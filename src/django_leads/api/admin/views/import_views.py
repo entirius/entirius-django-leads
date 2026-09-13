@@ -14,7 +14,7 @@ from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS,
 from django_leads.models import ImportBatch
 from django_leads.schemas.responses import ImportBatchDetailResponse, ImportBatchListResponse, ImportBatchResponse
 from django_leads.services import import_service
-from django_leads.tasks import import_csv
+from django_leads.tasks import enqueue_import
 
 _TAGS = ["Leads imports"]
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -23,14 +23,14 @@ UPLOAD_SCHEMA = {
 }
 
 
-def read_upload(request: Request) -> tuple[str, str]:
+def read_upload(request: Request) -> tuple[str, str, int]:
     upload = request.FILES.get("file")
     if upload is None:
         raise ValidationError({"file": ["a CSV file is required"]})
     if upload.size > MAX_UPLOAD_BYTES:
         raise ValidationError({"file": ["the file is too large"]})
     try:
-        return upload.name, upload.read().decode("utf-8-sig")
+        return upload.name, upload.read().decode("utf-8-sig"), upload.size
     except UnicodeDecodeError:
         raise ValidationError({"file": ["the file must be UTF-8 text"]}) from None
 
@@ -46,7 +46,7 @@ class ImportListView(AdminView):
         responses={200: ImportBatchListResponse, **ERROR_RESPONSES},
     )
     def get(self, request: Request, channel_idx: str) -> Response:
-        batches = ImportBatch.objects.filter(channel=self.channel(channel_idx)).defer("content", "report")
+        batches = ImportBatch.objects.filter(channel=self.channel(channel_idx)).defer("report")
         return self.paginated(request, batches, ImportBatchResponse.model_validate)
 
     @extend_schema(
@@ -56,9 +56,9 @@ class ImportListView(AdminView):
         responses={202: ImportBatchResponse, **ERROR_RESPONSES},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
-        filename, content = read_upload(request)
-        batch = import_service.create_batch(self.channel(channel_idx), filename, content, request.user.username)
-        transaction.on_commit(lambda: import_csv.delay(batch.pk))
+        filename, content, size_bytes = read_upload(request)
+        batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
+        transaction.on_commit(lambda: enqueue_import(batch.pk, content))
         return Response(ImportBatchResponse.model_validate(batch).model_dump(mode="json"), status=202)
 
 

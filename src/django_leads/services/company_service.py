@@ -50,16 +50,22 @@ def build_company(channel: Channel, row: dict[str, Any], stage: Stage) -> Compan
     )
 
 
-def upsert_company(channel: Channel, row: dict[str, Any], *, actor: str = "system") -> tuple[Company, bool]:
-    company = Company.objects.filter(channel=channel, domain=row["domain"]).first()
+def upsert_company(channel: Channel, row: dict[str, Any]) -> tuple[Company, bool]:
+    """Race-safe: the insert runs in a savepoint; a concurrent insert of the same domain is re-read and merged.
+    Writes no Activity — the caller records its own (import or form)."""
+    companies = Company.objects.filter(channel=channel, domain=row["domain"])
+    company = companies.first()
     if company is None:
-        company = build_company(channel, row, stage_service.first_stage(channel))
-        company.save()
-        return company, True
+        try:
+            with transaction.atomic():
+                company = build_company(channel, row, stage_service.first_stage(channel))
+                company.save()
+            return company, True
+        except IntegrityError:
+            company = companies.get()
     filled = fill_empty(company, row, FILL_FIELDS)
     if filled:
         company.save(update_fields=[*filled, "modified_at"])
-    activity_service.record(company, ActivityKind.IMPORT, "import matched", data={"filled": filled}, actor=actor)
     return company, False
 
 

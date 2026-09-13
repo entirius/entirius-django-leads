@@ -1,8 +1,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+from django.contrib.admin import AdminSite
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from django_leads.admin import CompanyAdmin
 from django_leads.enums import ImportStatus
 from django_leads.models import Company, ImportBatch
 from tests.conftest import api_url
@@ -73,10 +75,15 @@ def test_import_upload_runs_and_reports(admin_api, channel, django_capture_on_co
     assert response.status_code == 202
     detail = admin_api.get(api_url(f"imports/{response.json()['id']}/")).json()
     assert detail["status"] == ImportStatus.DONE and detail["created_count"] == 3
-    assert {"row": 7, "action": "skipped", "reason": "no_domain_no_email"} in detail["report"]
+    assert {"row": 7, "reason": "no_domain_no_email"} in detail["report"]
+    assert (detail["row_count"], detail["size_bytes"]) == (8, len(CSV.encode()))
     assert admin_api.get(api_url("imports/")).json()["count"] == ImportBatch.objects.count() == 1
 
 
 def test_activities_filtered_by_company(admin_api, company):
     admin_api.post(api_url(f"companies/{company.pk}/transition/"), {"stage_key": "won"}, format="json")
     assert admin_api.get(api_url(f"activities/?company={company.pk}")).json()["count"] == 1
+
+
+def test_company_admin_cannot_add(rf):
+    assert CompanyAdmin(Company, AdminSite()).has_add_permission(rf.get("/")) is False

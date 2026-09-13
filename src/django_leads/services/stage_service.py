@@ -70,7 +70,7 @@ def delete_stage(stage: Stage) -> None:
 
 @transaction.atomic
 def transition_stage(company: Company, stage: Stage, *, actor: str) -> Company:
-    """Move a company; writes the timeline and sends `stage_entered`. The same stage is a no-op."""
+    """Move a company; writes the timeline and sends `stage_entered` after commit. The same stage is a no-op."""
     if stage.channel_id != company.channel_id:
         raise ValueError("stage belongs to another channel")
     if stage.pk == company.stage_id:
@@ -81,7 +81,7 @@ def transition_stage(company: Company, stage: Stage, *, actor: str) -> Company:
     company.save(update_fields=["stage", "stage_entered_at", "modified_at"])
     data = {"from": previous, "to": stage.key}
     activity_service.record(company, ActivityKind.STAGE, f"stage {previous} -> {stage.key}", data=data, actor=actor)
-    stage_entered.send(sender=Company, company=company, stage=stage)
+    transaction.on_commit(lambda: stage_entered.send(sender=Company, company=company, stage=stage))
     return company
 
 

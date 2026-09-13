@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from django_leads.models import Channel
 from django_leads.services import import_service
-from django_leads.tasks import import_csv
+from django_leads.tasks import enqueue_import
 
 
 class Command(BaseCommand):
@@ -23,11 +23,12 @@ class Command(BaseCommand):
         if channel is None:
             raise CommandError(f"leads channel {options['channel']!r} not found")
         path = Path(options["file"])
-        batch = import_service.create_batch(channel, path.name, path.read_text(encoding="utf-8-sig"), "manage.py")
+        content = path.read_text(encoding="utf-8-sig")
+        batch = import_service.create_batch(channel, path.name, len(content.encode()), "manage.py")
         if not options["sync"]:
-            import_csv.delay(batch.pk)
+            enqueue_import(batch.pk, content)
             self.stdout.write(f"batch {batch.pk} queued")
             return
-        batch = import_service.run_batch(batch)
+        batch = import_service.run_content(batch, content)
         counts = f"created={batch.created_count} matched={batch.matched_count} skipped={batch.skipped_count}"
         self.stdout.write(f"batch {batch.pk} {batch.status}: {counts}")

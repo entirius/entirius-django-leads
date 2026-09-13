@@ -100,18 +100,21 @@ class ImportBatchResponse(BaseModel):
     created_count: int = Field(description="Rows that created a company.", examples=[8])
     matched_count: int = Field(description="Rows that matched a company.", examples=[1])
     skipped_count: int = Field(description="Rows skipped.", examples=[3])
+    row_count: int = Field(description="Data rows processed so far.", examples=[12])
+    size_bytes: int = Field(description="Uploaded file size.", examples=[1024])
     created_by: str = Field(description="Uploader.", examples=["admin"])
     created_at: datetime = Field(description="Uploaded.", examples=["2026-09-13T12:00:00Z"])
 
 
 class ImportReportEntry(BaseModel):
     row: int = Field(description="CSV line number (header = 1); 0 for a file-level failure.", examples=[2])
-    action: str = Field(description="created, matched, skipped or failed.", examples=["skipped"])
-    reason: str = Field(description="Skip or failure reason.", examples=["no_domain_no_email"])
+    reason: str = Field(description="Skip reason or file-level error code.", examples=["no_domain_no_email"])
 
 
 class ImportBatchDetailResponse(ImportBatchResponse):
-    report: list[ImportReportEntry] = Field(description="One entry per processed row.")
+    report: list[ImportReportEntry] = Field(
+        description="Skipped rows (row number and reason code, no row values), capped at LEADS_IMPORT_REPORT_MAX."
+    )
 
 
 class _Page(BaseModel):

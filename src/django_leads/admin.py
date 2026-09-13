@@ -32,7 +32,7 @@ class ContactInline(admin.TabularInline):
     model = Contact
     extra = 0
     fields = ("email", "first_name", "last_name", "job_title", "is_primary", "legal_basis", "source")
-    readonly_fields = ("email", "source")
+    readonly_fields = ("email", "source", "legal_basis")
 
 
 @admin.register(Company)
@@ -45,12 +45,15 @@ class CompanyAdmin(admin.ModelAdmin):
     readonly_fields = ("domain", "stage", "stage_entered_at", "hooks", "customer_uid", "last_activity_at")
     inlines = [ContactInline]
 
+    def has_add_permission(self, request) -> bool:
+        """`stage` is read-only here, so an admin form could never save a new company."""
+        return False
+
 
 @admin.register(ImportBatch)
 class ImportBatchAdmin(ReadOnlyAdmin):
     list_display = ("filename", "channel", "status", "created_count", "matched_count", "skipped_count", "created_at")
     list_filter = ("channel", "status")
-    exclude = ("content",)
 
 
 @admin.register(Activity)

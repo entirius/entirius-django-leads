@@ -41,6 +41,8 @@ class ActivityKind(models.TextChoices):
     BLOCKED = "blocked", "Blocked"
     SKIPPED = "skipped", "Skipped"
     ROTATION = "rotation", "Rotation"
+    LEGAL_BASIS = "legal_basis", "Legal basis"
+    LEGAL_BASIS_CONFLICT = "legal_basis_conflict", "Legal basis conflict"
 
 
 class ImportStatus(models.TextChoices):

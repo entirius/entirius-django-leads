@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from django.core.cache import cache
+from django.db import OperationalError
 from django_contact_forms.models import APIKey, ContactForm, Lead, LeadCreationRule
 from django_contact_forms.models import Channel as FormsChannel
 from django_contact_forms.services import lead_service
@@ -12,7 +13,9 @@ from rest_framework.test import APIClient
 
 from django_leads.enums import ActivityKind, LeadSource
 from django_leads.models import Activity, Company, Contact
+from django_leads.services import company_service, contact_service, form_service
 from django_leads.signals import contact_forms_bridge
+from django_leads.tasks import import_form_lead
 
 
 @pytest.fixture
@@ -118,3 +121,72 @@ def test_bridge_connects_once_with_dispatch_uid():
     assert contact_forms_bridge.connect() is True
     uids = [receiver[0][0] for receiver in lead_status_changed.receivers]
     assert uids.count(contact_forms_bridge.DISPATCH_UID) == 1
+
+
+@pytest.mark.parametrize("value", ["false", "False", "0", "off", "no", "", "nope", 0, 2, False, None, [], {}])
+def test_L03_string_false_is_not_consent(channel, forms_channel, django_capture_on_commit_callbacks, value):
+    with django_capture_on_commit_callbacks(execute=True):
+        submit(forms_channel, {"marketing_consent": value, "website": "https://ogrod.pl"})
+    assert Contact.objects.get().legal_basis is None
+    assert Activity.objects.filter(message="no legal basis").exists()
+
+
+@pytest.mark.parametrize("value", ["true", "TRUE", "1", "yes", "on", "y", "tak", " Tak ", True, 1])
+def test_L03_string_true_values_are_consent(value):
+    assert form_service.has_consent({"marketing_consent": value}) is True
+
+
+def test_consent_from_form_writes_legal_basis_activity_with_submission_ref(
+    channel, forms_channel, django_capture_on_commit_callbacks
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        lead = submit(forms_channel, {"marketing_consent": "on"})
+    activity = Activity.objects.get(kind=ActivityKind.LEGAL_BASIS)
+    assert activity.data == {"from": None, "to": "consent", "source": "form", "consent_ref": f"form:{lead.pk}"}
+
+
+def test_no_legal_basis_activity_only_when_contact_has_none(company, forms_channel, django_capture_on_commit_callbacks):
+    contact_service.upsert_contact(company, {"email": "ewa@ogrod.pl", "source": LeadSource.CSV})
+    Contact.objects.update(legal_basis="legitimate_interest")
+    with django_capture_on_commit_callbacks(execute=True):
+        submit(forms_channel, {"marketing_consent": True})
+    assert Contact.objects.get().legal_basis == "legitimate_interest"
+    kinds = set(Activity.objects.values_list("kind", "message"))
+    assert kinds == {
+        (ActivityKind.LEGAL_BASIS_CONFLICT, "legal basis legitimate_interest -> consent"),
+        (ActivityKind.FORM, "form submission"),
+    }
+
+
+def test_form_path_writes_no_import_activities(company, forms_channel, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=True):
+        submit(forms_channel, {"marketing_consent": True})
+        submit(forms_channel, {"marketing_consent": True})
+    assert Contact.objects.count() == 1
+    assert not Activity.objects.filter(kind=ActivityKind.IMPORT).exists()
+    assert Activity.objects.filter(kind=ActivityKind.FORM, message="form submission").count() == 2
+
+
+def test_bridge_failure_leaves_no_partial_company(channel, forms_channel, django_capture_on_commit_callbacks):
+    with mock.patch.object(contact_service, "upsert_contact", side_effect=RuntimeError("boom")):
+        with django_capture_on_commit_callbacks(execute=True):
+            submit(forms_channel, {"marketing_consent": True})
+    assert not Company.objects.exists() and not Activity.objects.exists()
+
+
+def test_bridge_retry_is_idempotent(channel, forms_channel, django_capture_on_commit_callbacks):
+    real, calls = company_service.upsert_company, []
+
+    def flaky(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise OperationalError("connection lost")
+        return real(*args, **kwargs)
+
+    with mock.patch.object(company_service, "upsert_company", flaky):
+        with django_capture_on_commit_callbacks(execute=True):
+            lead = submit(forms_channel, {"marketing_consent": True})
+    assert len(calls) == 2 and Contact.objects.count() == 1
+    assert import_form_lead.delay(lead.pk, forms_channel.idx).get() is False
+    assert Contact.objects.count() == 1
+    assert Activity.objects.filter(kind=ActivityKind.FORM, message="form submission").count() == 1

@@ -2,15 +2,26 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-"""CSV import: rows are normalised, deduplicated and written chunk by chunk (≤ 2 selects + bulk writes each)."""
+"""CSV import: rows are normalised, deduplicated and written chunk by chunk (≤ 2 selects + bulk writes each).
+
+Lifecycle: every chunk commits atomically together with the batch counters and `last_row_done`, so a retry
+resumes after the last committed row. A row the bulk write rejects is retried alone in a savepoint and skipped
+with a reason code; any other error fails the batch with an error code — a run never leaves it `running`.
+The CSV is never stored: the report keeps row numbers and reason codes only."""
 
 import csv
-import io
 import itertools
+import logging
+import tempfile
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.db import DataError, IntegrityError, OperationalError, transaction
+from django.db.models import Model, Q
 from django_agreements.enums import LegalBasis
 from django_regional.models import Language
 
@@ -20,6 +31,8 @@ from django_leads.models import Activity, Channel, Company, Contact, ImportBatch
 from django_leads.services import activity_service, company_service, contact_service, stage_service
 from django_leads.utils.domains import email_domain, registrable_domain
 from django_leads.utils.emails import normalize_email
+
+logger = logging.getLogger(__name__)
 
 CSV_COLUMNS = (
     "company_name",
@@ -35,10 +48,15 @@ CSV_COLUMNS = (
     "legal_basis",
     "phone",
 )
+ERROR_CODES = {csv.Error: "csv_error", UnicodeDecodeError: "encoding_error", stage_service.NoStages: "no_stages"}
 
 
 class SkipRow(ValueError):
-    """The row is not imported; the message is the report reason."""
+    """The row is not imported; the message is the report reason code."""
+
+
+class ImportFailed(ValueError):
+    """The whole file is rejected; the message is the error code."""
 
 
 @dataclass
@@ -49,15 +67,15 @@ class Lookups:
     languages: dict[str, Language]
 
 
-def create_batch(channel: Channel, filename: str, content: str, created_by: str) -> ImportBatch:
-    return ImportBatch.objects.create(channel=channel, filename=filename, content=content, created_by=created_by)
+def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: str) -> ImportBatch:
+    return ImportBatch.objects.create(channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by)
 
 
 def parse_rows(file: Iterable[str]) -> Iterator[dict[str, str]]:
     """Stream CSV rows as dicts of the known columns; the header row is required."""
     reader = csv.DictReader(file)
     if not reader.fieldnames or not set(CSV_COLUMNS) & {name.strip() for name in reader.fieldnames}:
-        raise ValueError("missing CSV header")
+        raise ImportFailed("missing_header")
     for raw in reader:
         yield {column: (raw.get(column) or "").strip() for column in CSV_COLUMNS}
 
@@ -67,35 +85,91 @@ def build_lookups(channel: Channel) -> Lookups:
     return Lookups(stage=stage_service.first_stage(channel), languages=languages)
 
 
-def run_batch(batch: ImportBatch) -> ImportBatch:
-    """Apply the whole file; a redelivered finished batch is left alone."""
-    if batch.status == ImportStatus.DONE:
-        return batch
-    _reset(batch)
+def run_content(batch: ImportBatch, content: str) -> ImportBatch:
+    """Run an uploaded text through a temp file under `LEADS_IMPORT_TMP_DIR`, deleted whatever the outcome."""
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", suffix=".csv", dir=leads_settings.LEADS_IMPORT_TMP_DIR, delete=False
+    ) as file:
+        file.write(content)
+    path = Path(file.name)
     try:
-        lookups = build_lookups(batch.channel)
-        rows = enumerate(parse_rows(io.StringIO(batch.content)), start=2)
-        while chunk := list(itertools.islice(rows, leads_settings.LEADS_IMPORT_CHUNK_SIZE)):
+        return run_file(batch, path)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def run_file(batch: ImportBatch, path: Path) -> ImportBatch:
+    """Apply the file; a finished batch is left alone. Only `OperationalError` propagates (task retry)."""
+    if batch.status in (ImportStatus.DONE, ImportStatus.FAILED):
+        return batch
+    batch.status = ImportStatus.RUNNING
+    batch.save(update_fields=["status", "modified_at"])
+    try:
+        with path.open(encoding="utf-8", newline="") as file:
+            apply_rows(batch, parse_rows(file))
+    except OperationalError:
+        raise
+    except Exception as error:
+        logger.warning("leads: import batch %s failed (%s)", batch.pk, type(error).__name__)
+        return fail_batch(batch, error_code(error))
+    batch.status = ImportStatus.DONE
+    batch.save(update_fields=["status", "modified_at"])
+    return batch
+
+
+def apply_rows(batch: ImportBatch, rows: Iterable[dict[str, str]]) -> None:
+    lookups = build_lookups(batch.channel)
+    pending = ((line, row) for line, row in enumerate(rows, start=2) if line > batch.last_row_done)
+    while chunk := list(itertools.islice(pending, leads_settings.LEADS_IMPORT_CHUNK_SIZE)):
+        with transaction.atomic():
             apply_chunk(batch, chunk, lookups)
-    except ValueError as error:
-        batch.report.append({"row": 0, "action": "failed", "reason": str(error)})
-        return _finish(batch, ImportStatus.FAILED)
-    return _finish(batch, ImportStatus.DONE)
+
+
+def error_code(error: Exception) -> str:
+    if isinstance(error, ImportFailed):
+        return str(error)
+    return next((code for kind, code in ERROR_CODES.items() if isinstance(error, kind)), "internal_error")
+
+
+def fail_batch(batch: ImportBatch, code: str) -> ImportBatch:
+    """Counters and report as last committed, plus the file-level entry `{row: 0, reason: code}`."""
+    batch.refresh_from_db()
+    batch.status = ImportStatus.FAILED
+    batch.report.append({"row": 0, "reason": code})
+    batch.save(update_fields=["status", "report", "modified_at"])
+    return batch
 
 
 def apply_chunk(batch: ImportBatch, rows: list[tuple[int, dict[str, str]]], lookups: Lookups) -> None:
-    """Upsert one chunk of `(line number, row)`; counts and report are saved at the end."""
+    """Upsert one chunk of `(line number, row)` in bulk; rows the database rejects are redone one by one."""
     writer = _ChunkWriter(batch, lookups)
     prepared = writer.prepare(rows)
     writer.prefetch(prepared)
     for line, company_row, contact_row in prepared:
         writer.apply(line, company_row, contact_row)
-    writer.flush()
+    try:
+        with transaction.atomic():
+            writer.flush()
+    except (DataError, IntegrityError):
+        writer.outcomes = [_apply_alone(batch, *row) for row in prepared]
+    save_progress(batch, [*writer.skipped, *writer.outcomes], rows[-1][0])
+
+
+def save_progress(batch: ImportBatch, outcomes: list[tuple[int, str, str]], last_line: int) -> None:
+    """One batch update per chunk: counters, resume point and — only when a row was skipped — the capped report."""
+    for _, action, _ in outcomes:
+        setattr(batch, f"{action}_count", getattr(batch, f"{action}_count") + 1)
+    room = max(leads_settings.LEADS_IMPORT_REPORT_MAX - len(batch.report), 0)
+    skipped = [{"row": line, "reason": reason} for line, action, reason in outcomes if action == "skipped"]
+    batch.report.extend(skipped[:room])
+    batch.last_row_done, batch.row_count = last_line, last_line - 1
+    fields = ["created_count", "matched_count", "skipped_count", "last_row_done", "row_count", "modified_at"]
+    batch.save(update_fields=[*fields, "report"] if skipped[:room] else fields)
 
 
 def normalise_row(raw: dict[str, str], languages: dict[str, Language]) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """`(company row, contact row or None)`; raises `SkipRow` with the report reason."""
-    email = normalize_email(raw["email"])
+    email = _row_email(raw)
     legal_basis = raw["legal_basis"].lower() or None
     if legal_basis and legal_basis not in LegalBasis.values:
         raise SkipRow("invalid_legal_basis")
@@ -107,17 +181,29 @@ def normalise_row(raw: dict[str, str], languages: dict[str, Language]) -> tuple[
         "industry": raw["industry"],
         "source": LeadSource.CSV,
     }
-    if not email:
+    _check_lengths(Company, company)
+    if not (email or raw["first_name"] or raw["last_name"]):
         return company, None
+    return company, _contact_row(raw, email, legal_basis, languages)
+
+
+def _contact_row(raw: dict[str, str], email: str, legal_basis: str | None, languages: dict[str, Language]) -> dict:
+    """A contact without email is kept when it has a name (L-08)."""
     contact = {key: raw[key] for key in ("first_name", "last_name", "job_title", "phone")}
+    _check_lengths(Contact, {**contact, "email": email})
     language = languages.get(raw["language"].lower())
-    return company, {
-        **contact,
-        "email": email,
-        "language": language,
-        "legal_basis": legal_basis,
-        "source": LeadSource.CSV,
-    }
+    return {**contact, "email": email, "language": language, "legal_basis": legal_basis, "source": LeadSource.CSV}
+
+
+def _row_email(raw: dict[str, str]) -> str:
+    email = normalize_email(raw["email"])
+    if not email:
+        return ""
+    try:
+        validate_email(email)
+    except ValidationError:
+        raise SkipRow("invalid_email") from None
+    return email
 
 
 def _row_domain(raw: dict[str, str], email: str) -> str:
@@ -133,6 +219,59 @@ def _row_domain(raw: dict[str, str], email: str) -> str:
     return domain
 
 
+def _check_lengths(model: type[Model], values: dict[str, Any]) -> None:
+    """A value longer than its column is a skipped row (`too_long:<field>`), never a database error."""
+    for name, value in values.items():
+        limit = model._meta.get_field(name).max_length
+        if isinstance(value, str) and limit and len(value) > limit:
+            raise SkipRow(f"too_long:{name}")
+
+
+def contact_key(domain: str, email: str, first_name: str, last_name: str) -> tuple[str, str]:
+    """Dedup key within a chunk: the email, or the name for a contact without email."""
+    return domain, email or f"name:{first_name.casefold()} {last_name.casefold()}"
+
+
+def _apply_alone(batch: ImportBatch, line: int, company_row: dict, contact_row: dict | None) -> tuple[int, str, str]:
+    """The slow path of one row, in its own savepoint through the race-safe upserts."""
+    try:
+        with transaction.atomic():
+            return _upsert_row(batch, line, company_row, contact_row)
+    except DataError:
+        return line, "skipped", "invalid_value"
+    except IntegrityError:
+        return line, "skipped", "conflict"
+
+
+def _upsert_row(batch: ImportBatch, line: int, company_row: dict, contact_row: dict | None) -> tuple[int, str, str]:
+    company, created = company_service.upsert_company(batch.channel, company_row)
+    contact = contact_service.upsert_contact(company, contact_row)[0] if contact_row else None
+    message, data = "import created" if created else "import matched", {"row": line}
+    activities = [
+        Activity(
+            company=company,
+            contact=contact,
+            kind=ActivityKind.IMPORT,
+            message=message,
+            data=data,
+            actor=f"import:{batch.pk}",
+        )
+    ]
+    basis = contact_row and contact_row["legal_basis"]
+    if basis and (activity := _propose_basis(batch, line, contact, basis)):
+        contact.save(update_fields=["legal_basis", "modified_at"])
+        activities.append(activity)
+    activity_service.record_many(activities)
+    return line, "created" if created else "matched", ""
+
+
+def _propose_basis(batch: ImportBatch, line: int, contact: Contact, basis: str) -> Activity | None:
+    ref = f"import:{batch.pk}:{line}"
+    return contact_service.propose_legal_basis(
+        contact, basis, source="import", consent_ref=ref, actor=f"import:{batch.pk}"
+    )
+
+
 @dataclass
 class _ChunkWriter:
     batch: ImportBatch
@@ -142,6 +281,8 @@ class _ChunkWriter:
     new: list[Any] = field(default_factory=list)
     dirty: list[Any] = field(default_factory=list)
     activities: list[Activity] = field(default_factory=list)
+    outcomes: list[tuple[int, str, str]] = field(default_factory=list)
+    skipped: list[tuple[int, str, str]] = field(default_factory=list)
 
     @property
     def actor(self) -> str:
@@ -153,18 +294,19 @@ class _ChunkWriter:
             try:
                 prepared.append((line, *normalise_row(raw, self.lookups.languages)))
             except SkipRow as reason:
-                self._report(line, "skipped", str(reason))
+                self.skipped.append((line, "skipped", str(reason)))
         return prepared
 
     def prefetch(self, prepared: list[tuple[int, dict, dict | None]]) -> None:
-        """The chunk's two selects: existing companies by domain, their contacts by email."""
+        """The chunk's two selects: existing companies by domain, their contacts by email (or without one)."""
         domains = {company_row["domain"] for _, company_row, _ in prepared}
         emails = {contact_row["email"] for _, _, contact_row in prepared if contact_row}
         existing = Company.objects.filter(channel=self.batch.channel, domain__in=domains)
         self.companies = {company.domain: company for company in existing}
         by_id = {company.pk: company for company in self.companies.values()}
-        found = Contact.objects.filter(company__in=list(by_id), email__in=emails) if by_id and emails else []
-        self.contacts = {(by_id[contact.company_id].domain, contact.email): contact for contact in found}
+        by_email = Q(email__in=emails - {""}) | Q(email="")
+        found = Contact.objects.filter(by_email, company__in=list(by_id)) if by_id and emails else []
+        self.contacts = {contact_key(by_id[c.company_id].domain, c.email, c.first_name, c.last_name): c for c in found}
 
     def apply(self, line: int, company_row: dict, contact_row: dict | None) -> None:
         company, created = self._company(company_row)
@@ -177,13 +319,14 @@ class _ChunkWriter:
                 company=company, contact=contact, kind=ActivityKind.IMPORT, message=message, data=data, actor=self.actor
             )
         )
-        self._report(line, "created" if created else "matched", "")
+        if contact_row and contact_row["legal_basis"]:
+            self._basis(line, contact, contact_row["legal_basis"])
+        self.outcomes.append((line, "created" if created else "matched", ""))
 
     def flush(self) -> None:
         self._write(Company, company_service.FILL_FIELDS)
-        self._write(Contact, contact_service.FILL_FIELDS)
+        self._write(Contact, (*contact_service.FILL_FIELDS, "legal_basis"))
         activity_service.record_many(self.activities)
-        self.batch.save(update_fields=["created_count", "matched_count", "skipped_count", "report", "modified_at"])
 
     def _company(self, row: dict) -> tuple[Company, bool]:
         company = self.companies.get(row["domain"])
@@ -195,7 +338,7 @@ class _ChunkWriter:
         return company, True
 
     def _contact(self, company: Company, row: dict, filled: list[str]) -> Contact:
-        key = (company.domain, row["email"])
+        key = contact_key(company.domain, row["email"], row["first_name"], row["last_name"])
         contact = self.contacts.get(key)
         if contact is None:
             contact = self.contacts[key] = contact_service.build_contact(company, row)
@@ -203,6 +346,14 @@ class _ChunkWriter:
             return contact
         filled.extend(self._fill(contact, row, contact_service.FILL_FIELDS))
         return contact
+
+    def _basis(self, line: int, contact: Contact, basis: str) -> None:
+        activity = _propose_basis(self.batch, line, contact, basis)
+        if activity is None:
+            return
+        self.activities.append(activity)
+        if activity.kind == ActivityKind.LEGAL_BASIS and contact.pk and contact not in self.dirty:
+            self.dirty.append(contact)
 
     def _fill(self, instance: Any, row: dict, fields: tuple[str, ...]) -> list[str]:
         filled = company_service.fill_empty(instance, row, fields)
@@ -217,20 +368,3 @@ class _ChunkWriter:
             model.objects.bulk_create(created)
         if changed:
             model.objects.bulk_update(changed, fields)
-
-    def _report(self, line: int, action: str, reason: str) -> None:
-        counter = f"{action}_count"
-        setattr(self.batch, counter, getattr(self.batch, counter) + 1)
-        self.batch.report.append({"row": line, "action": action, "reason": reason})
-
-
-def _reset(batch: ImportBatch) -> None:
-    batch.status, batch.report = ImportStatus.RUNNING, []
-    batch.created_count = batch.matched_count = batch.skipped_count = 0
-    batch.save()
-
-
-def _finish(batch: ImportBatch, status: str) -> ImportBatch:
-    batch.status = status
-    batch.save(update_fields=["status", "report", "modified_at"])
-    return batch

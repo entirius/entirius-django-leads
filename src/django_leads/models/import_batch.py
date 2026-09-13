@@ -9,17 +9,20 @@ from django_leads.enums import ImportStatus, LeadSource
 
 
 class ImportBatch(BaseModel):
-    """One uploaded file; counts and `report` (`{row, action, reason}`) grow after every chunk."""
+    """One uploaded file; counters, `last_row_done` and the capped `report` (`{row, reason}` of skipped rows)
+    are committed with every chunk. The CSV itself is never stored."""
 
     channel = models.ForeignKey("django_leads.Channel", on_delete=models.CASCADE, related_name="import_batches")
     source = models.CharField(max_length=16, choices=LeadSource.choices, default=LeadSource.CSV)
     filename = models.CharField(max_length=255, blank=True, default="")
-    # The uploaded CSV text — the worker may run in another container than the upload.
-    content = models.TextField(blank=True, default="")
+    size_bytes = models.PositiveBigIntegerField(default=0)
     status = models.CharField(max_length=16, choices=ImportStatus.choices, default=ImportStatus.PENDING)
     created_count = models.PositiveIntegerField(default=0)
     matched_count = models.PositiveIntegerField(default=0)
     skipped_count = models.PositiveIntegerField(default=0)
+    row_count = models.PositiveIntegerField(default=0)
+    # CSV line of the last committed row — a retried run resumes after it.
+    last_row_done = models.PositiveIntegerField(default=0)
     report = models.JSONField(default=list, blank=True)
     created_by = models.CharField(max_length=150, blank=True, default="")
 

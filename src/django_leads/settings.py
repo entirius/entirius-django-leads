@@ -10,6 +10,10 @@ QUEUE_DEFAULT = getattr(settings, "LEADS_QUEUE_DEFAULT", "leads_default")
 
 # CSV import: rows per chunk — counts and the report are saved after every chunk.
 LEADS_IMPORT_CHUNK_SIZE = getattr(settings, "LEADS_IMPORT_CHUNK_SIZE", 500)
+# Where the worker keeps the uploaded CSV while a run lasts (deleted at its end); None = the system temp dir.
+LEADS_IMPORT_TMP_DIR = getattr(settings, "LEADS_IMPORT_TMP_DIR", None)
+# Skipped rows kept in a batch report (row number + reason code); the counters always cover every row.
+LEADS_IMPORT_REPORT_MAX = getattr(settings, "LEADS_IMPORT_REPORT_MAX", 1000)
 
 # contact_forms bridge: body keys read from `Lead.raw_data`.
 LEADS_FORM_CONSENT_KEYS = getattr(settings, "LEADS_FORM_CONSENT_KEYS", ["marketing_consent"])

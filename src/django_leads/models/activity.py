@@ -14,7 +14,7 @@ class Activity(models.Model):
     contact = models.ForeignKey(
         "django_leads.Contact", on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
     )
-    kind = models.CharField(max_length=16, choices=ActivityKind.choices)
+    kind = models.CharField(max_length=32, choices=ActivityKind.choices)
     message = models.CharField(max_length=255)
     data = models.JSONField(default=dict, blank=True)
     actor = models.CharField(max_length=128, default="system")

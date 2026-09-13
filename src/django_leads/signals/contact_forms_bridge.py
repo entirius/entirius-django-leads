@@ -7,7 +7,7 @@
 import logging
 
 from django.apps import apps
-from django.db import transaction
+from django.db import OperationalError, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +34,16 @@ def on_lead_status_changed(sender, lead, old_status, channel_idx, **kwargs) -> N
 
 
 def _import(lead, channel_idx: str) -> None:
-    """A bridge failure is logged — it never breaks the already committed form submission."""
+    """Atomic: a failure leaves no partial company. A retryable DB error hands the submission to the leads
+    queue; any other failure is logged — it never breaks the already committed form submission."""
     from django_leads.services import form_service
+    from django_leads.tasks import import_form_lead
 
     try:
-        form_service.import_form_lead(lead, channel_idx)
+        with transaction.atomic():
+            form_service.import_form_lead(lead, channel_idx)
+    except OperationalError:
+        logger.warning("leads: contact_forms lead %s queued for retry", lead.pk)
+        import_form_lead.delay(lead.pk, channel_idx)
     except Exception:
         logger.exception("leads: contact_forms lead %s could not be imported", lead.pk)

@@ -81,5 +81,7 @@ class ContactDetailView(AdminView):
         updates = parse(ContactUpdateRequest, request.data).model_dump(mode="json", exclude_unset=True)
         if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "is_primary")):
             raise ValidationError({"detail": ["null is only allowed for language and legal_basis"]})
-        contact = contact_service.update_contact(self.contact(channel_idx, pk), resolve_language(updates))
+        contact = contact_service.update_contact(
+            self.contact(channel_idx, pk), resolve_language(updates), actor=request.user.username
+        )
         return Response(ContactResponse.of(contact).model_dump(mode="json"))
