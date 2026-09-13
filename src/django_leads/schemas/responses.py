@@ -141,3 +141,92 @@ class ActivityListResponse(_Page):
 
 class ImportBatchListResponse(_Page):
     results: list[ImportBatchResponse] = Field(description="Batches, newest first.")
+
+
+class RuleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Rule id.", examples=[100])
+    trigger: str = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
+    stage_id: int | None = Field(description="Stage id.", examples=[102])
+    action: str = Field(description="request_audit or communicate.", examples=["communicate"])
+    template_key: str = Field(description="Communicator template.", examples=["lead.cold.b2b"])
+    contact_strategy: str = Field(description="primary or ai_pick.", examples=["primary"])
+    require_hooks: bool = Field(description="Skip companies without hooks.", examples=[True])
+    require_email: bool = Field(description="Skip companies without a contact email.", examples=[True])
+    require_legal_basis: bool = Field(description="Skip contacts without a legal basis.", examples=[True])
+    cooldown_hours: int = Field(description="No re-run within.", examples=[24])
+    is_active: bool = Field(description="Evaluated at all.", examples=[True])
+    order: int = Field(description="Evaluation order.", examples=[0])
+
+
+class RuleListResponse(BaseModel):
+    results: list[RuleResponse] = Field(description="Rules in evaluation order.")
+
+
+class RuleRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Run id.", examples=[1])
+    rule_id: int = Field(description="Rule id.", examples=[100])
+    company_id: int = Field(description="Company id.", examples=[102])
+    fired_at: datetime = Field(description="Evaluated.", examples=["2026-09-13T12:00:00Z"])
+    outcome: str = Field(description="fired, skipped, blocked or cooldown.", examples=["fired"])
+    detail: str = Field(description="Short reason.", examples=["message 7 review_required"])
+
+
+class RuleRunListResponse(_Page):
+    results: list[RuleRunResponse] = Field(description="Runs, newest first.")
+
+
+class ProfileResponse(BaseModel):
+    """List shape — the prompt is never listed."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Profile id.", examples=[100])
+    key: str = Field(description="Profile key.", examples=["leads.analysis"])
+    model: str = Field(description="Toolbox model.", examples=["fake-chat"])
+
+
+class ProfileDetailResponse(ProfileResponse):
+    prompt_text: str = Field(description="Prompt with placeholders.", examples=["..."])
+    json_schema: dict[str, Any] = Field(description="Output JSON schema.", examples=[{}])
+
+
+class AnalysisProfileResponse(ProfileResponse):
+    is_active: bool = Field(description="Used by the analysis.", examples=[True])
+
+
+class AnalysisProfileDetailResponse(ProfileDetailResponse):
+    is_active: bool = Field(description="Used by the analysis.", examples=[True])
+
+
+class ProfileListResponse(BaseModel):
+    results: list[ProfileResponse] = Field(description="Profiles of the channel.")
+
+
+class AnalysisProfileListResponse(BaseModel):
+    results: list[AnalysisProfileResponse] = Field(description="Profiles of the channel.")
+
+
+class DraftResponse(BaseModel):
+    message_id: int = Field(description="Communicator message id.", examples=[7])
+    status: str = Field(description="Message status.", examples=["review_required"])
+
+
+class AuditRequestedResponse(BaseModel):
+    audit_id: str = Field(description="siteintel audit id.", examples=["6f1c..."])
+    status: str = Field(description="Audit status.", examples=["pending"])
+
+
+class CustomerLinkResponse(BaseModel):
+    customer_uid: str = Field(description="Linked customer uid.", examples=["0b8f..."])
+
+
+class DevEvaluateResponse(BaseModel):
+    runs: list[RuleRunResponse] = Field(description="Runs of this evaluation, in rule order.")
+
+
+class DevRotateResponse(BaseModel):
+    rotated: int = Field(description="Threads that rotated or parked a company.", examples=[1])

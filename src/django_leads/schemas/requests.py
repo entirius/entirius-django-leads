@@ -6,7 +6,7 @@
 from django_agreements.enums import LegalBasis
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
 
-from django_leads.enums import CompanyType, StageKind
+from django_leads.enums import CompanyType, ContactStrategy, RuleAction, RuleTrigger, StageKind
 from django_leads.services.company_service import SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
@@ -119,3 +119,84 @@ class ActivityListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+
+
+class RuleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trigger: RuleTrigger = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
+    stage_id: int | None = Field(default=None, description="Stage; required for stage_entered.", examples=[102])
+    action: RuleAction = Field(default=RuleAction.COMMUNICATE, description="request_audit or communicate.")
+    template_key: str = Field(default="", max_length=128, description="Communicator template; for communicate.")
+    contact_strategy: ContactStrategy = Field(default=ContactStrategy.PRIMARY, description="primary or ai_pick.")
+    require_hooks: bool = Field(default=True, description="Skip companies without hooks.")
+    require_email: bool = Field(default=True, description="Skip companies without a contact email.")
+    require_legal_basis: bool = Field(default=True, description="Skip contacts without a legal basis.")
+    cooldown_hours: int = Field(default=24, ge=0, le=8760, description="No re-run for the company within.")
+    is_active: bool = Field(default=True, description="Evaluated at all.")
+    order: int = Field(default=0, ge=0, le=32767, description="Evaluation order.")
+
+
+class RuleUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trigger: RuleTrigger | None = Field(default=None, description="stage_entered or intel_ready.")
+    stage_id: int | None = Field(default=None, description="Stage; null clears it.", examples=[102])
+    action: RuleAction | None = Field(default=None, description="request_audit or communicate.")
+    template_key: str | None = Field(default=None, max_length=128, description="Communicator template.")
+    contact_strategy: ContactStrategy | None = Field(default=None, description="primary or ai_pick.")
+    require_hooks: bool | None = Field(default=None, description="Skip companies without hooks.")
+    require_email: bool | None = Field(default=None, description="Skip companies without a contact email.")
+    require_legal_basis: bool | None = Field(default=None, description="Skip contacts without a legal basis.")
+    cooldown_hours: int | None = Field(default=None, ge=0, le=8760, description="No re-run within.")
+    is_active: bool | None = Field(default=None, description="Evaluated at all.")
+    order: int | None = Field(default=None, ge=0, le=32767, description="Evaluation order.")
+
+
+class RuleRunListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    company: int | None = Field(default=None, description="Company id filter.", examples=[102])
+
+
+class ProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$", description="Profile key.")
+    prompt_text: str = Field(min_length=1, description="Prompt with placeholders.")
+    json_schema: dict = Field(default_factory=dict, description="Output JSON schema.")
+    model: str = Field(min_length=1, max_length=128, description="Toolbox model.", examples=["fake-chat"])
+
+
+class ProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$")
+    prompt_text: str | None = Field(default=None, min_length=1, description="Prompt with placeholders.")
+    json_schema: dict | None = Field(default=None, description="Output JSON schema.")
+    model: str | None = Field(default=None, min_length=1, max_length=128, description="Toolbox model.")
+
+
+class AnalysisProfileRequest(ProfileRequest):
+    is_active: bool = Field(default=True, description="Used by the analysis.")
+
+
+class AnalysisProfileUpdateRequest(ProfileUpdateRequest):
+    is_active: bool | None = Field(default=None, description="Used by the analysis.")
+
+
+class CommunicateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template_key: str = Field(
+        min_length=1, max_length=128, description="Communicator template.", examples=["lead.cold.b2b"]
+    )
+    contact_id: int = Field(description="Contact of the company.", examples=[102])
+
+
+class DevEvaluateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_id: int = Field(description="Company id.", examples=[102])
+    trigger: RuleTrigger = Field(description="stage_entered or intel_ready.")
+    stage_key: str | None = Field(default=None, max_length=64, description="Stage; default the company's stage.")

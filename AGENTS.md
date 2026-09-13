@@ -10,7 +10,7 @@ Leads and B2B pipeline for the Volkanos platform: companies, contacts, stages, r
 | `make check` | lint + format-check (ruff) |
 | `make fix` | auto-fix lint + format |
 | `make test` | test suite (pytest + pytest-django) |
-| `make install` needs the sibling clones `../entirius-django-agreements` and `../entirius-django-contact-forms` | `[tool.uv.sources]` until their releases |
+| `make install` needs the sibling clones `../entirius-django-{agreements,contact-forms,communicator,siteintel,notifications,utils}` | `[tool.uv.sources]` until their releases |
 
 ## Conventions
 
@@ -65,12 +65,55 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   the lead id); other failures are logged, never raised. Never writes `django_contact_forms.Lead`.
 - Admin API v2 (`JWTAuthentication` + `IsAdminUser`): `api/leads/v2/admin/<channel_idx>/` — `companies/`
   (`?stage=&search=&sort=`), `companies/<id>/`, `companies/<id>/transition/`, `contacts/`, `stages/`,
-  `activities/?company=`, `imports/`. PATCH whitelists live in the services.
-- Hard deps: utils, regional, agreements (`LegalBasis`); soft: `django_contact_forms`.
+  `activities/?company=`, `imports/`, `rules/`, `rule-runs/?company=`, `analysis-profiles/`, `recipient-profiles/`,
+  `companies/<id>/{communicate,request-audit,create-customer}/`; development `test/evaluate/`, `test/rotate-now/`.
+  PATCH whitelists live in the services.
+- Rules (`services/rule_service.evaluate_rules(company, trigger, *, stage=None)`): active `StageRule`s of the
+  trigger (and stage) by `order`; checks in this order: `do_not_contact` → blocked; any `RuleRun` of (rule, company)
+  inside `cooldown_hours` → cooldown (a skipped run counts — rules never loop); `request_audit` → siteintel;
+  `require_hooks` without hooks → skipped; no candidate with email → skipped; no legal basis → skipped; else
+  `outreach_service.request_draft` → fired. Every evaluation writes a `RuleRun`; errors become Activity
+  `rule error: <class>`, never raise.
+- Drafts: `outreach_service.request_draft` is the only caller of communicator `communicate()` (leads never writes a
+  `Message`); footer from agreements `resolve_clause_set` (contact language → channel default), missing clause set
+  → Activity `skipped: no clause set`. Manual path `POST companies/<id>/communicate/` skips rule conditions only.
+- Intel: `report_ready` → task `django_leads.analyse_intel` → one toolbox completion (`AnalysisProfile`
+  `leads.analysis`, never retried) → hooks/platform/type → `intel_ready` rules. Empty sources → no toolbox call.
+  Failures → Activity `analysis failed: <code>` + notification (`LEADS_NOTIFY_ROLE`, medium).
+- Recipient pick (`ai_pick`): candidates `{"candidates": [...]}` JSON in the last user message
+  (`RecipientPickProfile` `leads.pick_recipient`); an id outside the candidates falls back to the primary contact.
+- Rotation: `sequence_finished` → task `django_leads.rotate_thread`, daily beat `django_leads.rotate_unresponsive`
+  (host schedule); one rotation per thread (Activity `rotation` `data.thread_id`), threads matched by `subject_ref`
+  + `recipient_email`; `LEADS_ROTATION_MAX` reached or no next contact → stage `kind=unresponsive`
+  (missing stage → `ConfigurationError`).
+- Prompts (`prompt_text`, rendered prompts) never reach logs, Activity data or API lists.
+- Hard deps: utils, regional, agreements (`LegalBasis`), communicator, siteintel; soft: `django_contact_forms`,
+  `django_notifications` (alerts), `django_accounts` (`companies/<id>/create-customer/` routed only when installed).
+
+## Signals
+
+| Direction | Signal | Handling |
+|---|---|---|
+| emitted | `django_leads.signals.stage_entered(company, stage)` | own receiver → task `django_leads.evaluate_rules` |
+| emitted | `django_leads.signals.contact_anonymised(contact)` | plan 11 |
+| consumed | siteintel `report_ready(audit, succeeded_sources)` | task `django_leads.analyse_intel` |
+| consumed | communicator `reply_received(thread, reply)` | Activity `reply`, `on_reply` stage, high notification |
+| consumed | communicator `company_skipped(subject_ref)` | `do_not_contact = True`, Activity `blocked` |
+| consumed | communicator `message_sent(message)` | Activity `sent` |
+| consumed | communicator `sequence_finished(thread)` | task `django_leads.rotate_thread` |
+
+All receivers: `dispatch_uid="django_leads.<name>"`, run after commit, never raise into the sender; only
+`subject_ref` `leads.Company:<int>` is handled.
+
+## Settings
+
+`LEADS_QUEUE_DEFAULT` (`leads_default`), `LEADS_IMPORT_*`, `LEADS_FORM_*`, `LEADS_FREEMAIL_DOMAINS`,
+`LEADS_ROTATION_MAX` (2), `LEADS_NOTIFY_ROLE` (`sales_admin`), `LEADS_ANALYSIS_MAX_HOOKS` (10); toolbox
+`AI_TOOLBOX_*` (django_utils); development endpoints need `ENVIRONMENT = "development"`.
 
 ## Testing end-to-end
 
 - Unit (`make test`, sqlite; `make module-test MODULE=entirius-django-leads` in zeno, PostgreSQL — the L-05
-  query ceiling is exact only there): L-01, L-02, L-03, L-04, L-05, L-06, L-07, L-18, L-19.
-- BDD (emporium `features/leads/leads_import.feature`, `make bdd TAGS=@leads`): L-01, L-04, L-06, L-07, L-19;
-  not one-shot. The funnel walkthrough is the E2E guide of plan 12.
+  query ceiling is exact only there): L-01, L-02, L-03, L-04, L-05, L-06, L-07, L-08…L-15, L-18, L-19.
+- BDD (`make bdd TAGS=@leads`): `features/leads/leads_import.feature` L-01, L-04, L-06, L-07, L-19 (not one-shot);
+  `features/leads/leads_pipeline.feature` L-08…L-12, L-14 (`@leads-oneshot` — needs a fresh `make seed`). The funnel walkthrough is the E2E guide of plan 12.
