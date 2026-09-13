@@ -3,7 +3,18 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 from django.contrib import admin
 
-from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, Stage
+from django_leads.models import (
+    Activity,
+    AnalysisProfile,
+    Channel,
+    Company,
+    Contact,
+    ImportBatch,
+    RecipientPickProfile,
+    RuleRun,
+    Stage,
+    StageRule,
+)
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
@@ -61,3 +72,28 @@ class ActivityAdmin(ReadOnlyAdmin):
     list_display = ("created_at", "company", "kind", "message", "actor")
     list_filter = ("kind",)
     search_fields = ("company__name", "company__domain", "message")
+
+
+@admin.register(StageRule)
+class StageRuleAdmin(admin.ModelAdmin):
+    list_display = ("channel", "order", "trigger", "stage", "action", "template_key", "contact_strategy", "is_active")
+    list_filter = ("channel", "trigger", "action", "is_active")
+
+
+@admin.register(RuleRun)
+class RuleRunAdmin(ReadOnlyAdmin):
+    list_display = ("fired_at", "rule", "company", "outcome", "detail")
+    list_filter = ("outcome",)
+    search_fields = ("company__name", "company__domain")
+
+
+@admin.register(AnalysisProfile)
+class AnalysisProfileAdmin(admin.ModelAdmin):
+    """Prompt profiles are edited here and through the API only — never in the CMS."""
+
+    list_display = ("channel", "key", "model", "is_active")
+
+
+@admin.register(RecipientPickProfile)
+class RecipientPickProfileAdmin(admin.ModelAdmin):
+    list_display = ("channel", "key", "model")

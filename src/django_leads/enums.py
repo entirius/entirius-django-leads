@@ -43,6 +43,7 @@ class ActivityKind(models.TextChoices):
     ROTATION = "rotation", "Rotation"
     LEGAL_BASIS = "legal_basis", "Legal basis"
     LEGAL_BASIS_CONFLICT = "legal_basis_conflict", "Legal basis conflict"
+    INTEL = "intel", "Intel"
 
 
 class ImportStatus(models.TextChoices):
@@ -50,3 +51,25 @@ class ImportStatus(models.TextChoices):
     RUNNING = "running", "Running"
     DONE = "done", "Done"
     FAILED = "failed", "Failed"
+
+
+class RuleTrigger(models.TextChoices):
+    STAGE_ENTERED = "stage_entered", "Stage entered"
+    INTEL_READY = "intel_ready", "Intel ready"
+
+
+class RuleAction(models.TextChoices):
+    REQUEST_AUDIT = "request_audit", "Request audit"
+    COMMUNICATE = "communicate", "Communicate"
+
+
+class ContactStrategy(models.TextChoices):
+    PRIMARY = "primary", "Primary contact"
+    AI_PICK = "ai_pick", "AI pick"
+
+
+class RuleOutcome(models.TextChoices):
+    FIRED = "fired", "Fired"
+    SKIPPED = "skipped", "Skipped"
+    BLOCKED = "blocked", "Blocked"
+    COOLDOWN = "cooldown", "Cooldown"

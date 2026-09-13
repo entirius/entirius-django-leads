@@ -16,3 +16,13 @@ groups:
       - Contact
       - Activity
       - ImportBatch
+  - name: rules
+    title: "Rules & Prompt Profiles"
+    models:
+      - Channel
+      - Stage
+      - Company
+      - StageRule
+      - RuleRun
+      - AnalysisProfile
+      - RecipientPickProfile

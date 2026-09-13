@@ -23,3 +23,10 @@ LEADS_FORM_WEBSITE_KEYS = getattr(settings, "LEADS_FORM_WEBSITE_KEYS", ["website
 LEADS_FREEMAIL_DOMAINS = getattr(
     settings, "LEADS_FREEMAIL_DOMAINS", ["gmail.com", "wp.pl", "o2.pl", "onet.pl", "interia.pl", "outlook.com"]
 )
+
+# Rotation: next contacts tried after a sequence ends without a reply, then the company parks as `unresponsive`.
+LEADS_ROTATION_MAX = getattr(settings, "LEADS_ROTATION_MAX", 2)
+# notifications recipient role of replies and failed analyses (soft dependency).
+LEADS_NOTIFY_ROLE = getattr(settings, "LEADS_NOTIFY_ROLE", "sales_admin")
+# Hooks kept from one intel analysis.
+LEADS_ANALYSIS_MAX_HOOKS = getattr(settings, "LEADS_ANALYSIS_MAX_HOOKS", 10)
