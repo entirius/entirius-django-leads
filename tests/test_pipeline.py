@@ -6,14 +6,14 @@ import json
 from types import SimpleNamespace
 from unittest import mock
 
-import httpx
 import pytest
 from django.urls import clear_url_caches
 from django_communicator import signals as communicator_signals
 from django_communicator.models import Channel as CommunicatorChannel
 from django_communicator.models import Thread
 from django_siteintel.models import Audit, Report
-from django_utils.toolbox.testing import error_response, mock_toolbox
+from django_utils.toolbox import ToolboxBudgetExceededError
+from django_utils.toolbox.schemas import CompletionResponse
 
 from django_leads.enums import ActivityKind, ContactStrategy, RuleTrigger, StageKind
 from django_leads.models import Activity, AnalysisProfile, Company, RecipientPickProfile, RuleRun, Stage
@@ -29,9 +29,23 @@ ANALYSIS = {
 }
 
 
-def completion(parsed: dict) -> httpx.Response:
-    body = {"output": json.dumps(parsed), "parsed": parsed, "usage": {"input_tokens": 1, "output_tokens": 1}}
-    return httpx.Response(200, json={**body, "cost": "0", "model": "fake-chat", "attempts": 1, "request_id": "r"})
+def completion(parsed: dict) -> CompletionResponse:
+    usage = {"input_tokens": 1, "output_tokens": 1}
+    body = {"output": json.dumps(parsed), "parsed": parsed, "usage": usage, "cost": "0", "model": "fake-chat"}
+    return CompletionResponse.model_validate({**body, "attempts": 1, "request_id": "r"})
+
+
+@pytest.fixture
+def toolbox():
+    r"""The toolbox client of both callers; \`complete.call_args.args[0]\` is the CompletionRequest."""
+    client = mock.MagicMock()
+    with (
+        mock.patch("django_leads.services.recipient_service.ToolboxClient") as picker,
+        mock.patch("django_leads.services.intel_service.ToolboxClient") as analyser,
+    ):
+        for patched in (picker, analyser):
+            patched.return_value.__enter__.return_value = client
+        yield client
 
 
 def messages(company, kind: str) -> list[str]:
@@ -62,14 +76,13 @@ def audit(shop) -> Audit:
     return audit
 
 
-def test_L12_ai_pick_stores_contact_id_and_reason(shop, pick_rule):
+def test_L12_ai_pick_stores_contact_id_and_reason(shop, pick_rule, toolbox):
     second = shop.contacts.get(email="ola@example-shop-4.test")
-    with mock_toolbox() as router:
-        router["complete"].mock(return_value=completion({"contact_id": second.pk, "reason": "owns the shop"}))
-        contact, data = recipient_service.pick_recipient(shop, pick_rule)
-        sent = json.loads(router["complete"].calls.last.request.content)
-    assert sent["tags"] == ["leads.pick_recipient", "channel:default-europe"]
-    block = json.loads(sent["messages"][-1]["content"].split(": ", 1)[1])
+    toolbox.complete.return_value = completion({"contact_id": second.pk, "reason": "owns the shop"})
+    contact, data = recipient_service.pick_recipient(shop, pick_rule)
+    sent = toolbox.complete.call_args.args[0]
+    assert sent.tags == ["leads.pick_recipient", "channel:default-europe"]
+    block = json.loads(sent.messages[-1].content.split(": ", 1)[1])
     assert [row["email"] for row in block["candidates"]] == ["piotr@example-shop-4.test", "ola@example-shop-4.test"]
     assert contact == second and data == {"contact_id": second.pk, "reason": "owns the shop"}
     activity = Activity.objects.get(company=shop, message="recipient picked")
@@ -77,50 +90,47 @@ def test_L12_ai_pick_stores_contact_id_and_reason(shop, pick_rule):
 
 
 @pytest.mark.parametrize("answer", [{"contact_id": 999999, "reason": "x"}, {"reason": "no id"}])
-def test_L13_ai_pick_invalid_contact_falls_back_to_primary(shop, pick_rule, answer):
+def test_L13_ai_pick_invalid_contact_falls_back_to_primary(shop, pick_rule, toolbox, answer):
     without_email = shop.contacts.get(email="")
     answer = answer if answer["reason"] != "x" else {"contact_id": without_email.pk, "reason": "x"}
-    with mock_toolbox() as router:
-        router["complete"].mock(return_value=completion(answer))
-        contact, data = recipient_service.pick_recipient(shop, pick_rule)
+    toolbox.complete.return_value = completion(answer)
+    contact, data = recipient_service.pick_recipient(shop, pick_rule)
     assert contact.is_primary and data == {"reason": "fallback"}
     assert messages(shop, ActivityKind.RULE) == ["recipient pick rejected: unknown contact"]
 
 
-def test_primary_strategy_never_calls_toolbox(shop, make_rule):
-    with mock_toolbox() as router:
-        contact, data = recipient_service.pick_recipient(shop, make_rule())
-        assert not router["complete"].called
+def test_primary_strategy_never_calls_toolbox(shop, make_rule, toolbox):
+    contact, data = recipient_service.pick_recipient(shop, make_rule())
+    assert not toolbox.complete.called
     assert contact.is_primary and data == {"reason": "primary"}
 
 
-def test_analysis_sets_hooks_platform_type_then_intel_ready_rules(shop, audit):
-    with mock_toolbox() as router, mock.patch("django_leads.services.rule_service.evaluate_rules") as evaluate:
-        router["complete"].mock(return_value=completion(ANALYSIS))
+def test_analysis_sets_hooks_platform_type_then_intel_ready_rules(shop, audit, toolbox):
+    toolbox.complete.return_value = completion(ANALYSIS)
+    with mock.patch("django_leads.services.rule_service.evaluate_rules") as evaluate:
         intel_service.analyse_audit(str(audit.pk), ["lighthouse"])
-        sent = json.loads(router["complete"].calls.last.request.content)
+    sent = toolbox.complete.call_args.args[0]
     shop.refresh_from_db()
-    assert sent["tags"][0] == "leads.analysis" and '{"performance":41}' in sent["messages"][0]["content"]
+    assert sent.tags[0] == "leads.analysis" and '{"performance":41}' in sent.messages[0].content
     assert len(shop.hooks) == 3 and shop.platform == "Magento 2" and shop.company_type == "RETAILER"
     assert Activity.objects.get(company=shop, kind=ActivityKind.INTEL).data["hooks"] == 3
     evaluate.assert_called_once_with(shop, RuleTrigger.INTEL_READY)
 
 
-def test_L11_empty_sources_no_toolbox_call_rules_still_evaluated(shop, audit):
-    with mock_toolbox() as router, mock.patch("django_leads.services.rule_service.evaluate_rules") as evaluate:
+def test_L11_empty_sources_no_toolbox_call_rules_still_evaluated(shop, audit, toolbox):
+    with mock.patch("django_leads.services.rule_service.evaluate_rules") as evaluate:
         intel_service.analyse_audit(str(audit.pk), [])
-        assert not router["complete"].called
-    assert evaluate.called
+    assert not toolbox.complete.called and evaluate.called
     assert messages(shop, ActivityKind.INTEL) == ["no intel sources succeeded"]
 
 
-def test_analysis_error_writes_activity_no_retry_on_budget(shop, audit):
-    with mock_toolbox() as router, mock.patch("django_leads.services.alert_service.alert") as alert:
-        router["complete"].mock(return_value=error_response(402, "BUDGET_EXCEEDED"))
-        from django_leads.tasks import analyse_intel
+def test_analysis_error_writes_activity_no_retry_on_budget(shop, audit, toolbox):
+    from django_leads.tasks import analyse_intel
 
+    toolbox.complete.side_effect = ToolboxBudgetExceededError(402, "Budget exceeded.", "BUDGET_EXCEEDED")
+    with mock.patch("django_leads.services.alert_service.alert") as alert:
         analyse_intel.delay(str(audit.pk), ["lighthouse"])
-        assert router["complete"].call_count == 1
+    assert toolbox.complete.call_count == 1
     assert messages(shop, ActivityKind.INTEL) == ["analysis failed: BUDGET_EXCEEDED"]
     assert alert.call_args.kwargs["title"] == "Intel analysis failed"
     assert not RuleRun.objects.exists()

@@ -42,7 +42,6 @@ test = [
     "dj-database-url>=2.0",
     "entirius-django-contact-forms",
     "entirius-django-notifications>=0.1.0",
-    "respx>=0.21",
 ]
 
 [project.urls]
