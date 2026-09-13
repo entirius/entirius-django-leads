@@ -22,6 +22,9 @@ INSTALLED_APPS = [
     "django_regional",
     "django_agreements",
     "django_contact_forms",
+    "django_notifications",
+    "django_siteintel",
+    "django_communicator",
     "django_leads",
 ]
 MIDDLEWARE = [
@@ -58,3 +61,11 @@ BASE_URL = "api"
 PRIVATE_DIR = tempfile.mkdtemp()
 MEDIA_URL = "/media/"
 STATIC_URL = "/static/"
+ENVIRONMENT = "development"
+# Toolbox calls are mocked with respx (`django_utils.toolbox.testing.mock_toolbox`) — nothing leaves the process.
+AI_TOOLBOX_BASE_URL = "http://toolbox.test"
+AI_TOOLBOX_API_KEY = "test-key"
+AI_TOOLBOX_CHANNEL = "zeno-test"
+# django_communicator: no celery-once backend in the module suite.
+COMMUNICATOR_REQUIRE_ONCE_BACKEND = False
+REDIS_URL = "redis://redis.test:6379"
