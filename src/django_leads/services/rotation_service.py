@@ -6,6 +6,7 @@
 
 import logging
 
+from django.db import transaction
 from django_communicator.enums import SequenceStopReason, ThreadStatus
 from django_communicator.models import Thread
 
@@ -23,14 +24,20 @@ class ConfigurationError(Exception):
 
 
 def rotate_thread(thread: Thread) -> Contact | None:
-    """At most one rotation per thread; subjects of other modules are ignored."""
+    """At most one rotation per thread (the company row lock serialises receiver and daily scan); subjects of other
+    modules are ignored."""
     company = company_from_ref(thread.subject_ref)
-    if (
-        company is None
-        or Activity.objects.filter(company=company, kind=ActivityKind.ROTATION, data__thread_id=thread.pk).exists()
-    ):
+    if company is None:
         return None
-    return rotate_company(company, thread_id=thread.pk)
+    try:
+        with transaction.atomic():
+            Company.objects.select_for_update().filter(pk=company.pk).first()
+            rotated = Activity.objects.filter(company=company, kind=ActivityKind.ROTATION, data__thread_id=thread.pk)
+            return None if rotated.exists() else rotate_company(company, thread_id=thread.pk)
+    except ConfigurationError:
+        logger.error("leads: channel %s has no unresponsive stage", company.channel.idx)
+        activity_service.record(company, ActivityKind.ROTATION, "no unresponsive stage", data={"thread_id": thread.pk})
+        return None
 
 
 def rotate_unresponsive() -> int:
