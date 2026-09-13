@@ -15,14 +15,37 @@ requires-python = ">=3.11"
 license = "MPL-2.0"
 dependencies = [
     "Django>=4.2",
+    "djangorestframework>=3.14",
+    "djangorestframework-simplejwt>=5.3",
+    "drf-spectacular>=0.27",
+    "pydantic[email]>=2.0",
+    "celery>=5.3",
+    "tldextract>=5.1",
+    "entirius-django-utils>=2.0.0",
+    "entirius-django-regional>=2.0.1",
+    "entirius-django-agreements>=2.1.0",
 ]
 
 [project.optional-dependencies]
 dev  = ["ruff", "pre-commit"]
-test = ["pytest", "pytest-django", "psycopg[binary]>=3.1", "dj-database-url>=2.0"]
+# Soft dependency: form submissions become contacts only when django_contact_forms is installed.
+contact-forms = ["entirius-django-contact-forms"]
+test = [
+    "pytest",
+    "pytest-django",
+    "factory-boy",
+    "psycopg[binary]>=3.1",
+    "dj-database-url>=2.0",
+    "entirius-django-contact-forms",
+]
 
 [project.urls]
 Repository = "https://github.com/entirius/entirius-django-leads"
+
+# agreements 2.1.0 (LegalBasis) is not on PyPI until its release — resolve the sibling clones.
+[tool.uv.sources]
+entirius-django-agreements = { path = "../entirius-django-agreements", editable = true }
+entirius-django-contact-forms = { path = "../entirius-django-contact-forms", editable = true }
 
 [build-system]
 requires = ["hatchling"]

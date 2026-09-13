@@ -1,7 +1,9 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Standalone test settings: DATABASE_URL when set (CI / zeno), else sqlite in memory for the smoke suite."""
+"""Standalone test settings: DATABASE_URL when set (CI / zeno), else sqlite in memory."""
+
+import tempfile
 
 import dj_database_url
 
@@ -14,6 +16,12 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "drf_spectacular",
+    "django_regional",
+    "django_agreements",
+    "django_contact_forms",
     "django_leads",
 ]
 MIDDLEWARE = [
@@ -29,12 +37,24 @@ TEMPLATES = [
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
+                "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ]
         },
     }
 ]
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "django_utils.api.v2_errors.v2_exception_handler",
+}
+SPECTACULAR_SETTINGS = {"TITLE": "django-leads Admin API v2", "VERSION": "2.0.0", "OAS_VERSION": "3.1.0"}
 DATABASES = {"default": dj_database_url.config(default="sqlite://:memory:")}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+BASE_URL = "api"
+# django_contact_forms (soft dependency, installed for the bridge tests) refuses to import without these.
+PRIVATE_DIR = tempfile.mkdtemp()
+MEDIA_URL = "/media/"
+STATIC_URL = "/static/"

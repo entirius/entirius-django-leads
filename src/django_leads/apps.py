@@ -9,3 +9,8 @@ class DjangoLeadsConfig(AppConfig):
     name = "django_leads"
     label = "django_leads"
     is_volkanos = True
+
+    def ready(self) -> None:
+        from django_leads.signals import contact_forms_bridge
+
+        contact_forms_bridge.connect()

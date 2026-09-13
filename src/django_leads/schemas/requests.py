@@ -1,0 +1,121 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+"""Request schemas of the leads admin API v2."""
+
+from django_agreements.enums import LegalBasis
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
+
+from django_leads.enums import CompanyType, StageKind
+from django_leads.services.company_service import SORT_FIELDS
+from django_leads.utils.domains import registrable_domain
+
+
+class CompanyListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    stage: str = Field(default="", max_length=64, description="Stage key filter.", examples=["new"])
+    search: str = Field(default="", max_length=253, description="Substring of name or domain.", examples=["shop"])
+    sort: str = Field(
+        default="name", description="name, domain, stage_entered_at or last_activity_at; `-` for descending."
+    )
+
+    @field_validator("sort")
+    @classmethod
+    def sort_in_allowlist(cls, value: str) -> str:
+        if value.lstrip("-") not in SORT_FIELDS:
+            raise ValueError(f"sort must be one of {sorted(SORT_FIELDS)} (optionally prefixed with -)")
+        return value
+
+
+class CompanyCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    domain: str = Field(min_length=1, max_length=253, description="Domain or URL; stored registrable.")
+    name: str = Field(default="", max_length=255, description="Company name; the domain when empty.")
+    website: HttpUrl | None = Field(default=None, description="Website URL.")
+    company_type: CompanyType = Field(default=CompanyType.UNKNOWN, description="Company type.")
+    industry: str = Field(default="", max_length=128, description="Industry.")
+
+    @field_validator("domain")
+    @classmethod
+    def domain_is_registrable(cls, value: str) -> str:
+        return registrable_domain(value)
+
+
+class CompanyUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255, description="Company name.")
+    website: HttpUrl | None = Field(default=None, description="Website URL.")
+    company_type: CompanyType | None = Field(default=None, description="Company type.")
+    industry: str | None = Field(default=None, max_length=128, description="Industry.")
+    description: str | None = Field(default=None, description="Free-text description.")
+    do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
+    external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
+
+
+class TransitionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stage_key: str = Field(min_length=1, max_length=64, description="Target stage key.", examples=["contacted"])
+
+
+class ContactListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+
+
+class ContactCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_id: int = Field(description="Company of the contact.", examples=[101])
+    email: EmailStr | None = Field(default=None, description="Email; immutable once set.")
+    first_name: str = Field(default="", max_length=128, description="First name.")
+    last_name: str = Field(default="", max_length=128, description="Last name.")
+    job_title: str = Field(default="", max_length=128, description="Job title.")
+    phone: str = Field(default="", max_length=32, description="Phone.")
+    language: str | None = Field(default=None, min_length=2, max_length=2, description="ISO 639-1 code.")
+    is_primary: bool = Field(default=False, description="Primary contact of the company.")
+    legal_basis: LegalBasis | None = Field(default=None, description="GDPR legal basis.")
+
+
+class ContactUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str | None = Field(default=None, max_length=128, description="First name.")
+    last_name: str | None = Field(default=None, max_length=128, description="Last name.")
+    job_title: str | None = Field(default=None, max_length=128, description="Job title.")
+    phone: str | None = Field(default=None, max_length=32, description="Phone.")
+    language: str | None = Field(default=None, min_length=2, max_length=2, description="ISO 639-1 code.")
+    is_primary: bool | None = Field(default=None, description="Primary contact of the company.")
+    legal_basis: LegalBasis | None = Field(default=None, description="GDPR legal basis.")
+
+
+class StageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_]+$", description="Slug.", examples=["new"])
+    label: str = Field(min_length=1, max_length=128, description="Label.", examples=["New"])
+    order: int = Field(default=0, ge=0, le=32767, description="Position in the pipeline.")
+    kind: StageKind = Field(default=StageKind.OPEN, description="open, won, lost or unresponsive.")
+    is_terminal: bool = Field(default=False, description="No further stages after this one.")
+    on_reply: bool = Field(default=False, description="Companies move here when a contact replies.")
+
+
+class StageUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_]+$", description="Slug.")
+    label: str | None = Field(default=None, min_length=1, max_length=128, description="Label.")
+    order: int | None = Field(default=None, ge=0, le=32767, description="Position in the pipeline.")
+    kind: StageKind | None = Field(default=None, description="open, won, lost or unresponsive.")
+    is_terminal: bool | None = Field(default=None, description="No further stages after this one.")
+    on_reply: bool | None = Field(default=None, description="Companies move here when a contact replies.")
+
+
+class ActivityListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    company: int | None = Field(default=None, description="Company id filter.", examples=[101])
