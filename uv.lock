@@ -759,7 +759,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-django", marker = "extra == 'test'" },
     { name = "ruff", marker = "extra == 'dev'" },
-    { name = "tldextract", specifier = ">=5.1" },
+    { name = "tldextract", specifier = ">=5.3" },
 ]
 provides-extras = ["dev", "contact-forms", "test"]
 
