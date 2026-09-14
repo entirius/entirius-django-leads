@@ -7,6 +7,7 @@
 import logging
 from datetime import timedelta
 
+from django.db import transaction
 from django.utils import timezone
 
 from django_leads.enums import ActivityKind, RuleAction, RuleOutcome, RuleTrigger
@@ -24,14 +25,20 @@ def evaluate_rules(company: Company, trigger: str, *, stage: Stage | None = None
 
 
 def _run(rule: StageRule, company: Company) -> RuleRun:
-    """Never raises: an unexpected error is logged and becomes Activity `rule` plus a skipped run."""
+    """Never raises: an unexpected error is logged and becomes Activity `rule` plus a skipped run. The company row
+    lock serialises concurrent evaluations (worker tasks), so the cooldown check sees the other run."""
     try:
-        outcome, detail = _evaluate(rule, company)
+        with transaction.atomic():
+            Company.objects.select_for_update().filter(pk=company.pk).first()
+            return _record_run(rule, company, *_evaluate(rule, company))
     except Exception as error:
         logger.exception("leads: rule %s failed for company %s", rule.pk, company.pk)
         message = f"rule error: {type(error).__name__}"
         activity_service.record(company, ActivityKind.RULE, message, data={"rule_id": rule.pk})
-        outcome, detail = RuleOutcome.SKIPPED, message
+        return _record_run(rule, company, RuleOutcome.SKIPPED, message)
+
+
+def _record_run(rule: StageRule, company: Company, outcome: str, detail: str) -> RuleRun:
     return RuleRun.objects.create(rule=rule, company=company, outcome=outcome, detail=detail[:255])
 
 

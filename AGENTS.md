@@ -72,7 +72,8 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   trigger (and stage) by `order`; checks in this order: `do_not_contact` → blocked; any `RuleRun` of (rule, company)
   inside `cooldown_hours` → cooldown (a skipped run counts — rules never loop); `request_audit` → siteintel;
   `require_hooks` without hooks → skipped; no candidate with email → skipped; no legal basis → skipped; else
-  `outreach_service.request_draft` → fired. Every evaluation writes a `RuleRun`; errors become Activity
+  `outreach_service.request_draft` → fired. Every evaluation writes a `RuleRun` under a company row lock
+  (concurrent worker tasks see each other's cooldown); errors become Activity
   `rule error: <class>`, never raise.
 - Drafts: `outreach_service.request_draft` is the only caller of communicator `communicate()` (leads never writes a
   `Message`); footer from agreements `resolve_clause_set` (contact language → channel default), missing clause set
