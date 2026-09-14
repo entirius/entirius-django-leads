@@ -22,6 +22,7 @@ class StageRule(BaseModel):
     contact_strategy = models.CharField(max_length=16, choices=ContactStrategy.choices, default=ContactStrategy.PRIMARY)
     require_hooks = models.BooleanField(default=True)
     require_email = models.BooleanField(default=True)
+    # No effect and not exposed by the API: the outreach gate always requires a legal basis.
     require_legal_basis = models.BooleanField(default=True)
     cooldown_hours = models.PositiveIntegerField(default=24)
     is_active = models.BooleanField(default=True)

@@ -154,7 +154,6 @@ class RuleResponse(BaseModel):
     contact_strategy: str = Field(description="primary or ai_pick.", examples=["primary"])
     require_hooks: bool = Field(description="Skip companies without hooks.", examples=[True])
     require_email: bool = Field(description="Skip companies without a contact email.", examples=[True])
-    require_legal_basis: bool = Field(description="Skip contacts without a legal basis.", examples=[True])
     cooldown_hours: int = Field(description="No re-run within.", examples=[24])
     is_active: bool = Field(description="Evaluated at all.", examples=[True])
     order: int = Field(description="Evaluation order.", examples=[0])

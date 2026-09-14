@@ -4,6 +4,9 @@
 
 """Drafts through communicator only — leads never creates a Message itself."""
 
+from dataclasses import dataclass
+
+from django.db import transaction
 from django_agreements.models import Channel as AgreementsChannel
 from django_agreements.services.clause_set_service import ClauseSetMissing, render_legal_footer, resolve_clause_set
 from django_communicator.enums import MessageStatus
@@ -21,47 +24,64 @@ def subject_ref(company: Company) -> str:
     return f"leads.Company:{company.pk}"
 
 
+@dataclass(frozen=True)
+class Blocked:
+    """The outreach gate refused the draft; `reason` is the code recorded as `blocked: <reason>`."""
+
+    reason: str
+
+
 def request_draft(
     company: Company, contact: Contact, template_key: str, *, actor: str, thread: Thread | None = None
-) -> Message | None:
-    """A reviewable draft for the contact; None (Activity `blocked`/`skipped`) when the outreach gate refuses the
-    contact or no legal footer can be built."""
-    if check_gate(contact, actor=actor):
-        return None
-    language = _language_code(company, contact)
+) -> Message | Blocked | None:
+    """A reviewable draft for the contact; `Blocked` when the outreach gate refuses, None (Activity `skipped`) when
+    no legal footer can be built. The gate and `communicate()` share one short transaction on the locked company and
+    contact rows — an opt-out or `do_not_contact` either commits first (blocked) or waits for the draft commit."""
     try:
-        footer = _legal_footer(company, contact, language)
-        message = communicate(
-            channel_idx=company.channel.idx,
-            template_key=template_key,
-            recipient=RecipientData(
-                email=contact.email,
-                first_name=contact.first_name,
-                last_name=contact.last_name,
-                language=language,
-                legal_footer=footer,
-            ),
-            context=_context(company, contact),
-            subject_ref=subject_ref(company),
-            requires_review=True,
-            thread=thread,
-        )
+        with transaction.atomic():
+            company, contact = _lock(company, contact)
+            reason = recipient_service.block_reason(contact)
+            if reason:
+                return _blocked(company, contact, reason, actor)
+            message = _communicate(company, contact, template_key, thread)
+            _record_draft(company, contact, message, template_key, actor)
     except (ClauseSetMissing, AgreementsChannel.DoesNotExist):
         return _skipped(company, contact, "skipped: no clause set", actor)
     except LegalFooterRequiredError:
         return _skipped(company, contact, "skipped: no legal basis", actor)
-    _record_draft(company, contact, message, template_key, actor)
     return message
 
 
-def check_gate(contact: Contact, *, actor: str) -> str | None:
-    """The outreach gate on freshly read contact and company rows; a refusal is recorded as `blocked: <reason>`."""
-    fresh = Contact.objects.select_related("company").get(pk=contact.pk)
-    reason = recipient_service.block_reason(fresh)
-    if reason:
-        message = f"blocked: {reason}"
-        activity_service.record(fresh.company, ActivityKind.BLOCKED, message, contact=fresh, actor=actor)
-    return reason
+def _lock(company: Company, contact: Contact) -> tuple[Company, Contact]:
+    """Company first, then the contact — the order every locked phase of the module uses."""
+    locked_company = Company.objects.select_for_update().get(pk=company.pk)
+    locked_contact = Contact.objects.select_for_update().get(pk=contact.pk, company=locked_company)
+    locked_contact.company = locked_company
+    return locked_company, locked_contact
+
+
+def _blocked(company: Company, contact: Contact, reason: str, actor: str) -> Blocked:
+    activity_service.record(company, ActivityKind.BLOCKED, f"blocked: {reason}", contact=contact, actor=actor)
+    return Blocked(reason)
+
+
+def _communicate(company: Company, contact: Contact, template_key: str, thread: Thread | None) -> Message:
+    language = _language_code(company, contact)
+    return communicate(
+        channel_idx=company.channel.idx,
+        template_key=template_key,
+        recipient=RecipientData(
+            email=contact.email,
+            first_name=contact.first_name,
+            last_name=contact.last_name,
+            language=language,
+            legal_footer=_legal_footer(company, contact, language),
+        ),
+        context=_context(company, contact),
+        subject_ref=subject_ref(company),
+        requires_review=True,
+        thread=thread,
+    )
 
 
 def _language_code(company: Company, contact: Contact) -> str:

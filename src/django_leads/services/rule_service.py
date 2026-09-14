@@ -5,8 +5,8 @@
 """Stage rules: conditions in a fixed order, a RuleRun per evaluation, cooldown per (rule, company).
 
 Three phases per rule: (a) under the company row lock the company is re-read, the conditions checked and the run
-written — `claimed` when outreach follows; (b) recipient pick (toolbox) and draft outside any transaction; (c) the
-run completed. A redelivered evaluation of the same event finds its run and pays nothing again.
+written — `claimed` when outreach follows; (b) recipient pick (toolbox) among gate-eligible contacts outside any
+transaction, then `request_draft` (its own short transaction: gate on locked rows + draft); (c) the run completed. A redelivered evaluation of the same event finds its run and pays nothing again.
 """
 
 import logging
@@ -97,18 +97,18 @@ def _check(rule: StageRule, company: Company) -> tuple[str | None, str]:
 
 
 def _outreach(rule: StageRule, company: Company) -> tuple[str, str]:
-    """No lock held: the pick may call the toolbox; `request_draft` re-checks the outreach gate on fresh rows."""
+    """No lock held: the pick may call the toolbox; `request_draft` takes the outreach gate on locked rows."""
     from django_leads.services import outreach_service, recipient_service
 
     contact, _ = recipient_service.pick_recipient(company, rule)
     if contact is None:
-        return _stop(company, rule, RuleOutcome.BLOCKED, ActivityKind.BLOCKED, "blocked: no_email")
-    if rule.require_legal_basis and not contact.legal_basis:
-        return _stop(company, rule, RuleOutcome.SKIPPED, ActivityKind.SKIPPED, "skipped: no legal basis")
-    message = outreach_service.request_draft(company, contact, rule.template_key, actor=f"rule:{rule.pk}")
-    if message is None:
+        return _stop(company, rule, RuleOutcome.BLOCKED, ActivityKind.BLOCKED, "blocked: no_eligible_contact")
+    result = outreach_service.request_draft(company, contact, rule.template_key, actor=f"rule:{rule.pk}")
+    if isinstance(result, outreach_service.Blocked):
+        return RuleOutcome.BLOCKED, f"blocked: {result.reason}"
+    if result is None:
         return RuleOutcome.SKIPPED, "no draft"
-    return RuleOutcome.FIRED, f"message {message.pk} {message.status}"
+    return RuleOutcome.FIRED, f"message {result.pk} {result.status}"
 
 
 def _in_cooldown(rule: StageRule, company: Company) -> bool:

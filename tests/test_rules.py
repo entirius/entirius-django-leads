@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from django_leads.enums import ActivityKind, RuleAction, RuleOutcome, RuleTrigger
 from django_leads.models import Activity, Contact, RuleRun, Stage
-from django_leads.services import rule_service, stage_service
+from django_leads.services import recipient_service, rule_service, stage_service
 
 pytestmark = pytest.mark.django_db
 
@@ -72,7 +72,7 @@ def test_zero_cooldown_is_still_idempotent(shop, make_rule, communicate):
 
 @pytest.mark.parametrize(
     ("require_email", "outcome", "message"),
-    [(True, "skipped", "skipped: no email"), (False, "blocked", "blocked: no_email")],
+    [(True, "skipped", "skipped: no email"), (False, "blocked", "blocked: no_eligible_contact")],
 )
 def test_require_email_is_honoured(company, make_rule, communicate, require_email, outcome, message):
     rule = make_rule(require_hooks=False, require_email=require_email)
@@ -146,11 +146,24 @@ def test_L11_intel_ready_zero_hooks_skips_unless_require_hooks_false(shop, make_
     assert activity_messages(shop, ActivityKind.SKIPPED) == ["skipped: no hooks"]
 
 
-def test_contact_without_legal_basis_is_skipped(shop, make_rule, communicate):
+def test_contact_without_legal_basis_is_blocked_by_the_gate_only(shop, make_rule, communicate):
     shop.contacts.update(legal_basis=None)
     runs = rule_service.evaluate_rules(shop, RuleTrigger.STAGE_ENTERED, stage=make_rule().stage)
-    assert [run.outcome for run in runs] == [RuleOutcome.SKIPPED]
-    assert activity_messages(shop, ActivityKind.SKIPPED) == ["skipped: no legal basis"]
+    assert [run.outcome for run in runs] == [RuleOutcome.BLOCKED]
+    assert activity_messages(shop, ActivityKind.BLOCKED) == ["blocked: no_eligible_contact"]
+    assert not activity_messages(shop, ActivityKind.SKIPPED)
+    communicate.assert_not_called()
+
+
+def test_manual_communicate_single_gate_evaluation(shop, communicate, admin_api):
+    contact = shop.contacts.get(is_primary=True)
+    Contact.objects.filter(pk=contact.pk).update(opt_out_at=timezone.now())
+    body = {"template_key": "lead.cold.b2b", "contact_id": contact.pk}
+    with mock.patch.object(recipient_service, "block_reason", wraps=recipient_service.block_reason) as gate:
+        response = admin_api.post(f"/api/leads/v2/admin/default-europe/companies/{shop.pk}/communicate/", body)
+    assert response.status_code == 409 and response.json()["error"] == "NotEligible"
+    assert gate.call_count == 1
+    assert activity_messages(shop, ActivityKind.BLOCKED) == ["blocked: opted_out"]
     communicate.assert_not_called()
 
 

@@ -44,7 +44,8 @@ def eligible(contact: Contact) -> bool:
 
 
 def pick_recipient(company: Company, rule: StageRule) -> tuple[Contact | None, dict]:
-    options = candidates(company)
+    """Only contacts the outreach gate accepts are offered — an ineligible pick never hides an eligible contact."""
+    options = [contact for contact in candidates(company) if eligible(contact)]
     if not options:
         return None, {}
     if rule.contact_strategy == ContactStrategy.PRIMARY or len(options) == 1:

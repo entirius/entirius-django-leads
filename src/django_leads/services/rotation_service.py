@@ -106,10 +106,10 @@ def _close(claim: Claim, detail: str) -> Claim:
 
 
 def _draft(claim: Claim, contact: Contact, thread_id: int) -> Contact | None:
-    """Outside any transaction (the draft may call the toolbox); the count and the marker only after a draft."""
+    """Outside the claim lock; `request_draft` takes the gate on locked rows. The count and marker only after a draft."""
     company = claim.company
     message = outreach_service.request_draft(company, contact, _template_key(company), actor="system")
-    if message is None:
+    if message is None or isinstance(message, outreach_service.Blocked):
         _no_draft(claim, contact, thread_id)
         return None
     data = {"thread_id": thread_id, "contact_id": contact.pk, "message_id": message.pk}

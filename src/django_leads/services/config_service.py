@@ -14,7 +14,7 @@ from django_leads.models import AnalysisProfile, Channel, RecipientPickProfile, 
 RULE_FIELDS = frozenset(
     {
         "trigger", "stage_id", "action", "template_key", "contact_strategy", "require_hooks",
-        "require_email", "require_legal_basis", "cooldown_hours", "is_active", "order",
+        "require_email", "cooldown_hours", "is_active", "order",
     }
 )  # fmt: skip
 PROFILE_FIELDS = {

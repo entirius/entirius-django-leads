@@ -40,13 +40,12 @@ class CompanyCommunicateView(CompanyActionView):
         contact = company.contacts.exclude(email="").filter(pk=body.contact_id).first()
         if contact is None:
             raise ValidationError({"contact_id": ["no contact with an email in this company"]})
-        reason = outreach_service.check_gate(contact, actor=request.user.username)
-        if reason:
-            return Response({"error": "NotEligible", "detail": f"contact not eligible: {reason}"}, status=409)
         try:
             message = outreach_service.request_draft(company, contact, body.template_key, actor=request.user.username)
         except CommunicatorChannel.DoesNotExist:
             raise Conflict("communicator channel not configured") from None
+        if isinstance(message, outreach_service.Blocked):
+            return Response({"error": "NotEligible", "detail": f"contact not eligible: {message.reason}"}, status=409)
         if message is None:
             raise Conflict("no draft: see the company timeline")
         return Response(DraftResponse(message_id=message.pk, status=message.status).model_dump(), status=201)

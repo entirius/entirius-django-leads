@@ -3,6 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import importlib
 import json
+import threading
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest import mock
@@ -10,7 +11,7 @@ from unittest import mock
 import pytest
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db import connection
+from django.db import OperationalError, connection, transaction
 from django.urls import clear_url_caches
 from django.utils import timezone
 from django_communicator import signals as communicator_signals
@@ -21,7 +22,16 @@ from django_utils.toolbox import ToolboxBudgetExceededError
 from django_utils.toolbox.schemas import CompletionResponse
 
 from django_leads.enums import ActivityKind, ContactStrategy, RuleTrigger, StageKind
-from django_leads.models import Activity, AnalysisProfile, Claim, Company, RecipientPickProfile, RuleRun, Stage
+from django_leads.models import (
+    Activity,
+    AnalysisProfile,
+    Claim,
+    Company,
+    Contact,
+    RecipientPickProfile,
+    RuleRun,
+    Stage,
+)
 from django_leads.services import (
     customer_link_service,
     intel_service,
@@ -215,9 +225,83 @@ def test_rule_rechecks_do_not_contact_after_lock(shop, pick_rule, make_rule, too
     toolbox.complete.side_effect = skip_during_pick
     with mock.patch("django_leads.services.outreach_service.communicate") as communicate:
         runs = rule_service.evaluate_rules(shop, RuleTrigger.INTEL_READY)
-    assert [run.outcome for run in runs] == ["skipped", "blocked"]
+    assert [run.outcome for run in runs] == ["blocked", "blocked"]
     assert messages(shop, ActivityKind.BLOCKED) == ["blocked: do_not_contact", "blocked: do_not_contact"]
     communicate.assert_not_called()
+
+
+def test_L12_rule_skips_ineligible_and_picks_eligible_contact(shop, pick_rule, toolbox):
+    shop.contacts.filter(is_primary=True).update(opt_out_at=timezone.now())
+    shop.contacts.create(email="anon@example-shop-4.test", legal_basis="consent", anonymised_at=timezone.now())
+    third = shop.contacts.create(email="third@example-shop-4.test", legal_basis="consent", source="csv")
+    toolbox.complete.return_value = completion({"contact_id": third.pk, "reason": "x"})
+    draft = SimpleNamespace(pk=5, status="review_required")
+    with (
+        mock.patch("django_leads.services.outreach_service.communicate", return_value=draft) as communicate,
+        mock.patch("django_leads.services.outreach_service._legal_footer", return_value="footer"),
+    ):
+        runs = rule_service.evaluate_rules(shop, RuleTrigger.INTEL_READY)
+    sent = toolbox.complete.call_args.args[0].messages[-1].content
+    assert "piotr@" not in sent and "anon@" not in sent and "third@" in sent
+    assert [run.outcome for run in runs] == ["fired"]
+    assert communicate.call_args.kwargs["recipient"].email == "third@example-shop-4.test"
+
+
+def _opt_out_in_other_connection(contact_id: int, errors: list) -> None:
+    """A separate connection with a short lock timeout: commits the opt-out, or records that the row was locked."""
+    try:
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout = '500ms'")
+            Contact.objects.filter(pk=contact_id).update(opt_out_at=timezone.now())
+    except OperationalError as error:
+        errors.append(error)
+    finally:
+        connection.close()
+
+
+def _in_other_thread(contact_id: int) -> list:
+    errors = []
+    worker = threading.Thread(target=_opt_out_in_other_connection, args=(contact_id, errors))
+    worker.start()
+    worker.join()
+    return errors
+
+
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="needs concurrent PostgreSQL transactions")
+@pytest.mark.django_db(transaction=True)
+def test_opt_out_committed_during_pick_blocks_draft(shop, pick_rule, toolbox):
+    second = shop.contacts.get(email="ola@example-shop-4.test")
+
+    def opt_out_during_pick(request):
+        assert _in_other_thread(second.pk) == []
+        return completion({"contact_id": second.pk, "reason": "x"})
+
+    toolbox.complete.side_effect = opt_out_during_pick
+    with mock.patch("django_leads.services.outreach_service.communicate") as communicate:
+        runs = rule_service.evaluate_rules(shop, RuleTrigger.INTEL_READY)
+    assert [run.outcome for run in runs] == ["blocked"]
+    assert messages(shop, ActivityKind.BLOCKED) == ["blocked: opted_out"]
+    communicate.assert_not_called()
+
+
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="needs concurrent PostgreSQL transactions")
+@pytest.mark.django_db(transaction=True)
+def test_opt_out_waits_for_draft_commit(shop, make_rule):
+    primary = shop.contacts.get(is_primary=True)
+    lock_errors = []
+
+    def draft_while_opt_out_attempted(**kwargs):
+        lock_errors.extend(_in_other_thread(primary.pk))
+        return SimpleNamespace(pk=5, status="review_required")
+
+    with (
+        mock.patch("django_leads.services.outreach_service.communicate", side_effect=draft_while_opt_out_attempted),
+        mock.patch("django_leads.services.outreach_service._legal_footer", return_value="footer"),
+    ):
+        runs = rule_service.evaluate_rules(shop, RuleTrigger.STAGE_ENTERED, stage=make_rule().stage)
+    assert [run.outcome for run in runs] == ["fired"]
+    assert len(lock_errors) == 1 and shop.contacts.get(pk=primary.pk).opt_out_at is None
 
 
 def test_analysis_error_writes_activity_no_retry_on_budget(shop, audit, toolbox):
