@@ -13,8 +13,8 @@ import csv
 import itertools
 import logging
 import os
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,8 @@ from django_agreements.enums import LegalBasis
 from django_regional.models import Language
 
 from django_leads import settings as leads_settings
+from django_leads.connectors.base import ImportFailed
+from django_leads.connectors.csv import CsvConnector, parse_rows  # noqa: F401 — `parse_rows` kept importable here
 from django_leads.enums import ActivityKind, CompanyType, ImportStatus, LeadSource
 from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, Stage
 from django_leads.services import activity_service, company_service, contact_service, stage_service
@@ -34,29 +36,11 @@ from django_leads.utils.emails import normalize_email
 
 logger = logging.getLogger(__name__)
 
-CSV_COLUMNS = (
-    "company_name",
-    "domain",
-    "website",
-    "company_type",
-    "industry",
-    "first_name",
-    "last_name",
-    "email",
-    "job_title",
-    "language",
-    "legal_basis",
-    "phone",
-)
 ERROR_CODES = {csv.Error: "csv_error", UnicodeDecodeError: "encoding_error", stage_service.NoStages: "no_stages"}
 
 
 class SkipRow(ValueError):
     """The row is not imported; the message is the report reason code."""
-
-
-class ImportFailed(ValueError):
-    """The whole file is rejected; the message is the error code."""
 
 
 @dataclass
@@ -69,15 +53,6 @@ class Lookups:
 
 def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: str) -> ImportBatch:
     return ImportBatch.objects.create(channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by)
-
-
-def parse_rows(file: Iterable[str]) -> Iterator[dict[str, str]]:
-    """Stream CSV rows as dicts of the known columns; the header row is required."""
-    reader = csv.DictReader(file)
-    if not reader.fieldnames or not set(CSV_COLUMNS) & {name.strip() for name in reader.fieldnames}:
-        raise ImportFailed("missing_header")
-    for raw in reader:
-        yield {column: (raw.get(column) or "").strip() for column in CSV_COLUMNS}
 
 
 def build_lookups(channel: Channel) -> Lookups:
@@ -140,8 +115,8 @@ def run_file(batch: ImportBatch, path: Path) -> ImportBatch:
     batch.status = ImportStatus.RUNNING
     batch.save(update_fields=["status", "modified_at"])
     try:
-        with path.open(encoding="utf-8", newline="") as file:
-            apply_rows(batch, parse_rows(file))
+        candidates = CsvConnector(path).fetch_candidates(batch.channel)
+        apply_rows(batch, (asdict(candidate) for candidate in candidates))
     except OperationalError:
         raise
     except Exception as error:
