@@ -10,6 +10,9 @@
 - Admin API v2: companies, contacts, stages, activities, imports.
 - Retention: daily `anonymise_inactive` pseudonymises contacts of idle companies per channel (`contact_anonymised`).
 - GDPR export/erasure by email across modules with `gdpr` hooks: `leads_gdpr` command and admin API v2.
+- GDPR fixes: `ErasedAddress` tokens — erased or retention-anonymised addresses are never re-imported or re-created
+  from a form (`erased_address`); blank or invalid `--email` refused, TTY-only confirmation; anonymisation locked and
+  idempotent under concurrency.
 - Connector seam: `Connector` protocol and `leads_connectors` entry points; CSV import runs through `csv`, `twenty`
   is an interface only.
 - Stage rules (`stage_entered` / `intel_ready`) with a `RuleRun` per evaluation and a cooldown per (rule, company);

@@ -54,9 +54,9 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   batch `missing_file`, a message from before this contract (id + content) fails it `legacy_message` unprocessed.
   When marking failed after the last retry hits the DB again, the task logs batch id + code and returns — the sweep
   below ends the batch.
-  Chunks of `LEADS_IMPORT_CHUNK_SIZE`, ≤ 2 selects + bulk writes each, one `transaction.atomic()` per chunk
+  Chunks of `LEADS_IMPORT_CHUNK_SIZE`, ≤ 3 selects (erased addresses, companies, contacts) + bulk writes each, one `transaction.atomic()` per chunk
   together with the counters and `last_row_done` — a retry resumes after it, nothing is replayed. A bulk write the
-  DB rejects is redone row by row in savepoints. Skip reasons: `no_domain_no_email`, `freemail_no_domain`,
+  DB rejects is redone row by row in savepoints. Skip reasons: `erased_address`, `no_domain_no_email`, `freemail_no_domain`,
   `invalid_legal_basis`, `invalid_domain`, `invalid_email`, `too_long:<field>`, `conflict`, `invalid_value`.
   Any other error ends the batch `failed` with report entry `{row: 0, reason: <code>}` (`missing_header`,
   `csv_error`, `encoding_error`, `no_stages`, `database_error` after the last retry, `internal_error`,
@@ -131,18 +131,29 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
 - Retention (`services/retention_service`, task `django_leads.anonymise_inactive`, `QueueOnce`, daily beat — host
   schedule): contacts not yet anonymised at companies idle longer than `Channel.retention_days` (null →
   `LEADS_RETENTION_DAYS`, 180) by `Company.last_activity_at` (null = never picked), never in a `won` stage, and
-  without an own Activity after the cutoff. `anonymise_contact`: email → `utils/emails.anonymised_address` token
-  (`anon-<sha256[:16]>@LEADS_ANONYMISED_DOMAIN`, deterministic), names/job title/phone cleared, `anonymised_at`,
-  Activity `anonymised` with `email_hash`, `contact_anonymised` on commit. Rows are never deleted; company, stage,
-  hooks, counters and timeline stay. `email_hash`/`anonymised_address` are copied in communicator (a test pins them).
+  without an own Activity after the cutoff. `anonymise_contact` re-reads the contact `select_for_update(of=self)` in
+  its transaction and skips one already anonymised (erase + retention, or two erases, write once): email →
+  `utils/emails.anonymised_address` token (`anon-<sha256[:16]>@LEADS_ANONYMISED_DOMAIN`, deterministic), names/job
+  title/phone cleared, `anonymised_at`, token remembered in `ErasedAddress`, Activity `anonymised` with `email_hash`,
+  `contact_anonymised` on commit (once). Rows are never deleted; company, stage, hooks, counters and timeline stay.
+- Tokens: `utils/emails.email_hash` / `anonymised_address` are canonical; communicator and agreements keep local copies
+  (no dependency on leads), each with a parity test that runs when leads is installed; `tests/test_retention.py` pins
+  both copies here.
+- Erased addresses (`models.ErasedAddress`, `services/erased_address_service`): tokens of every erased or anonymised
+  address, never the address. The CSV import skips such a row whole (`erased_address`, no company, no contact) and
+  the form bridge returns `None` for it. Communicator's global `email_token` suppression (created by its
+  `contact_anonymised` receiver and its erase hook) blocks every channel, so no send path reaches the address either.
 - GDPR (`gdpr/`, `services/gdpr_service`): every installed app's top-level `<app>.gdpr` module with
   `gdpr_export(email) -> dict` (keyed by model name) and `gdpr_erase(email) -> dict[str, int]` (protocol
   `gdpr/protocol.GdprHooks`) is discovered at call time (`gdpr/registry.discover`, never in `ready()`); leads' own
   hooks live in the `django_leads.gdpr` package. Export = `{email, generated_at, modules}` (JSON-ready); erase runs in
   one transaction after an Activity `note` "gdpr erase requested" on every affected company (actor = user), leads
-  anonymises the contacts (actor `gdpr`) and scrubs their Activities (`[erased]`). Matching covers the plain address
-  and its token (contacts already anonymised by retention). Entry points: `manage.py leads_gdpr --email X
-  (--export PATH | --erase [--yes])`, `POST api/leads/v2/admin/gdpr/{export,erase}/` (channel-independent).
+  remembers the token, anonymises the contacts (actor `gdpr`) and scrubs their Activities (`[erased]`). Matching
+  covers the plain address and its token (contacts already anonymised by retention); `contacts_of_email` and
+  `gdpr_service.export` raise `ValueError` on a blank address (it would match every email-less contact). Entry points:
+  `manage.py leads_gdpr --email X (--export PATH | --erase [--yes])` — `--email` normalised and validated
+  (`CommandError`), the confirmation is asked only on a TTY, otherwise `--yes` is required;
+  `POST api/leads/v2/admin/gdpr/{export,erase}/` (channel-independent, email validated).
 - Connectors (`connectors/`): `Connector` protocol (`key`, `fetch_candidates(channel) -> Iterable[CandidateRow]`,
   `push_status(company)`), `registry.get_connector(key, **kwargs)` over the `leads_connectors` entry points
   (`csv`, `twenty`). `CsvConnector(path)` owns `parse_rows` and feeds every CSV import; `TwentyConnector` raises
@@ -157,7 +168,7 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
 | Direction | Signal | Handling |
 |---|---|---|
 | emitted | `django_leads.signals.stage_entered(company, stage)` | own receiver → task `django_leads.evaluate_rules` |
-| emitted | `django_leads.signals.contact_anonymised(email_hash, anonymised_email, subject_ref)` | communicator anonymises the threads |
+| emitted | `django_leads.signals.contact_anonymised(email_hash, anonymised_email, subject_ref)` | communicator suppresses the token globally and anonymises the threads |
 | consumed | siteintel `report_ready(audit, succeeded_sources)` | task `django_leads.analyse_intel` |
 | consumed | communicator `reply_received(thread, reply)` | Activity `reply`, `on_reply` stage, high notification |
 | consumed | communicator `company_skipped(subject_ref)` | `do_not_contact = True`, Activity `blocked` |

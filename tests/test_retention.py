@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
+from django_agreements import gdpr as agreements_gdpr
 from django_agreements.enums import LegalBasis
 from django_communicator.utils import emails as communicator_emails
 
@@ -36,6 +37,7 @@ def test_email_hash_matches_communicator_copy():
     assert email_hash(" Foo@Bar.PL ") == communicator_emails.email_hash(" Foo@Bar.PL ") == email_hash("foo@bar.pl")
     assert anonymised_address(" Foo@Bar.PL ") == communicator_emails.anonymised_address("foo@bar.pl")
     assert anonymised_address("foo@bar.pl").endswith("@anonymised.invalid")
+    assert anonymised_address(" Foo@Bar.PL ") == agreements_gdpr.anonymised_address("foo@bar.pl")
 
 
 def test_L16_inactive_contact_anonymised_company_and_stats_kept(company, django_capture_on_commit_callbacks):
@@ -173,7 +175,8 @@ def test_L17_erase_scrubs_activities_and_calls_every_module(subject, django_capt
         cls=DjangoJSONEncoder,
     )
     assert "stale@example-stale.test" not in stored
-    assert Suppression.objects.get().value == "stale@example-stale.test"
+    suppression = Suppression.objects.get()
+    assert (suppression.channel, suppression.value) == (None, anonymised_address("stale@example-stale.test"))
     assert gdpr_service.export("stale@example-stale.test")["modules"]["django_leads"]["Contact"][0]["anonymised_at"]
 
 
@@ -228,6 +231,144 @@ def test_anonymise_now_endpoint_runs_retention_as_of(admin_api, company):
     assert admin_api.post(url, {}, format="json").json() == {"anonymised": {"default-europe": 0}}
     as_of = (timezone.now() + timedelta(days=1)).isoformat()
     assert admin_api.post(url, {"as_of": as_of}, format="json").json() == {"anonymised": {"default-europe": 1}}
+
+
+# --- FIX-11: erased addresses stay erased, one subject per erase, locked anonymisation ---
+
+
+def test_L17_erased_never_contacted_address_is_suppressed_on_every_channel(company, django_capture_on_commit_callbacks):
+    from django_communicator.models import Channel as CommunicatorChannel
+    from django_communicator.services import suppression_service
+
+    from django_leads.services import gdpr_service
+
+    stale_contact(company, email="never@ogrod.pl")
+    channels = [CommunicatorChannel.objects.create(idx=idx, label=idx) for idx in ("default-europe", "default-local")]
+    with django_capture_on_commit_callbacks(execute=True):
+        gdpr_service.erase("Never@Ogrod.pl", actor="operator")
+
+    assert all(suppression_service.is_suppressed(channel, " never@ogrod.pl ") for channel in channels)
+    assert not suppression_service.is_suppressed(channels[1], "someone@ogrod.pl")
+
+
+def test_L16_retention_anonymised_address_blocks_reimport(company, django_capture_on_commit_callbacks):
+    from django_communicator.models import Channel as CommunicatorChannel
+    from django_communicator.services import suppression_service
+
+    from tests.test_import import csv_of, reasons, run
+
+    stale_contact(company)
+    age(company)
+    with django_capture_on_commit_callbacks(execute=True):
+        anonymise_inactive(as_of=timezone.now().isoformat())
+
+    batch = run(company.channel, csv_of("Stale,example-stale.test,,,,Stale,Again,STALE@example-stale.test,,,consent,"))
+
+    assert (batch.created_count, batch.matched_count, reasons(batch)) == (0, 0, {2: "erased_address"})
+    assert Contact.objects.count() == 1 and not Company.objects.filter(domain="example-stale.test").exists()
+    communicator_channel = CommunicatorChannel.objects.create(idx="default-europe", label="Default")
+    assert suppression_service.is_suppressed(communicator_channel, "stale@example-stale.test")
+
+
+def test_contacts_of_email_refuses_empty():
+    from django_leads.gdpr.hooks import contacts_of_email
+    from django_leads.services import gdpr_service
+
+    for blank in ("", "   ", None):
+        with pytest.raises(ValueError):
+            contacts_of_email(blank)
+    with pytest.raises(ValueError):
+        gdpr_service.export(" ")
+
+
+def test_gdpr_command_blank_email_refused(company, tmp_path):
+    from django.core.management import CommandError, call_command
+
+    nameless = Contact.objects.create(company=company, email="", first_name="No", last_name="Email")
+    for value in (" ", "not-an-email"):
+        with pytest.raises(CommandError, match="valid email"):
+            call_command("leads_gdpr", "--email", value, "--erase", "--yes")
+        with pytest.raises(CommandError, match="valid email"):
+            call_command("leads_gdpr", "--email", value, "--export", str(tmp_path / "out.json"))
+    nameless.refresh_from_db()
+    assert (nameless.first_name, nameless.anonymised_at) == ("No", None) and not (tmp_path / "out.json").exists()
+
+
+def test_gdpr_command_without_tty_requires_yes(company, monkeypatch):
+    import io
+
+    from django.core.management import CommandError, call_command
+
+    contact = stale_contact(company)
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    with pytest.raises(CommandError, match="--yes"):
+        call_command("leads_gdpr", "--email", contact.email, "--erase")
+
+    class Terminal(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    monkeypatch.setattr("sys.stdin", Terminal(""))
+    monkeypatch.setattr("builtins.input", mock_eof)
+    with pytest.raises(CommandError, match="no answer"):
+        call_command("leads_gdpr", "--email", contact.email, "--erase")
+    contact.refresh_from_db()
+    assert contact.anonymised_at is None
+
+
+def mock_eof(prompt: str) -> str:
+    raise EOFError
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_erase_and_retention_anonymise_once(company):
+    from django.db import connection
+
+    from django_leads.services import gdpr_service
+
+    contact = stale_contact(company)
+    stale_copy = Contact.objects.get(pk=contact.pk)
+    sent = []
+    contact_anonymised.connect(lambda sender, **kwargs: sent.append(kwargs), weak=False, dispatch_uid="test.once")
+    try:
+        if connection.vendor == "postgresql":
+            _race(contact, lambda: gdpr_service.erase(contact.email, actor="operator"))
+        else:  # sqlite has no row locks: the stale copy still has to be re-read and skipped
+            retention_service.anonymise_contact(contact)
+            gdpr_service.erase("stale@example-stale.test", actor="operator")
+        retention_service.anonymise_contact(stale_copy)
+    finally:
+        contact_anonymised.disconnect(dispatch_uid="test.once")
+
+    assert Activity.objects.filter(kind=ActivityKind.ANONYMISED).count() == 1 and len(sent) == 1
+
+
+def _race(contact: Contact, erase) -> None:
+    """Retention holds the row lock while the erase starts; the erase waits, re-reads and skips the contact."""
+    import threading
+    import time
+
+    from django.db import connection, transaction
+
+    locked = threading.Event()
+
+    def retention() -> None:
+        with transaction.atomic():
+            retention_service.anonymise_contact(Contact.objects.get(pk=contact.pk))
+            locked.set()
+            time.sleep(0.5)
+        connection.close()
+
+    def erasure() -> None:
+        locked.wait(5)
+        erase()
+        connection.close()
+
+    threads = [threading.Thread(target=retention), threading.Thread(target=erasure)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(10)
 
 
 # --- Connector seam ---

@@ -232,3 +232,14 @@ def test_sweep_records_form_import_failed_on_linked_company(company, forms_chann
     failure = Activity.objects.get(company=company, kind=ActivityKind.FORM_IMPORT_FAILED)
     assert failure.data == {"lead_id": lead.pk, "contact_form_id": lead.contact_form_id}
     assert sweep_service.retry_form_leads(later) == 0 and not Contact.objects.exists()
+
+
+def test_form_with_erased_address_creates_no_contact(channel, forms_channel, django_capture_on_commit_callbacks):
+    from django_leads.services import erased_address_service
+
+    erased_address_service.remember(" EWA@ogrod.pl ")
+    with django_capture_on_commit_callbacks(execute=True):
+        lead = submit(forms_channel, {"marketing_consent": True, "website": "https://www.ogrod.pl/kontakt"})
+
+    assert form_service.import_form_lead(lead, forms_channel.idx) is None
+    assert not Contact.objects.exists() and not Company.objects.exists() and not Activity.objects.exists()

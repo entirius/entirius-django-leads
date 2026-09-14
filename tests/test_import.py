@@ -230,14 +230,14 @@ def chunk_queries(channel, rows: list[tuple[int, dict]]) -> list[str]:
 
 
 def test_L05_5000_rows_chunked_query_ceiling(channel):
-    """Every chunk: 2 selects + bulk writes, whatever its size (sqlite splits bulk inserts, so the
-    exact ceiling is asserted on PostgreSQL — zeno `make module-test`). Savepoints are not counted."""
+    """Every chunk: 3 selects (erased addresses, companies, contacts) + bulk writes, whatever its size (sqlite splits
+    bulk inserts, so the exact ceiling is asserted on PostgreSQL — zeno `make module-test`). Savepoints not counted."""
     rows = list(enumerate(import_service.parse_rows(io.StringIO(big_csv(5000))), start=2))
     for start in range(0, 5000, 500):
         sql = chunk_queries(channel, rows[start : start + 500])
-        assert sum(query.lstrip().upper().startswith("SELECT") for query in sql) <= 2
+        assert sum(query.lstrip().upper().startswith("SELECT") for query in sql) <= 3
         if connection.vendor == "postgresql":
-            assert len(sql) <= 9, sql
+            assert len(sql) <= 10, sql
     assert Company.objects.count() == 250 and Contact.objects.count() == 5000
 
 

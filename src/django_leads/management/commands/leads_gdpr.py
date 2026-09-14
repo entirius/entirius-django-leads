@@ -3,11 +3,15 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
 import os
+import sys
 from pathlib import Path
 
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
+from django.core.validators import validate_email
 
 from django_leads.services import gdpr_service
+from django_leads.utils.emails import normalize_email
 
 
 class Command(BaseCommand):
@@ -21,12 +25,12 @@ class Command(BaseCommand):
         parser.add_argument("--yes", action="store_true", help="Erase without the interactive confirmation")
 
     def handle(self, *args, **options) -> None:
-        email = options["email"]
+        email = valid_email(options["email"])
         if options["export"]:
             self._export(email, Path(options["export"]))
             return
-        if not options["yes"] and input(f"Erase all data of {email}? This cannot be undone [y/N] ").lower() != "y":
-            raise CommandError("erasure aborted")
+        if not options["yes"]:
+            confirm(email)
         for module, counts in gdpr_service.erase(email, actor="manage.py").items():
             self.stdout.write(f"{module}: {json.dumps(counts, sort_keys=True)}")
 
@@ -37,3 +41,25 @@ class Command(BaseCommand):
             json.dump(payload, file, ensure_ascii=False, indent=2)
         self.stdout.write(f"modules: {', '.join(payload['modules'])}")
         self.stdout.write(f"written to {path}")
+
+
+def valid_email(raw: str) -> str:
+    """Normalised and validated — a blank or malformed value never selects anyone."""
+    email = normalize_email(raw)
+    try:
+        validate_email(email)
+    except ValidationError:
+        raise CommandError("--email must be a valid email address") from None
+    return email
+
+
+def confirm(email: str) -> None:
+    """Asks on a terminal only; without one (cron, pipes, CI) the erasure needs `--yes`."""
+    if not sys.stdin.isatty():
+        raise CommandError("no terminal to confirm the erasure on — pass --yes")
+    try:
+        answer = input(f"Erase all data of {email}? This cannot be undone [y/N] ")
+    except EOFError:
+        raise CommandError("erasure aborted: no answer") from None
+    if answer.strip().lower() != "y":
+        raise CommandError("erasure aborted")

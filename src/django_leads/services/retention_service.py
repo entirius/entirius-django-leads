@@ -13,7 +13,7 @@ from django.utils import timezone
 from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, StageKind
 from django_leads.models import Activity, Channel, Company, Contact
-from django_leads.services import activity_service
+from django_leads.services import activity_service, erased_address_service
 from django_leads.services.outreach_service import subject_ref
 from django_leads.signals import contact_anonymised
 from django_leads.utils.emails import anonymised_address, email_hash
@@ -32,28 +32,35 @@ def select_inactive_contacts(channel: Channel, *, as_of: datetime) -> QuerySet[C
 
 
 def anonymise_contact(contact: Contact, *, actor: str = "retention") -> Contact:
-    """Email → token, name, job title and phone cleared; Activity `anonymised` with the hash; `contact_anonymised`
-    on commit. An already anonymised contact is returned unchanged."""
-    if contact.anonymised_at is not None:
-        return contact
-    hashed = email_hash(contact.email or f"contact:{contact.pk}")
-    contact.email = anonymised_address(contact.email) if contact.email else ""
+    """Email → token (remembered in `ErasedAddress`), name, job title and phone cleared; Activity `anonymised` with the
+    hash; `contact_anonymised` on commit. The row is re-read under a lock: a contact already anonymised (by a
+    concurrent erase or retention run) is returned unchanged, so the Activity and the signal happen once."""
+    with transaction.atomic():
+        locked = Contact.objects.select_for_update(of=("self",)).select_related("company").get(pk=contact.pk)
+        if locked.anonymised_at is None:
+            _pseudonymise(locked, actor)
+    return locked
+
+
+def _pseudonymise(contact: Contact, actor: str) -> None:
+    original = contact.email
+    hashed = email_hash(original or f"contact:{contact.pk}")
+    contact.email = anonymised_address(original) if original else ""
     for name in PERSONAL_FIELDS:
         setattr(contact, name, "")
     contact.anonymised_at = timezone.now()
-    with transaction.atomic():
-        contact.save(update_fields=["email", *PERSONAL_FIELDS, "anonymised_at", "modified_at"])
-        activity_service.record(
-            contact.company, ActivityKind.ANONYMISED, "contact anonymised", contact=contact,
-            data={"email_hash": hashed}, actor=actor,
-        )  # fmt: skip
-        signal_kwargs = {
-            "email_hash": hashed,
-            "anonymised_email": contact.email,
-            "subject_ref": subject_ref(contact.company),
-        }
-        transaction.on_commit(lambda: contact_anonymised.send(sender=Contact, **signal_kwargs))
-    return contact
+    contact.save(update_fields=["email", *PERSONAL_FIELDS, "anonymised_at", "modified_at"])
+    erased_address_service.remember(original)
+    activity_service.record(
+        contact.company, ActivityKind.ANONYMISED, "contact anonymised", contact=contact,
+        data={"email_hash": hashed}, actor=actor,
+    )  # fmt: skip
+    signal_kwargs = {
+        "email_hash": hashed,
+        "anonymised_email": contact.email,
+        "subject_ref": subject_ref(contact.company),
+    }
+    transaction.on_commit(lambda: contact_anonymised.send(sender=Contact, **signal_kwargs))
 
 
 def anonymise_inactive(as_of: datetime) -> dict[str, int]:

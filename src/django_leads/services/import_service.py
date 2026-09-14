@@ -2,7 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-"""CSV import: rows are normalised, deduplicated and written chunk by chunk (≤ 2 selects + bulk writes each).
+"""CSV import: rows are normalised, deduplicated and written chunk by chunk (≤ 3 selects + bulk writes each: erased
+addresses, companies, contacts).
 
 Lifecycle: every chunk commits atomically together with the batch counters and `last_row_done`, so a retry
 resumes after the last committed row. A row the bulk write rejects is retried alone in a savepoint and skipped
@@ -30,7 +31,13 @@ from django_leads.connectors.base import ImportFailed
 from django_leads.connectors.csv import CsvConnector, parse_rows  # noqa: F401 — `parse_rows` kept importable here
 from django_leads.enums import ActivityKind, CompanyType, ImportStatus, LeadSource
 from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, Stage
-from django_leads.services import activity_service, company_service, contact_service, stage_service
+from django_leads.services import (
+    activity_service,
+    company_service,
+    contact_service,
+    erased_address_service,
+    stage_service,
+)
 from django_leads.utils.domains import email_domain, registrable_domain
 from django_leads.utils.emails import normalize_email
 
@@ -305,7 +312,20 @@ class _ChunkWriter:
                 prepared.append((line, *normalise_row(raw, self.lookups.languages)))
             except SkipRow as reason:
                 self.skipped.append((line, "skipped", str(reason)))
-        return prepared
+        return self._without_erased(prepared)
+
+    def _without_erased(self, prepared: list[tuple[int, dict, dict | None]]) -> list[tuple[int, dict, dict | None]]:
+        """A row whose email was erased or anonymised is skipped whole — no company, no contact (one select)."""
+        erased = erased_address_service.erased_emails(
+            contact_row["email"] for _, _, contact_row in prepared if contact_row
+        )
+        kept = []
+        for line, company_row, contact_row in prepared:
+            if contact_row and contact_row["email"] in erased:
+                self.skipped.append((line, "skipped", erased_address_service.SKIP_REASON))
+            else:
+                kept.append((line, company_row, contact_row))
+        return kept
 
     def prefetch(self, prepared: list[tuple[int, dict, dict | None]]) -> None:
         """The chunk's two selects: existing companies by domain, their contacts by email (or without one)."""

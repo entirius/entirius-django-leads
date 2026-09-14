@@ -12,7 +12,7 @@ from django_agreements.enums import LegalBasis
 from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, LeadSource
 from django_leads.models import Activity, Channel, Contact
-from django_leads.services import activity_service, company_service, contact_service
+from django_leads.services import activity_service, company_service, contact_service, erased_address_service
 from django_leads.utils.domains import email_domain, registrable_domain
 from django_leads.utils.emails import normalize_email
 
@@ -23,13 +23,17 @@ CONSENT_VALUES = frozenset({"true", "1", "yes", "on", "y", "tak"})
 
 
 def import_form_lead(lead: Any, channel_idx: str) -> Contact | None:
-    """Upsert the submission's company and contact; `None` when the channel or a company domain is missing.
-    A submission already imported (its `form submission` Activity exists) is a no-op returning `None`."""
+    """Upsert the submission's company and contact; `None` when the channel or a company domain is missing, or the
+    address was erased or anonymised (nothing created). A submission already imported (its `form submission`
+    Activity exists) is a no-op returning `None`."""
     channel = Channel.objects.filter(idx=channel_idx).first()
     if channel is None:
         logger.info("leads: no leads channel %s for contact_forms lead %s", channel_idx, lead.pk)
         return None
     if Activity.objects.filter(kind=ActivityKind.FORM, company__channel=channel, data__lead_id=lead.pk).exists():
+        return None
+    if erased_address_service.is_erased(lead.email):
+        logger.info("leads: contact_forms lead %s skipped, %s", lead.pk, erased_address_service.SKIP_REASON)
         return None
     domain = form_domain(lead)
     if domain is None:

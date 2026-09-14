@@ -8,6 +8,7 @@ from django_leads.models.channel import Channel
 from django_leads.models.claim import Claim
 from django_leads.models.company import Company
 from django_leads.models.contact import Contact
+from django_leads.models.erased_address import ErasedAddress
 from django_leads.models.import_batch import ImportBatch
 from django_leads.models.recipient_pick_profile import RecipientPickProfile
 from django_leads.models.rule_run import RuleRun
@@ -21,6 +22,7 @@ __all__ = [
     "Claim",
     "Company",
     "Contact",
+    "ErasedAddress",
     "ImportBatch",
     "RecipientPickProfile",
     "RuleRun",

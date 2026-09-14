@@ -10,14 +10,17 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 
 from django_leads.models import Activity, Company, Contact
-from django_leads.services import retention_service
+from django_leads.services import erased_address_service, retention_service
 from django_leads.utils.emails import anonymised_address, normalize_email
 
 ERASED = "[erased]"
 
 
 def contacts_of_email(email: str) -> QuerySet[Contact]:
-    """Contacts with the address in every channel, including contacts already anonymised to its token."""
+    """Contacts with the address in every channel, including contacts already anonymised to its token. A blank
+    address raises `ValueError` — it would select every contact without an email."""
+    if not normalize_email(email):
+        raise ValueError("an email address is required")
     return Contact.objects.filter(Q(email=normalize_email(email)) | Q(email=anonymised_address(email)))
 
 
@@ -31,9 +34,11 @@ def gdpr_export(email: str) -> dict[str, Any]:
 
 
 def gdpr_erase(email: str) -> dict[str, int]:
-    """Contacts anonymised (actor `gdpr`), then every Activity of those contacts scrubbed."""
-    contacts = list(contacts_of_email(email).select_related("company"))
+    """The address remembered as erased (contact or not), contacts anonymised (actor `gdpr`, locked, once), then
+    every Activity of those contacts scrubbed."""
     with transaction.atomic():
+        contacts = list(contacts_of_email(email))
+        erased_address_service.remember(email)
         for contact in contacts:
             retention_service.anonymise_contact(contact, actor="gdpr")
         activities = Activity.objects.filter(contact__in=contacts).update(message=ERASED, data={"erased": True})

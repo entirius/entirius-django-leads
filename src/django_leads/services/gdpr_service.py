@@ -20,7 +20,9 @@ from django_leads.utils.emails import normalize_email
 
 
 def export(email: str) -> dict[str, Any]:
-    """`{email, generated_at, modules: {app name: export}}`, JSON-ready (dates ISO)."""
+    """`{email, generated_at, modules: {app name: export}}`, JSON-ready (dates ISO). A blank address raises
+    `ValueError` before any module runs."""
+    contacts_of_email(email)
     modules = {name: hooks.gdpr_export(email) for name, hooks in registry.discover().items()}
     payload = {"email": normalize_email(email), "generated_at": timezone.now(), "modules": modules}
     return json.loads(json.dumps(payload, cls=DjangoJSONEncoder))
