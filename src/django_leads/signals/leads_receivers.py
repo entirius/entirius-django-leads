@@ -16,5 +16,6 @@ def connect() -> None:
 def on_stage_entered(sender, company, stage, **kwargs) -> None:
     from django_leads.tasks import evaluate_rules
 
-    work = lambda: evaluate_rules.delay(company.pk, RuleTrigger.STAGE_ENTERED.value, stage.pk)  # noqa: E731
+    event = f"stage:{stage.pk}:{company.stage_entered_at.isoformat()}"
+    work = lambda: evaluate_rules.delay(company.pk, RuleTrigger.STAGE_ENTERED.value, stage.pk, event)  # noqa: E731
     after_commit(work, "on_stage_entered")

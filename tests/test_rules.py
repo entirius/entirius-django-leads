@@ -1,10 +1,12 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import json
 from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+from django.utils import timezone
 
 from django_leads.enums import ActivityKind, RuleAction, RuleOutcome, RuleTrigger
 from django_leads.models import Activity, Contact, RuleRun, Stage
@@ -41,10 +43,60 @@ def test_rule_fires_communicate_for_primary_contact(shop, make_rule, communicate
 def test_L08_rule_skips_contact_without_email_and_does_not_loop(company, make_rule, communicate):
     Contact.objects.create(company=company, email="", first_name="No", legal_basis="consent")
     rule = make_rule(require_hooks=False)
-    first = rule_service.evaluate_rules(company, RuleTrigger.STAGE_ENTERED, stage=rule.stage)
-    second = rule_service.evaluate_rules(company, RuleTrigger.STAGE_ENTERED, stage=rule.stage)
-    assert [run.outcome for run in first + second] == [RuleOutcome.SKIPPED, RuleOutcome.COOLDOWN]
+    first = rule_service.evaluate_rules(company, RuleTrigger.STAGE_ENTERED, stage=rule.stage, event="e1")
+    again = rule_service.evaluate_rules(company, RuleTrigger.STAGE_ENTERED, stage=rule.stage, event="e1")
+    assert [run.outcome for run in first + again] == [RuleOutcome.SKIPPED, RuleOutcome.SKIPPED]
+    assert RuleRun.objects.count() == 1
     assert activity_messages(company, ActivityKind.SKIPPED) == ["skipped: no email"]
+    communicate.assert_not_called()
+
+
+def test_L09_cooldown_ignores_skipped_and_cooldown_runs(shop, make_rule, communicate):
+    rule = make_rule()
+    for outcome in (RuleOutcome.SKIPPED, RuleOutcome.COOLDOWN, RuleOutcome.BLOCKED):
+        RuleRun.objects.create(rule=rule, company=shop, outcome=outcome)
+    runs = rule_service.evaluate_rules(shop, RuleTrigger.STAGE_ENTERED, stage=rule.stage)
+    assert [run.outcome for run in runs] == [RuleOutcome.FIRED]
+    assert rule_service.evaluate_rules(shop, RuleTrigger.STAGE_ENTERED, stage=rule.stage)[0].outcome == "cooldown"
+
+
+def test_zero_cooldown_is_still_idempotent(shop, make_rule, communicate):
+    from django_leads.tasks import evaluate_rules
+
+    rule = make_rule(cooldown_hours=0)
+    for event in ("stage:1:a", "stage:1:a", "stage:1:b"):
+        evaluate_rules.apply(args=(shop.pk, RuleTrigger.STAGE_ENTERED, rule.stage_id, event))
+    assert communicate.call_count == 2
+    assert list(RuleRun.objects.values_list("event_key", flat=True).order_by("id")) == ["stage:1:a", "stage:1:b"]
+
+
+@pytest.mark.parametrize(
+    ("require_email", "outcome", "message"),
+    [(True, "skipped", "skipped: no email"), (False, "blocked", "blocked: no_email")],
+)
+def test_require_email_is_honoured(company, make_rule, communicate, require_email, outcome, message):
+    rule = make_rule(require_hooks=False, require_email=require_email)
+    runs = rule_service.evaluate_rules(company, RuleTrigger.STAGE_ENTERED, stage=rule.stage)
+    assert [run.outcome for run in runs] == [outcome]
+    assert message in activity_messages(company, outcome)
+    communicate.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        ({"opt_out_at": timezone.now()}, "opted_out"),
+        ({"anonymised_at": timezone.now()}, "anonymised"),
+        ({"legal_basis": None}, "no_legal_basis"),
+    ],
+)
+def test_L13_manual_communicate_refuses_opted_out_anonymised_or_no_basis(shop, communicate, admin_api, change, reason):
+    contact = shop.contacts.get(is_primary=True)
+    Contact.objects.filter(pk=contact.pk).update(**change)
+    body = {"template_key": "lead.cold.b2b", "contact_id": contact.pk}
+    response = admin_api.post(f"/api/leads/v2/admin/default-europe/companies/{shop.pk}/communicate/", body)
+    assert response.status_code == 409 and reason in json.dumps(response.json())
+    assert activity_messages(shop, ActivityKind.BLOCKED) == [f"blocked: {reason}"]
     communicate.assert_not_called()
 
 

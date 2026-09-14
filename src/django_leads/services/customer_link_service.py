@@ -4,28 +4,13 @@
 
 """Won seam: link an existing accounts Customer by the primary contact's email (accounts is a soft dependency)."""
 
-import functools
-import logging
-
 from django_leads.enums import ActivityKind
 from django_leads.models import Company
 from django_leads.services import activity_service
 
-logger = logging.getLogger(__name__)
-
 
 class NoCustomer(Exception):
     """No Customer owns the email of the company's primary contact."""
-
-
-@functools.cache
-def accounts_available() -> bool:
-    try:
-        from django_accounts.models import Customer  # noqa: F401
-    except (ImportError, RuntimeError):
-        logger.info("django_accounts not installed — create-customer is disabled")
-        return False
-    return True
 
 
 def link_customer(company: Company, *, actor: str) -> str:
@@ -40,10 +25,11 @@ def link_customer(company: Company, *, actor: str) -> str:
 
 
 def find_customer_uid(email: str):
-    """`Customer.email` is a property returning an allauth EmailAddress — match through EmailAddress itself."""
+    """`Customer.email` is a property returning an allauth EmailAddress — match through a verified EmailAddress only
+    (an unverified address proves nothing about who owns the account)."""
     from allauth.account.models import EmailAddress
     from django_accounts.models import Customer
 
-    address = EmailAddress.objects.filter(email__iexact=email).select_related("user").first()
+    address = EmailAddress.objects.filter(email__iexact=email, verified=True).select_related("user").first()
     customer = Customer.objects.filter(user=address.user).first() if address else None
     return customer.uid if customer else None

@@ -28,19 +28,21 @@ class CompanyCommunicateView(CompanyActionView):
     @extend_schema(
         tags=_TAGS,
         summary="Request a reviewable draft for a contact",
-        description="No rule conditions or cooldown. 409 for do_not_contact or when no draft can be built "
-        "(no clause set, no legal basis for a template with a legal footer); 400 for a foreign or email-less contact.",
+        description="No rule conditions or cooldown. 409 when the outreach gate refuses the contact (do_not_contact, "
+        "opted_out, anonymised, no_legal_basis) or no draft can be built (no clause set); 400 for a foreign or "
+        "email-less contact.",
         request=CommunicateRequest,
         responses={201: DraftResponse, **ERROR_RESPONSES, 409: None},
     )
     def post(self, request: Request, channel_idx: str, pk: int) -> Response:
         body = parse(CommunicateRequest, request.data)
         company = self.company(channel_idx, pk)
-        if company.do_not_contact:
-            raise Conflict("company is do_not_contact")
         contact = company.contacts.exclude(email="").filter(pk=body.contact_id).first()
         if contact is None:
             raise ValidationError({"contact_id": ["no contact with an email in this company"]})
+        reason = outreach_service.check_gate(contact, actor=request.user.username)
+        if reason:
+            return Response({"error": "NotEligible", "detail": f"contact not eligible: {reason}"}, status=409)
         try:
             message = outreach_service.request_draft(company, contact, body.template_key, actor=request.user.username)
         except CommunicatorChannel.DoesNotExist:

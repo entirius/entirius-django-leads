@@ -10,14 +10,14 @@ from django.conf import settings
 from django_siteintel.models import Audit
 from django_siteintel.services.audit_service import request_audit
 from django_utils.toolbox import ToolboxClient, ToolboxError
-from django_utils.toolbox.schemas import CompletionRequest, Message
+from django_utils.toolbox.schemas import CompletionRequest
 
-from django_leads.enums import ActivityKind, CompanyType, RuleTrigger
+from django_leads.enums import ActivityKind, ClaimState, CompanyType, RuleTrigger
 from django_leads.models import AnalysisProfile, Company
-from django_leads.services import activity_service, alert_service, rule_service
+from django_leads.services import activity_service, alert_service, claim_service, rule_service
 from django_leads.settings import LEADS_ANALYSIS_MAX_HOOKS
 from django_leads.utils.domains import registrable_domain
-from django_leads.utils.prompts import json_summary, render_prompt
+from django_leads.utils.prompts import json_summary, prompt_messages
 
 logger = logging.getLogger(__name__)
 
@@ -46,22 +46,33 @@ def company_for_audit(audit: Audit) -> Company | None:
     return companies.filter(channel__idx=audit.channel_idx, domain=registrable_domain(audit.domain)).first()
 
 
-def analyse_audit(audit_id: str, succeeded_sources: list[str]) -> Company | None:
-    """Hooks from a finished audit, then the `intel_ready` rules; a failed analysis alerts and evaluates nothing."""
+def analyse_audit(audit_id: str, succeeded_sources: list[str], *, run_id: str = "") -> Company | None:
+    """Hooks from a finished audit, then the `intel_ready` rules; a failed analysis alerts and evaluates nothing.
+    Claim `intel:<audit>:<run>` — a redelivered task finds it and never repeats the paid completion."""
     audit = Audit.objects.filter(pk=audit_id).first()
     company = company_for_audit(audit) if audit else None
-    if company is None:
+    claim = claim_service.take(company, f"intel:{audit_id}:{run_id}") if company else None
+    if claim is None:
         return None
-    if not succeeded_sources:
-        activity_service.record(company, ActivityKind.INTEL, "no intel sources succeeded")
-    else:
-        try:
-            _analyse(company, audit)
-        except AnalysisFailed as error:
-            _analysis_failed(company, error.code)
-            return company
-    rule_service.evaluate_rules(company, RuleTrigger.INTEL_READY)
+    try:
+        _analyse_sources(company, audit, succeeded_sources)
+    except AnalysisFailed as error:
+        claim_service.finish(claim, ClaimState.FAILED, error.code[:64])
+        _analysis_failed(company, error.code)
+        return company
+    claim_service.finish(claim, ClaimState.DONE)
+    rule_service.evaluate_rules(company, RuleTrigger.INTEL_READY, event=f"audit:{audit_id}")
     return company
+
+
+def _analyse_sources(company: Company, audit: Audit, succeeded_sources: list[str]) -> None:
+    """No source succeeded → the hooks of an older audit are cleared, rules never draft on stale hooks."""
+    if succeeded_sources:
+        _analyse(company, audit)
+        return
+    company.hooks = []
+    company.save(update_fields=["hooks", "modified_at"])
+    activity_service.record(company, ActivityKind.INTEL_EMPTY, "no intel sources succeeded")
 
 
 def _analyse(company: Company, audit: Audit) -> None:
@@ -70,7 +81,7 @@ def _analyse(company: Company, audit: Audit) -> None:
         raise AnalysisFailed("no_profile")
     request = CompletionRequest(
         model=profile.model,
-        messages=[Message(role="system", content=render_prompt(profile.prompt_text, _prompt_values(company, audit)))],
+        messages=prompt_messages(profile.prompt_text, _prompt_values(company, audit)),
         json_schema=profile.json_schema or None,
         tags=[ANALYSIS_KEY, f"channel:{company.channel.idx}"],
     )

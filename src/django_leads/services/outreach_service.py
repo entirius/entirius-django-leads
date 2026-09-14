@@ -12,7 +12,7 @@ from django_communicator.services.communicate_service import LegalFooterRequired
 
 from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
-from django_leads.services import activity_service
+from django_leads.services import activity_service, recipient_service
 
 CONTEXT_FIELDS = ("domain", "company_type", "industry", "description", "platform", "hooks")
 
@@ -24,7 +24,10 @@ def subject_ref(company: Company) -> str:
 def request_draft(
     company: Company, contact: Contact, template_key: str, *, actor: str, thread: Thread | None = None
 ) -> Message | None:
-    """A reviewable draft for the contact; None (Activity `skipped`) when no legal footer can be built."""
+    """A reviewable draft for the contact; None (Activity `blocked`/`skipped`) when the outreach gate refuses the
+    contact or no legal footer can be built."""
+    if check_gate(contact, actor=actor):
+        return None
     language = _language_code(company, contact)
     try:
         footer = _legal_footer(company, contact, language)
@@ -51,15 +54,23 @@ def request_draft(
     return message
 
 
+def check_gate(contact: Contact, *, actor: str) -> str | None:
+    """The outreach gate on freshly read contact and company rows; a refusal is recorded as `blocked: <reason>`."""
+    fresh = Contact.objects.select_related("company").get(pk=contact.pk)
+    reason = recipient_service.block_reason(fresh)
+    if reason:
+        message = f"blocked: {reason}"
+        activity_service.record(fresh.company, ActivityKind.BLOCKED, message, contact=fresh, actor=actor)
+    return reason
+
+
 def _language_code(company: Company, contact: Contact) -> str:
     language = contact.language or company.channel.default_language
     return language.iso2.lower() if language else ""
 
 
 def _legal_footer(company: Company, contact: Contact, language: str) -> str:
-    """No basis → empty footer; communicator decides whether the template may go out without one."""
-    if not contact.legal_basis:
-        return ""
+    """The outreach gate guarantees a legal basis — the clause set of that basis builds the footer."""
     clause_set = resolve_clause_set(
         channel_idx=company.channel.idx, legal_basis=contact.legal_basis, language_code=language
     )

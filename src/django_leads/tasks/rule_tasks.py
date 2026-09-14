@@ -8,8 +8,8 @@ from django_leads.settings import QUEUE_DEFAULT
 
 
 @shared_task(name="django_leads.evaluate_rules", queue=QUEUE_DEFAULT, acks_late=True)
-def evaluate_rules(company_id: int, trigger: str, stage_id: int | None = None) -> int:
-    """Worker side of the `stage_entered` receiver — `ai_pick` rules call the toolbox."""
+def evaluate_rules(company_id: int, trigger: str, stage_id: int | None = None, event: str = "") -> int:
+    """Worker side of the `stage_entered` receiver — `ai_pick` rules call the toolbox; `event` dedupes redelivery."""
     from django_leads.models import Company, Stage
     from django_leads.services import rule_service
 
@@ -17,4 +17,4 @@ def evaluate_rules(company_id: int, trigger: str, stage_id: int | None = None) -
     if company is None:
         return 0
     stage = Stage.objects.filter(pk=stage_id).first() if stage_id else None
-    return len(rule_service.evaluate_rules(company, trigger, stage=stage))
+    return len(rule_service.evaluate_rules(company, trigger, stage=stage, event=event))

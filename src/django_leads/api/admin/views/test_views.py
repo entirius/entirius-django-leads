@@ -71,13 +71,13 @@ class DevEvaluateView(DevelopmentView):
 class DevRotateNowView(DevelopmentView):
     @extend_schema(
         tags=_TAGS,
-        summary="Run the daily rotation scan now (development only)",
+        summary="Run the daily rotation scan of this channel now (development only)",
         request=None,
         responses={200: DevRotateResponse, **ERROR_RESPONSES},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
-        self.channel(channel_idx)
-        return Response(DevRotateResponse(rotated=rotation_service.rotate_unresponsive()).model_dump())
+        rotated = rotation_service.rotate_unresponsive(self.channel(channel_idx).idx)
+        return Response(DevRotateResponse(rotated=rotated).model_dump())
 
 
 class DevImportNowView(DevelopmentView):

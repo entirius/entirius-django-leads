@@ -8,12 +8,12 @@ import json
 
 from django.conf import settings
 from django_utils.toolbox import ToolboxClient, ToolboxError
-from django_utils.toolbox.schemas import CompletionRequest, Message
+from django_utils.toolbox.schemas import CompletionRequest
 
 from django_leads.enums import ActivityKind, ContactStrategy
 from django_leads.models import Company, Contact, RecipientPickProfile, StageRule
 from django_leads.services import activity_service
-from django_leads.utils.prompts import render_prompt
+from django_leads.utils.prompts import prompt_messages
 
 PICK_KEY = "leads.pick_recipient"
 
@@ -25,6 +25,22 @@ class PickRejected(Exception):
 def candidates(company: Company) -> list[Contact]:
     contacts = company.contacts.exclude(email="").filter(opt_out_at__isnull=True, anonymised_at__isnull=True)
     return list(contacts.select_related("language").order_by("-is_primary", "pk"))
+
+
+def block_reason(contact: Contact) -> str | None:
+    """The outreach gate: why no draft may go to the contact (reason code), None when it may."""
+    checks = (
+        (contact.company.do_not_contact, "do_not_contact"),
+        (not contact.email, "no_email"),
+        (contact.opt_out_at is not None, "opted_out"),
+        (contact.anonymised_at is not None, "anonymised"),
+        (not contact.legal_basis, "no_legal_basis"),
+    )
+    return next((reason for failed, reason in checks if failed), None)
+
+
+def eligible(contact: Contact) -> bool:
+    return block_reason(contact) is None
 
 
 def pick_recipient(company: Company, rule: StageRule) -> tuple[Contact | None, dict]:
@@ -54,7 +70,7 @@ def _ask(company: Company, options: list[Contact]) -> tuple[Contact, str]:
     }
     request = CompletionRequest(
         model=profile.model,
-        messages=[Message(role="user", content=render_prompt(profile.prompt_text, values))],
+        messages=prompt_messages(profile.prompt_text, values),
         json_schema=profile.json_schema or None,
         tags=[PICK_KEY, f"channel:{company.channel.idx}"],
     )

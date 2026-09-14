@@ -7,9 +7,10 @@ from celery import shared_task
 from django_leads.settings import QUEUE_DEFAULT
 
 
-@shared_task(name="django_leads.analyse_intel", queue=QUEUE_DEFAULT, acks_late=True)
-def analyse_intel(audit_id: str, succeeded_sources: list[str]) -> bool:
-    """One toolbox completion per run, never retried (paid, non-idempotent; budget errors stay failed)."""
+@shared_task(bind=True, name="django_leads.analyse_intel", queue=QUEUE_DEFAULT, acks_late=True)
+def analyse_intel(self, audit_id: str, succeeded_sources: list[str]) -> bool:
+    """One toolbox completion per run, never retried (paid; budget errors stay failed). A redelivered message keeps
+    its task id — the claim `intel:<audit>:<task id>` stops a second completion."""
     from django_leads.services import intel_service
 
-    return intel_service.analyse_audit(audit_id, succeeded_sources) is not None
+    return intel_service.analyse_audit(audit_id, succeeded_sources, run_id=self.request.id or "") is not None
