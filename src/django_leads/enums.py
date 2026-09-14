@@ -42,9 +42,12 @@ class ActivityKind(models.TextChoices):
     BLOCKED = "blocked", "Blocked"
     SKIPPED = "skipped", "Skipped"
     ROTATION = "rotation", "Rotation"
+    ROTATION_FAILED = "rotation_failed", "Rotation failed"
+    ROTATION_GAVE_UP = "rotation_gave_up", "Rotation gave up"
     LEGAL_BASIS = "legal_basis", "Legal basis"
     LEGAL_BASIS_CONFLICT = "legal_basis_conflict", "Legal basis conflict"
     INTEL = "intel", "Intel"
+    INTEL_EMPTY = "intel_empty", "Intel empty"
 
 
 class ImportStatus(models.TextChoices):
@@ -74,3 +77,12 @@ class RuleOutcome(models.TextChoices):
     SKIPPED = "skipped", "Skipped"
     BLOCKED = "blocked", "Blocked"
     COOLDOWN = "cooldown", "Cooldown"
+
+
+class ClaimState(models.TextChoices):
+    """Lifecycle of a claim around a paid call: `retry` waits for the next rotation attempt, `failed` is final."""
+
+    CLAIMED = "claimed", "Claimed"
+    DONE = "done", "Done"
+    RETRY = "retry", "Retry"
+    FAILED = "failed", "Failed"

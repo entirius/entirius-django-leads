@@ -32,6 +32,9 @@ LEADS_FREEMAIL_DOMAINS = getattr(
 
 # Rotation: next contacts tried after a sequence ends without a reply, then the company parks as `unresponsive`.
 LEADS_ROTATION_MAX = getattr(settings, "LEADS_ROTATION_MAX", 2)
+LEADS_ROTATION_RETRY_HOURS = getattr(settings, "LEADS_ROTATION_RETRY_HOURS", 24)
+LEADS_ROTATION_MAX_FAILURES = getattr(settings, "LEADS_ROTATION_MAX_FAILURES", 3)
+LEADS_CLAIM_STALE_MINUTES = getattr(settings, "LEADS_CLAIM_STALE_MINUTES", 30)
 # notifications recipient role of replies and failed analyses (soft dependency).
 LEADS_NOTIFY_ROLE = getattr(settings, "LEADS_NOTIFY_ROLE", "sales_admin")
 # Hooks kept from one intel analysis.

@@ -171,7 +171,7 @@ class RuleRunResponse(BaseModel):
     rule_id: int = Field(description="Rule id.", examples=[100])
     company_id: int = Field(description="Company id.", examples=[102])
     fired_at: datetime = Field(description="Evaluated.", examples=["2026-09-13T12:00:00Z"])
-    outcome: str = Field(description="fired, skipped, blocked or cooldown.", examples=["fired"])
+    outcome: str = Field(description="fired, skipped, blocked or cooldown; empty while claimed.", examples=["fired"])
     detail: str = Field(description="Short reason.", examples=["message 7 review_required"])
 
 
