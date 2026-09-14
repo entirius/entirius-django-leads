@@ -12,7 +12,7 @@ The CSV is never stored: the report keeps row numbers and reason codes only."""
 import csv
 import itertools
 import logging
-import tempfile
+import os
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,7 +20,7 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db import DataError, IntegrityError, OperationalError, transaction
+from django.db import DatabaseError, DataError, IntegrityError, OperationalError, transaction
 from django.db.models import Model, Q
 from django_agreements.enums import LegalBasis
 from django_regional.models import Language
@@ -85,17 +85,52 @@ def build_lookups(channel: Channel) -> Lookups:
     return Lookups(stage=stage_service.first_stage(channel), languages=languages)
 
 
-def run_content(batch: ImportBatch, content: str) -> ImportBatch:
-    """Run an uploaded text through a temp file under `LEADS_IMPORT_TMP_DIR`, deleted whatever the outcome."""
-    with tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", suffix=".csv", dir=leads_settings.LEADS_IMPORT_TMP_DIR, delete=False
-    ) as file:
+def upload_path(batch_id: int) -> Path:
+    return Path(leads_settings.LEADS_IMPORT_TMP_DIR) / f"{batch_id}.csv"
+
+
+def store_upload(batch_id: int, content: str) -> Path:
+    """Write the upload to `<LEADS_IMPORT_TMP_DIR>/<batch_id>.csv`, readable by the owner only."""
+    path = upload_path(batch_id)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with open(descriptor, "w", encoding="utf-8") as file:
         file.write(content)
-    path = Path(file.name)
+    return path
+
+
+def run_content(batch: ImportBatch, content: str) -> ImportBatch:
+    """Synchronous run of an uploaded text through its temp file, deleted whatever the outcome."""
+    path = store_upload(batch.pk, content)
     try:
         return run_file(batch, path)
     finally:
         path.unlink(missing_ok=True)
+
+
+def run_upload(batch_id: int, *, legacy: bool = False) -> ImportBatch:
+    """The queued run: the stored upload of the batch, deleted once the batch is done or failed. A message from
+    before the id-only contract (`legacy`) fails the batch without touching its content. Only `OperationalError`
+    propagates — the file stays for the retry."""
+    batch = ImportBatch.objects.select_related("channel").get(pk=batch_id)
+    path = upload_path(batch_id)
+    finished = batch.status in (ImportStatus.DONE, ImportStatus.FAILED)
+    if not finished and (legacy or not path.exists()):
+        fail_batch(batch, "legacy_message" if legacy else "missing_file")
+    elif not finished:
+        run_file(batch, path)
+    path.unlink(missing_ok=True)
+    return batch
+
+
+def give_up(batch_id: int, code: str) -> None:
+    """After the last retry: fail the batch and drop its file. When the database is still down the batch is left
+    to `sweep_service.fail_stale_batches`."""
+    upload_path(batch_id).unlink(missing_ok=True)
+    try:
+        fail_batch(ImportBatch.objects.get(pk=batch_id), code)
+    except DatabaseError:
+        logger.error("leads: import batch %s not marked failed (%s), left for the stale sweep", batch_id, code)
 
 
 def run_file(batch: ImportBatch, path: Path) -> ImportBatch:

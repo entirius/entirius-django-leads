@@ -4,14 +4,20 @@
 
 """Module settings — host overrides via Django settings of the same name."""
 
+import tempfile
+from pathlib import Path
+
 from django.conf import settings
 
 QUEUE_DEFAULT = getattr(settings, "LEADS_QUEUE_DEFAULT", "leads_default")
 
 # CSV import: rows per chunk — counts and the report are saved after every chunk.
 LEADS_IMPORT_CHUNK_SIZE = getattr(settings, "LEADS_IMPORT_CHUNK_SIZE", 500)
-# Where the worker keeps the uploaded CSV while a run lasts (deleted at its end); None = the system temp dir.
-LEADS_IMPORT_TMP_DIR = getattr(settings, "LEADS_IMPORT_TMP_DIR", None)
+# Uploads wait here as `<batch_id>.csv` (0600, directory 0700) until their run ends; the service writes, the worker
+# reads — both processes MUST see the same directory (a shared volume when they run in separate containers).
+LEADS_IMPORT_TMP_DIR = getattr(settings, "LEADS_IMPORT_TMP_DIR", str(Path(tempfile.gettempdir()) / "django_leads"))
+# A batch `pending`/`running` without progress for this long is failed (`stale`) by the sweep.
+LEADS_IMPORT_STALE_MINUTES = getattr(settings, "LEADS_IMPORT_STALE_MINUTES", 30)
 # Skipped rows kept in a batch report (row number + reason code); the counters always cover every row.
 LEADS_IMPORT_REPORT_MAX = getattr(settings, "LEADS_IMPORT_REPORT_MAX", 1000)
 

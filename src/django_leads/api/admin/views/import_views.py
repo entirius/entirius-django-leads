@@ -58,7 +58,8 @@ class ImportListView(AdminView):
     def post(self, request: Request, channel_idx: str) -> Response:
         filename, content, size_bytes = read_upload(request)
         batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
-        transaction.on_commit(lambda: enqueue_import(batch.pk, content))
+        import_service.store_upload(batch.pk, content)
+        transaction.on_commit(lambda: enqueue_import(batch.pk))
         return Response(ImportBatchResponse.model_validate(batch).model_dump(mode="json"), status=202)
 
 

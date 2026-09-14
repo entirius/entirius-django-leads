@@ -6,6 +6,7 @@ from celery import shared_task
 from django.apps import apps
 from django.db import OperationalError, transaction
 
+from django_leads.enums import ImportStatus
 from django_leads.settings import QUEUE_DEFAULT
 
 
@@ -18,24 +19,24 @@ from django_leads.settings import QUEUE_DEFAULT
     autoretry_for=(OperationalError,),
     retry_backoff=True,
 )
-def import_csv(self, batch_id: int, content: str) -> str:
-    """Apply an uploaded CSV batch. The text travels in the message (service and worker share no disk) and
-    lives in a temp file only while the run lasts; a retry resumes after the last committed row."""
-    from django_leads.models import ImportBatch
+def import_csv(self, batch_id: int, content: str | None = None) -> str:
+    """Apply the upload stored for the batch (`import_service.store_upload`); the message carries the id only.
+    A retry resumes after the last committed row. `content` is only ever set by a message queued before the
+    id-only contract — that batch fails as `legacy_message` without processing it."""
     from django_leads.services import import_service
 
-    batch = ImportBatch.objects.select_related("channel").get(pk=batch_id)
     try:
-        return import_service.run_content(batch, content).status
+        return import_service.run_upload(batch_id, legacy=content is not None).status
     except OperationalError:
-        if self.request.retries >= self.max_retries:
-            import_service.fail_batch(batch, "database_error")
-        raise
+        if self.request.retries < self.max_retries:
+            raise
+    import_service.give_up(batch_id, "database_error")
+    return ImportStatus.FAILED
 
 
-def enqueue_import(batch_id: int, content: str) -> None:
-    """Queue a CSV run; the masked `argsrepr` keeps the rows out of broker and worker logs."""
-    import_csv.apply_async((batch_id, content), argsrepr=f"({batch_id}, <csv>)")
+def enqueue_import(batch_id: int) -> None:
+    """Queue the run of a batch whose upload is already stored — no row of the CSV passes through the broker."""
+    import_csv.apply_async((batch_id,))
 
 
 @shared_task(
@@ -55,3 +56,19 @@ def import_form_lead(lead_id: int, channel_idx: str) -> bool:
         return False
     with transaction.atomic():
         return form_service.import_form_lead(lead, channel_idx) is not None
+
+
+@shared_task(name="django_leads.fail_stale_import_batches", queue=QUEUE_DEFAULT)
+def fail_stale_import_batches() -> dict[str, int]:
+    """Beat every 10 min (host schedule): stale batches failed, 24 h old temp files deleted, missed form
+    submissions retried once."""
+    from django.utils import timezone
+
+    from django_leads.services import sweep_service
+
+    now = timezone.now()
+    return {
+        "tmp_files": sweep_service.sweep_tmp_files(now),
+        "batches": sweep_service.fail_stale_batches(now),
+        "form_leads": sweep_service.retry_form_leads(now),
+    }

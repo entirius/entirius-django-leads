@@ -60,6 +60,7 @@ if apps.is_installed("django_accounts"):
 
 if dev.is_development():
     urlpatterns += [
+        path("test/import-now/", dev.DevImportNowView.as_view(), name="admin-leads-test-import-now"),
         path("test/evaluate/", dev.DevEvaluateView.as_view(), name="admin-leads-test-evaluate"),
         path("test/rotate-now/", dev.DevRotateNowView.as_view(), name="admin-leads-test-rotate-now"),
     ]

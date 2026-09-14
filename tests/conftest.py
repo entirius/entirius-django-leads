@@ -9,6 +9,7 @@ from django_regional.models import Language
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from django_leads import settings as leads_settings
 from django_leads.enums import LeadSource, RuleTrigger, StageKind
 from django_leads.models import Channel, Company, Contact, Stage, StageRule
 from django_leads.services import company_service
@@ -22,6 +23,14 @@ def eager_celery():
     current_app.conf.task_always_eager = True
     yield
     current_app.conf.task_always_eager = False
+
+
+@pytest.fixture(autouse=True)
+def import_tmp_dir(tmp_path, monkeypatch):
+    """Uploads land in the test's own directory, never in the shared system temp dir."""
+    directory = tmp_path / "imports"
+    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_TMP_DIR", str(directory))
+    return directory
 
 
 @pytest.fixture

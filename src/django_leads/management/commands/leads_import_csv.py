@@ -26,7 +26,8 @@ class Command(BaseCommand):
         content = path.read_text(encoding="utf-8-sig")
         batch = import_service.create_batch(channel, path.name, len(content.encode()), "manage.py")
         if not options["sync"]:
-            enqueue_import(batch.pk, content)
+            import_service.store_upload(batch.pk, content)
+            enqueue_import(batch.pk)
             self.stdout.write(f"batch {batch.pk} queued")
             return
         batch = import_service.run_content(batch, content)
