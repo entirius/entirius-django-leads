@@ -84,9 +84,13 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   upload imported in the request — no worker), `test/evaluate/`, `test/rotate-now/`.
   PATCH whitelists live in the services.
 - Outreach gate (`recipient_service.block_reason` / `eligible`): email, `legal_basis` set, no `opt_out_at`, no
-  `anonymised_at`, company not `do_not_contact`. `outreach_service.request_draft` re-reads contact and company and
-  checks it right before `communicate()` on every path (rules, rotation, manual); a refusal is Activity
-  `blocked: <reason>` (`do_not_contact`, `no_email`, `opted_out`, `anonymised`, `no_legal_basis`), never a draft.
+  `anonymised_at`, company not `do_not_contact`. Where it runs: only inside `outreach_service.request_draft`, one
+  short transaction that locks the company then the contact (`select_for_update`), evaluates the gate on those rows
+  and calls `communicate()` — an opt-out or `do_not_contact` commits before the lock (blocked) or waits for the draft
+  commit. Every path (rules, rotation, manual) goes through it once; a refusal returns `Blocked(reason)` and is one
+  Activity `blocked: <reason>` (`do_not_contact`, `no_email`, `opted_out`, `anonymised`, `no_legal_basis`), never a
+  draft. Rule `require_legal_basis` is not exposed by the API and has no effect — the gate is the only legal-basis
+  decision.
 - Rules (`services/rule_service.evaluate_rules(company, trigger, *, stage=None, event="")`): active `StageRule`s of
   the trigger (and stage) by `order`. Phase (a) under the company row lock, on the re-read row: a `RuleRun` of
   (rule, company, `event`) already exists → returned, nothing runs again (`event` = `stage:<id>:<entered_at>` from
@@ -94,8 +98,8 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   `do_not_contact` → blocked; a `fired` or in-flight `claimed` run inside `cooldown_hours` → cooldown (skipped,
   blocked and cooldown runs never count); `request_audit` → siteintel; `require_hooks` without hooks → skipped;
   `require_email` without a candidate → skipped (`false` lets the rule through, the gate then blocks `no_email`);
-  else the run is written `claimed` and committed. Phase (b) outside any transaction: recipient pick (toolbox), rule
-  `require_legal_basis`, `request_draft`. Phase (c) completes the run (`done`). A `claimed` run older than
+  else the run is written `claimed` and committed. Phase (b) outside the rule lock: recipient pick (toolbox) among
+  gate-eligible contacts only (none → blocked `no_eligible_contact`, no toolbox call), then `request_draft`. Phase (c) completes the run (`done`). A `claimed` run older than
   `LEADS_CLAIM_STALE_MINUTES` found by a redelivery → `failed` (`outcome_unknown`), never retried. Errors become
   Activity `rule error: <class>` and a skipped run, never raise.
 - Claims (`models.Claim`, `services/claim_service`): the same pattern for paid calls outside rules — key
@@ -103,7 +107,7 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
 - Drafts: `outreach_service.request_draft` is the only caller of communicator `communicate()` (leads never writes a
   `Message`); footer from agreements `resolve_clause_set` (contact language → channel default), missing clause set
   → Activity `skipped: no clause set`. Manual path `POST companies/<id>/communicate/` skips rule conditions only —
-  the gate answers 409 `NotEligible` with the reason.
+  `request_draft` runs once and its `Blocked` result answers 409 `NotEligible` with the reason.
 - Intel: `report_ready` → task `django_leads.analyse_intel` → claim → one toolbox completion (`AnalysisProfile`
   `leads.analysis`, never retried; a redelivered message keeps its task id and finds the claim) → hooks/platform/type
   → `intel_ready` rules. Empty sources → no toolbox call, `company.hooks` cleared, Activity `intel_empty`, then the
