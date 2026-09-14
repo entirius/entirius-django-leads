@@ -83,25 +83,47 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   `companies/<id>/{communicate,request-audit,create-customer}/`; development `test/import-now/` (multipart
   upload imported in the request — no worker), `test/evaluate/`, `test/rotate-now/`.
   PATCH whitelists live in the services.
-- Rules (`services/rule_service.evaluate_rules(company, trigger, *, stage=None)`): active `StageRule`s of the
-  trigger (and stage) by `order`; checks in this order: `do_not_contact` → blocked; any `RuleRun` of (rule, company)
-  inside `cooldown_hours` → cooldown (a skipped run counts — rules never loop); `request_audit` → siteintel;
-  `require_hooks` without hooks → skipped; no candidate with email → skipped; no legal basis → skipped; else
-  `outreach_service.request_draft` → fired. Every evaluation writes a `RuleRun` under a company row lock
-  (concurrent worker tasks see each other's cooldown); errors become Activity
-  `rule error: <class>`, never raise.
+- Outreach gate (`recipient_service.block_reason` / `eligible`): email, `legal_basis` set, no `opt_out_at`, no
+  `anonymised_at`, company not `do_not_contact`. `outreach_service.request_draft` re-reads contact and company and
+  checks it right before `communicate()` on every path (rules, rotation, manual); a refusal is Activity
+  `blocked: <reason>` (`do_not_contact`, `no_email`, `opted_out`, `anonymised`, `no_legal_basis`), never a draft.
+- Rules (`services/rule_service.evaluate_rules(company, trigger, *, stage=None, event="")`): active `StageRule`s of
+  the trigger (and stage) by `order`. Phase (a) under the company row lock, on the re-read row: a `RuleRun` of
+  (rule, company, `event`) already exists → returned, nothing runs again (`event` = `stage:<id>:<entered_at>` from
+  the `stage_entered` receiver, `audit:<id>` from intel; empty = no dedupe, e.g. `test/evaluate/`);
+  `do_not_contact` → blocked; a `fired` or in-flight `claimed` run inside `cooldown_hours` → cooldown (skipped,
+  blocked and cooldown runs never count); `request_audit` → siteintel; `require_hooks` without hooks → skipped;
+  `require_email` without a candidate → skipped (`false` lets the rule through, the gate then blocks `no_email`);
+  else the run is written `claimed` and committed. Phase (b) outside any transaction: recipient pick (toolbox), rule
+  `require_legal_basis`, `request_draft`. Phase (c) completes the run (`done`). A `claimed` run older than
+  `LEADS_CLAIM_STALE_MINUTES` found by a redelivery → `failed` (`outcome_unknown`), never retried. Errors become
+  Activity `rule error: <class>` and a skipped run, never raise.
+- Claims (`models.Claim`, `services/claim_service`): the same pattern for paid calls outside rules — key
+  `intel:<audit>:<task id>` and `rotation:<thread>`; `claimed` → `done` / `retry` / `failed`.
 - Drafts: `outreach_service.request_draft` is the only caller of communicator `communicate()` (leads never writes a
   `Message`); footer from agreements `resolve_clause_set` (contact language → channel default), missing clause set
-  → Activity `skipped: no clause set`. Manual path `POST companies/<id>/communicate/` skips rule conditions only.
-- Intel: `report_ready` → task `django_leads.analyse_intel` → one toolbox completion (`AnalysisProfile`
-  `leads.analysis`, never retried) → hooks/platform/type → `intel_ready` rules. Empty sources → no toolbox call.
-  Failures → Activity `analysis failed: <code>` + notification (`LEADS_NOTIFY_ROLE`, medium).
+  → Activity `skipped: no clause set`. Manual path `POST companies/<id>/communicate/` skips rule conditions only —
+  the gate answers 409 `NotEligible` with the reason.
+- Intel: `report_ready` → task `django_leads.analyse_intel` → claim → one toolbox completion (`AnalysisProfile`
+  `leads.analysis`, never retried; a redelivered message keeps its task id and finds the claim) → hooks/platform/type
+  → `intel_ready` rules. Empty sources → no toolbox call, `company.hooks` cleared, Activity `intel_empty`, then the
+  rules (never on stale hooks). Failures → Activity `analysis failed: <code>` + notification (`LEADS_NOTIFY_ROLE`,
+  medium).
+- Prompts (`utils/prompts`): the system message is the static `DATA_INSTRUCTIONS`; the profile template is rendered
+  into the user message in one pass (a value is never expanded again), every lead/company/site value wrapped in
+  `<company_data>…</company_data>` with the delimiter stripped from the value.
 - Recipient pick (`ai_pick`): candidates `{"candidates": [...]}` JSON in the last user message
   (`RecipientPickProfile` `leads.pick_recipient`); an id outside the candidates falls back to the primary contact.
 - Rotation: `sequence_finished` → task `django_leads.rotate_thread`, daily beat `django_leads.rotate_unresponsive`
-  (host schedule); one rotation per thread (Activity `rotation` `data.thread_id`), threads matched by `subject_ref`
-  + `recipient_email`; `LEADS_ROTATION_MAX` reached or no next contact → stage `kind=unresponsive`
-  (missing stage → `ConfigurationError`).
+  (host schedule; each thread isolated — an error is logged by class, the scan continues; `test/rotate-now/` scans
+  its channel only). Claim `rotation:<thread>` under the company row lock: another rotation of the company in flight
+  → nothing now; `do_not_contact` → Activity `blocked` + claim `done`; `LEADS_ROTATION_MAX` reached or no next
+  gate-eligible contact → stage `kind=unresponsive` + claim `done`; missing stage → `ConfigurationError`, rolled back,
+  Activity `no unresponsive stage` written outside, no claim (the thread rotates once the stage exists). Otherwise the
+  draft is requested outside the lock; only a draft raises `rotation_count` (`F()`) and writes Activity `rotation`.
+  No draft → Activity `rotation_failed`, count unchanged, claim `retry` (next attempt after
+  `LEADS_ROTATION_RETRY_HOURS`), after `LEADS_ROTATION_MAX_FAILURES` → `rotation_gave_up`, claim `failed`.
+- Customer link: `EmailAddress` matched case-insensitively with `verified=True` → user → `Customer`.
 - Prompts (`prompt_text`, rendered prompts) never reach logs, Activity data or API lists.
 - Hard deps: utils, regional, agreements (`LegalBasis`), communicator, siteintel; soft: `django_contact_forms`,
   `django_notifications` (alerts), `django_accounts` (`companies/<id>/create-customer/` routed only when installed).
@@ -131,7 +153,8 @@ All receivers: `dispatch_uid="django_leads.<name>"`, run after commit, never rai
 ## Settings
 
 `LEADS_QUEUE_DEFAULT` (`leads_default`), `LEADS_IMPORT_*` (`CHUNK_SIZE`, `TMP_DIR`, `STALE_MINUTES`,
-`REPORT_MAX`), `LEADS_FORM_*`, `LEADS_FREEMAIL_DOMAINS`, `LEADS_ROTATION_MAX` (2), `LEADS_NOTIFY_ROLE`
+`REPORT_MAX`), `LEADS_FORM_*`, `LEADS_FREEMAIL_DOMAINS`, `LEADS_ROTATION_MAX` (2), `LEADS_ROTATION_RETRY_HOURS` (24), `LEADS_ROTATION_MAX_FAILURES` (3),
+`LEADS_CLAIM_STALE_MINUTES` (30), `LEADS_NOTIFY_ROLE`
 (`sales_admin`), `LEADS_ANALYSIS_MAX_HOOKS` (10); toolbox `AI_TOOLBOX_*` (django_utils); development endpoints need `ENVIRONMENT = "development"`.
 
 ## Testing end-to-end
