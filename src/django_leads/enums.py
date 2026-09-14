@@ -29,6 +29,7 @@ class LeadSource(models.TextChoices):
 class ActivityKind(models.TextChoices):
     IMPORT = "import", "Import"
     FORM = "form", "Form"
+    FORM_IMPORT_FAILED = "form_import_failed", "Form import failed"
     STAGE = "stage", "Stage"
     RULE = "rule", "Rule"
     DRAFT = "draft", "Draft"

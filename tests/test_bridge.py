@@ -1,19 +1,22 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+from datetime import timedelta
 from unittest import mock
 
 import pytest
 from django.core.cache import cache
 from django.db import OperationalError
+from django.utils import timezone
 from django_contact_forms.models import APIKey, ContactForm, Lead, LeadCreationRule
 from django_contact_forms.models import Channel as FormsChannel
 from django_contact_forms.services import lead_service
+from kombu.exceptions import OperationalError as KombuOperationalError
 from rest_framework.test import APIClient
 
 from django_leads.enums import ActivityKind, LeadSource
 from django_leads.models import Activity, Company, Contact
-from django_leads.services import company_service, contact_service, form_service
+from django_leads.services import company_service, contact_service, form_service, sweep_service
 from django_leads.signals import contact_forms_bridge
 from django_leads.tasks import import_form_lead
 
@@ -190,3 +193,42 @@ def test_bridge_retry_is_idempotent(channel, forms_channel, django_capture_on_co
     assert import_form_lead.delay(lead.pk, forms_channel.idx).get() is False
     assert Contact.objects.count() == 1
     assert Activity.objects.filter(kind=ActivityKind.FORM, message="form submission").count() == 1
+
+
+def broken_bridge():
+    """Database and broker both down while the bridge runs."""
+    return (
+        mock.patch.object(company_service, "upsert_company", side_effect=OperationalError("database down")),
+        mock.patch.object(import_form_lead, "delay", side_effect=KombuOperationalError("broker down")),
+    )
+
+
+def test_bridge_broker_down_does_not_raise(channel, forms_channel, django_capture_on_commit_callbacks):
+    database, broker = broken_bridge()
+    with database, broker as delay, django_capture_on_commit_callbacks(execute=True):
+        submit(forms_channel, {"marketing_consent": True})
+    delay.assert_called_once()
+    assert not Company.objects.exists()
+
+
+def test_sweep_retries_pending_form_lead(channel, forms_channel, django_capture_on_commit_callbacks):
+    database, broker = broken_bridge()
+    with database, broker, django_capture_on_commit_callbacks(execute=True):
+        submit(forms_channel, {"marketing_consent": True})
+    later = timezone.now() + timedelta(minutes=31)
+    assert sweep_service.retry_form_leads(timezone.now()) == 0
+    assert sweep_service.retry_form_leads(later) == 1
+    assert Contact.objects.get().email == "ewa@ogrod.pl"
+    assert sweep_service.retry_form_leads(later) == 0
+
+
+def test_sweep_records_form_import_failed_on_linked_company(company, forms_channel, django_capture_on_commit_callbacks):
+    database, broker = broken_bridge()
+    with database, broker, django_capture_on_commit_callbacks(execute=True):
+        lead = submit(forms_channel, {"marketing_consent": True})
+    later = timezone.now() + timedelta(minutes=31)
+    with mock.patch.object(contact_service, "upsert_contact", side_effect=RuntimeError("boom")):
+        assert sweep_service.retry_form_leads(later) == 1
+    failure = Activity.objects.get(company=company, kind=ActivityKind.FORM_IMPORT_FAILED)
+    assert failure.data == {"lead_id": lead.pk, "contact_form_id": lead.contact_form_id}
+    assert sweep_service.retry_form_leads(later) == 0 and not Contact.objects.exists()

@@ -37,13 +37,23 @@ def _import(lead, channel_idx: str) -> None:
     """Atomic: a failure leaves no partial company. A retryable DB error hands the submission to the leads
     queue; any other failure is logged — it never breaks the already committed form submission."""
     from django_leads.services import form_service
-    from django_leads.tasks import import_form_lead
 
     try:
         with transaction.atomic():
             form_service.import_form_lead(lead, channel_idx)
     except OperationalError:
-        logger.warning("leads: contact_forms lead %s queued for retry", lead.pk)
-        import_form_lead.delay(lead.pk, channel_idx)
+        _queue_retry(lead.pk, channel_idx)
     except Exception:
         logger.exception("leads: contact_forms lead %s could not be imported", lead.pk)
+
+
+def _queue_retry(lead_id: int, channel_idx: str) -> None:
+    """An unreachable broker leaves the submission to the stale sweep (`sweep_service.retry_form_leads`)."""
+    from django_leads.tasks import import_form_lead
+
+    try:
+        import_form_lead.delay(lead_id, channel_idx)
+    except Exception as error:
+        logger.error("leads: contact_forms lead %s left for the sweep (%s)", lead_id, type(error).__name__)
+        return
+    logger.warning("leads: contact_forms lead %s queued for retry", lead_id)
