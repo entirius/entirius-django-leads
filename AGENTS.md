@@ -70,7 +70,7 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   of the submission's domain when it exists (otherwise only logged). Submissions skipped by design (free-mail, no
   channel) are re-tried by every sweep inside those 24 h at no effect.
 - Stages: `stage_service.transition_stage` is the only stage change (timeline + `signals.stage_entered` on commit);
-  `delete_stage` raises `StageInUse` (API 409). `signals.contact_anonymised` is emitted by plan 11.
+  `delete_stage` raises `StageInUse` (API 409).
 - contact_forms bridge (`signals/contact_forms_bridge.py`, soft): on Lead creation, after commit, upserts
   Company + Contact in `transaction.atomic()` (consent only for `True`, `1` or `true/1/yes/on/y/tak` in a
   `LEADS_FORM_CONSENT_KEYS` key; Activity "no legal basis" when the contact ends without one). Writes FORM (and
@@ -81,7 +81,8 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   (`?stage=&search=&sort=`), `companies/<id>/`, `companies/<id>/transition/`, `contacts/`, `stages/`,
   `activities/?company=`, `imports/`, `rules/`, `rule-runs/?company=`, `analysis-profiles/`, `recipient-profiles/`,
   `companies/<id>/{communicate,request-audit,create-customer}/`; development `test/import-now/` (multipart
-  upload imported in the request — no worker), `test/evaluate/`, `test/rotate-now/`.
+  upload imported in the request — no worker), `test/evaluate/`, `test/rotate-now/`, `test/anonymise-now/` (`{as_of}`,
+  the retention task in-process); channel-independent `api/leads/v2/admin/gdpr/{export,erase}/`.
   PATCH whitelists live in the services.
 - Outreach gate (`recipient_service.block_reason` / `eligible`): email, `legal_basis` set, no `opt_out_at`, no
   `anonymised_at`, company not `do_not_contact`. Where it runs: only inside `outreach_service.request_draft`, one
@@ -127,6 +128,25 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   draft is requested outside the lock; only a draft raises `rotation_count` (`F()`) and writes Activity `rotation`.
   No draft → Activity `rotation_failed`, count unchanged, claim `retry` (next attempt after
   `LEADS_ROTATION_RETRY_HOURS`), after `LEADS_ROTATION_MAX_FAILURES` → `rotation_gave_up`, claim `failed`.
+- Retention (`services/retention_service`, task `django_leads.anonymise_inactive`, `QueueOnce`, daily beat — host
+  schedule): contacts not yet anonymised at companies idle longer than `Channel.retention_days` (null →
+  `LEADS_RETENTION_DAYS`, 180) by `Company.last_activity_at` (null = never picked), never in a `won` stage, and
+  without an own Activity after the cutoff. `anonymise_contact`: email → `utils/emails.anonymised_address` token
+  (`anon-<sha256[:16]>@LEADS_ANONYMISED_DOMAIN`, deterministic), names/job title/phone cleared, `anonymised_at`,
+  Activity `anonymised` with `email_hash`, `contact_anonymised` on commit. Rows are never deleted; company, stage,
+  hooks, counters and timeline stay. `email_hash`/`anonymised_address` are copied in communicator (a test pins them).
+- GDPR (`gdpr/`, `services/gdpr_service`): every installed app's top-level `<app>.gdpr` module with
+  `gdpr_export(email) -> dict` (keyed by model name) and `gdpr_erase(email) -> dict[str, int]` (protocol
+  `gdpr/protocol.GdprHooks`) is discovered at call time (`gdpr/registry.discover`, never in `ready()`); leads' own
+  hooks live in the `django_leads.gdpr` package. Export = `{email, generated_at, modules}` (JSON-ready); erase runs in
+  one transaction after an Activity `note` "gdpr erase requested" on every affected company (actor = user), leads
+  anonymises the contacts (actor `gdpr`) and scrubs their Activities (`[erased]`). Matching covers the plain address
+  and its token (contacts already anonymised by retention). Entry points: `manage.py leads_gdpr --email X
+  (--export PATH | --erase [--yes])`, `POST api/leads/v2/admin/gdpr/{export,erase}/` (channel-independent).
+- Connectors (`connectors/`): `Connector` protocol (`key`, `fetch_candidates(channel) -> Iterable[CandidateRow]`,
+  `push_status(company)`), `registry.get_connector(key, **kwargs)` over the `leads_connectors` entry points
+  (`csv`, `twenty`). `CsvConnector(path)` owns `parse_rows` and feeds every CSV import; `TwentyConnector` raises
+  `NotImplementedError` (interface only in v1 — it will fill `source=connector` and `external_ref`).
 - Customer link: `EmailAddress` matched case-insensitively with `verified=True` → user → `Customer`.
 - Prompts (`prompt_text`, rendered prompts) never reach logs, Activity data or API lists.
 - Hard deps: utils, regional, agreements (`LegalBasis`), communicator, siteintel; soft: `django_contact_forms`,
@@ -137,7 +157,7 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
 | Direction | Signal | Handling |
 |---|---|---|
 | emitted | `django_leads.signals.stage_entered(company, stage)` | own receiver → task `django_leads.evaluate_rules` |
-| emitted | `django_leads.signals.contact_anonymised(contact)` | plan 11 |
+| emitted | `django_leads.signals.contact_anonymised(email_hash, anonymised_email, subject_ref)` | communicator anonymises the threads |
 | consumed | siteintel `report_ready(audit, succeeded_sources)` | task `django_leads.analyse_intel` |
 | consumed | communicator `reply_received(thread, reply)` | Activity `reply`, `on_reply` stage, high notification |
 | consumed | communicator `company_skipped(subject_ref)` | `do_not_contact = True`, Activity `blocked` |
@@ -152,18 +172,21 @@ All receivers: `dispatch_uid="django_leads.<name>"`, run after commit, never rai
 - Service and worker MUST share `LEADS_IMPORT_TMP_DIR` (default `<system temp>/django_leads`): in separate
   containers mount one named volume at that path in both (zeno: plan 12). Without it every queued import fails
   `missing_file`; `test/import-now/` and `leads_import_csv --sync` need no worker.
-- Beat: `django_leads.fail_stale_import_batches` every 10 min, `django_leads.rotate_unresponsive` daily.
+- Beat: `django_leads.fail_stale_import_batches` every 10 min, `django_leads.rotate_unresponsive` and
+  `django_leads.anonymise_inactive` daily (the latter under celery-once: `app.conf.ONCE`).
 
 ## Settings
 
 `LEADS_QUEUE_DEFAULT` (`leads_default`), `LEADS_IMPORT_*` (`CHUNK_SIZE`, `TMP_DIR`, `STALE_MINUTES`,
 `REPORT_MAX`), `LEADS_FORM_*`, `LEADS_FREEMAIL_DOMAINS`, `LEADS_ROTATION_MAX` (2), `LEADS_ROTATION_RETRY_HOURS` (24), `LEADS_ROTATION_MAX_FAILURES` (3),
 `LEADS_CLAIM_STALE_MINUTES` (30), `LEADS_NOTIFY_ROLE`
-(`sales_admin`), `LEADS_ANALYSIS_MAX_HOOKS` (10); toolbox `AI_TOOLBOX_*` (django_utils); development endpoints need `ENVIRONMENT = "development"`.
+(`sales_admin`), `LEADS_ANALYSIS_MAX_HOOKS` (10), `LEADS_RETENTION_DAYS` (180), `LEADS_ANONYMISED_DOMAIN`
+(`anonymised.invalid`, read by communicator and agreements too); toolbox `AI_TOOLBOX_*` (django_utils); development endpoints need `ENVIRONMENT = "development"`.
 
 ## Testing end-to-end
 
 - Unit (`make test`, sqlite; `make module-test MODULE=entirius-django-leads` in zeno, PostgreSQL — the L-05
-  query ceiling is exact only there): L-01, L-02, L-03, L-04, L-05, L-06, L-07, L-08…L-15, L-18, L-19.
+  query ceiling is exact only there): L-01, L-02, L-03, L-04, L-05, L-06, L-07, L-08…L-19.
 - BDD (`make bdd TAGS=@leads`): `features/leads/leads_import.feature` L-01, L-04, L-06, L-07, L-19 (not one-shot);
-  `features/leads/leads_pipeline.feature` L-08…L-12, L-14 (`@leads-oneshot` — needs a fresh `make seed`). The funnel walkthrough is the E2E guide of plan 12.
+  `features/leads/leads_pipeline.feature` L-08…L-12, L-14 (`@leads-oneshot` — needs a fresh `make seed`);
+  `features/leads/leads_gdpr.feature` L-16, L-17 (`@leads-oneshot`). The funnel walkthrough is the E2E guide of plan 12.

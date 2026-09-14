@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Development-only endpoints for BDD: synchronous CSV import, rule evaluation and rotation scan.
+"""Development-only endpoints for BDD: synchronous CSV import, rule evaluation, rotation scan and retention run.
 
 404 outside `ENVIRONMENT == "development"`.
 """
@@ -17,14 +17,16 @@ from django_leads.api.admin.views._base import ERROR_RESPONSES, AdminView, parse
 from django_leads.api.admin.views.import_views import UPLOAD_SCHEMA, read_upload
 from django_leads.enums import RuleTrigger
 from django_leads.models import Company, Stage
-from django_leads.schemas.requests import DevEvaluateRequest
+from django_leads.schemas.requests import DevAnonymiseRequest, DevEvaluateRequest
 from django_leads.schemas.responses import (
+    DevAnonymiseResponse,
     DevEvaluateResponse,
     DevRotateResponse,
     ImportBatchDetailResponse,
     RuleRunResponse,
 )
 from django_leads.services import import_service, rotation_service, rule_service
+from django_leads.tasks import anonymise_inactive
 
 _TAGS = ["Leads (development)"]
 
@@ -96,3 +98,18 @@ class DevImportNowView(DevelopmentView):
         batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
         batch = import_service.run_content(batch, content)
         return Response(ImportBatchDetailResponse.model_validate(batch).model_dump(mode="json"))
+
+
+class DevAnonymiseNowView(DevelopmentView):
+    @extend_schema(
+        tags=_TAGS,
+        summary="Run the daily retention task now (development only)",
+        description="Every channel, in this process; `as_of` moves the clock the retention cutoff is computed from.",
+        request=DevAnonymiseRequest,
+        responses={200: DevAnonymiseResponse, **ERROR_RESPONSES},
+    )
+    def post(self, request: Request, channel_idx: str) -> Response:
+        body = parse(DevAnonymiseRequest, request.data)
+        self.channel(channel_idx)
+        counts = anonymise_inactive(as_of=body.as_of.isoformat() if body.as_of else None)
+        return Response(DevAnonymiseResponse(anonymised=counts).model_dump())

@@ -8,5 +8,6 @@ from django.dispatch import Signal
 
 # Sent by `stage_service.transition_stage` on a real stage change. Args: company, stage.
 stage_entered = Signal()
-# Sent when a contact is anonymised (plan 11). Args: contact.
+# Sent on commit when a contact is anonymised. Args: email_hash (sha256 of the normalised old address),
+# anonymised_email (the token now stored), subject_ref ("leads.Company:<id>") — never the original email.
 contact_anonymised = Signal()

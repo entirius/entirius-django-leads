@@ -8,6 +8,10 @@
 - Chunked CSV import (command + admin API + Celery task) with an incremental report.
 - contact_forms bridge: new form Leads become contacts with their legal basis.
 - Admin API v2: companies, contacts, stages, activities, imports.
+- Retention: daily `anonymise_inactive` pseudonymises contacts of idle companies per channel (`contact_anonymised`).
+- GDPR export/erasure by email across modules with `gdpr` hooks: `leads_gdpr` command and admin API v2.
+- Connector seam: `Connector` protocol and `leads_connectors` entry points; CSV import runs through `csv`, `twenty`
+  is an interface only.
 - Stage rules (`stage_entered` / `intel_ready`) with a `RuleRun` per evaluation and a cooldown per (rule, company);
   drafts only through communicator `communicate()` (review required).
 - siteintel intel analysis through the toolbox (`AnalysisProfile`): hooks, platform, company type.

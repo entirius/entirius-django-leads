@@ -229,3 +229,24 @@ class DevEvaluateResponse(BaseModel):
 
 class DevRotateResponse(BaseModel):
     rotated: int = Field(description="Threads that rotated or parked a company.", examples=[1])
+
+
+class DevAnonymiseResponse(BaseModel):
+    anonymised: dict[str, int] = Field(
+        description="Anonymised contacts per channel idx.", examples=[{"default-europe": 1}]
+    )
+
+
+class GdprExportResponse(BaseModel):
+    email: str = Field(description="Normalised address of the data subject.", examples=["jan@example-shop-2.test"])
+    generated_at: datetime = Field(description="When the export was built.", examples=["2026-09-14T06:00:00Z"])
+    modules: dict[str, dict[str, Any]] = Field(
+        description="App name → rows keyed by model name; apps without GDPR hooks are absent.",
+        examples=[{"django_leads": {"Contact": [], "Company": [], "Activity": []}}],
+    )
+
+
+class GdprEraseResponse(BaseModel):
+    modules: dict[str, dict[str, int]] = Field(
+        description="App name → rows touched per kind.", examples=[{"django_leads": {"contacts": 1, "activities": 4}}]
+    )

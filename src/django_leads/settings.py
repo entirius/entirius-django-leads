@@ -39,3 +39,8 @@ LEADS_CLAIM_STALE_MINUTES = getattr(settings, "LEADS_CLAIM_STALE_MINUTES", 30)
 LEADS_NOTIFY_ROLE = getattr(settings, "LEADS_NOTIFY_ROLE", "sales_admin")
 # Hooks kept from one intel analysis.
 LEADS_ANALYSIS_MAX_HOOKS = getattr(settings, "LEADS_ANALYSIS_MAX_HOOKS", 10)
+
+# Retention: contacts of companies inactive this long are anonymised (fallback when `Channel.retention_days` is null).
+LEADS_RETENTION_DAYS = getattr(settings, "LEADS_RETENTION_DAYS", 180)
+# Host of the tokens replacing anonymised addresses; communicator and agreements read the same setting.
+LEADS_ANONYMISED_DOMAIN = getattr(settings, "LEADS_ANONYMISED_DOMAIN", "anonymised.invalid")

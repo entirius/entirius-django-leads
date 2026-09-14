@@ -5,4 +5,10 @@
 
 from django.urls import include, path
 
-urlpatterns = [path("api/leads/v2/admin/<str:channel_idx>/", include("django_leads.api.admin.urls"))]
+from django_leads.api.admin.views import gdpr_views as gdpr
+
+urlpatterns = [
+    path("api/leads/v2/admin/gdpr/export/", gdpr.GdprExportView.as_view(), name="admin-leads-gdpr-export"),
+    path("api/leads/v2/admin/gdpr/erase/", gdpr.GdprEraseView.as_view(), name="admin-leads-gdpr-erase"),
+    path("api/leads/v2/admin/<str:channel_idx>/", include("django_leads.api.admin.urls")),
+]

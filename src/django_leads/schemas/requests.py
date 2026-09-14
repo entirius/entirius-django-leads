@@ -3,8 +3,10 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Request schemas of the leads admin API v2."""
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 
 from django_leads.enums import CompanyType, ContactStrategy, RuleAction, RuleTrigger, StageKind
 from django_leads.services.company_service import SORT_FIELDS
@@ -214,3 +216,27 @@ class DevEvaluateRequest(BaseModel):
     company_id: int = Field(description="Company id.", examples=[102])
     trigger: RuleTrigger = Field(description="stage_entered or intel_ready.")
     stage_key: str | None = Field(default=None, max_length=64, description="Stage; default the company's stage.")
+
+
+class DevAnonymiseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: AwareDatetime | None = Field(
+        default=None, description="Clock of the retention run; now when omitted.", examples=["2026-09-15T06:00:00Z"]
+    )
+
+
+class GdprRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(max_length=254, description="Address of the data subject.", examples=["jan@example-shop-2.test"])
+
+    @field_validator("email")
+    @classmethod
+    def email_is_valid(cls, value: str) -> str:
+        """Django's validator: reserved test domains (`.test`) stay accepted, unlike `EmailStr`."""
+        try:
+            validate_email(value.strip())
+        except DjangoValidationError:
+            raise ValueError("not a valid email address") from None
+        return value.strip()
