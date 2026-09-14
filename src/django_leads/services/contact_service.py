@@ -98,7 +98,14 @@ def _basis_activity(contact: Contact, kind: str, data: dict, actor: str) -> Acti
     return Activity(company=contact.company, contact=contact, kind=kind, message=message, data=data, actor=actor)
 
 
-def create_contact(company: Company, row: dict[str, Any], *, actor: str) -> Contact:
+def admin_consent_ref(actor: str, basis: str | None, consent_ref: str | None) -> str:
+    """`admin:<actor>` — plus where consent was given for `consent`, which without it stays empty (refused)."""
+    if basis != LegalBasis.CONSENT:
+        return f"admin:{actor}"
+    return f"admin:{actor}:{consent_ref}" if consent_ref else ""
+
+
+def create_contact(company: Company, row: dict[str, Any], *, actor: str, consent_ref: str | None = None) -> Contact:
     contact = build_contact(company, row)
     contact.is_primary = bool(row.get("is_primary"))
     try:
@@ -107,12 +114,13 @@ def create_contact(company: Company, row: dict[str, Any], *, actor: str) -> Cont
     except IntegrityError:
         raise ContactExists(f"contact {contact.email} already exists") from None
     activity_service.record(company, ActivityKind.NOTE, "contact created", contact=contact, actor=actor)
-    if row.get("legal_basis"):
-        set_legal_basis(contact, row["legal_basis"], source="admin", consent_ref=f"admin:{actor}", actor=actor)
+    if basis := row.get("legal_basis"):
+        ref = admin_consent_ref(actor, basis, consent_ref)
+        set_legal_basis(contact, basis, source="admin", consent_ref=ref, actor=actor)
     return contact
 
 
-def update_contact(contact: Contact, updates: dict[str, Any], *, actor: str) -> Contact:
+def update_contact(contact: Contact, updates: dict[str, Any], *, actor: str, consent_ref: str | None = None) -> Contact:
     invalid = set(updates) - EDITABLE_FIELDS
     if invalid:
         raise ValueError(f"fields not editable: {sorted(invalid)}")
@@ -122,7 +130,8 @@ def update_contact(contact: Contact, updates: dict[str, Any], *, actor: str) -> 
     contact.save(update_fields=[*fields, "modified_at"])
     if "legal_basis" in updates:
         basis = updates["legal_basis"]
-        set_legal_basis(contact, basis, source="admin", consent_ref=f"admin:{actor}", actor=actor)
+        ref = admin_consent_ref(actor, basis, consent_ref)
+        set_legal_basis(contact, basis, source="admin", consent_ref=ref, actor=actor)
     return contact
 
 

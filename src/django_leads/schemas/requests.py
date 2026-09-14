@@ -4,7 +4,7 @@
 """Request schemas of the leads admin API v2."""
 
 from django_agreements.enums import LegalBasis
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 
 from django_leads.enums import CompanyType, ContactStrategy, RuleAction, RuleTrigger, StageKind
 from django_leads.services.company_service import SORT_FIELDS
@@ -67,6 +67,16 @@ class ContactListQuery(BaseModel):
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
 
 
+CONSENT_REF_DESCRIPTION = "Where consent was given (document, call, form); required when legal_basis is consent."
+
+
+def require_consent_ref(request: BaseModel) -> BaseModel:
+    """`consent` from an operator always says where it was given."""
+    if request.legal_basis == LegalBasis.CONSENT and not (request.consent_ref or "").strip():
+        raise ValueError("consent_ref is required when legal_basis is consent")
+    return request
+
+
 class ContactCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -79,6 +89,9 @@ class ContactCreateRequest(BaseModel):
     language: str | None = Field(default=None, min_length=2, max_length=2, description="ISO 639-1 code.")
     is_primary: bool = Field(default=False, description="Primary contact of the company.")
     legal_basis: LegalBasis | None = Field(default=None, description="GDPR legal basis.")
+    consent_ref: str | None = Field(default=None, max_length=255, description=CONSENT_REF_DESCRIPTION)
+
+    _consent_needs_ref = model_validator(mode="after")(require_consent_ref)
 
 
 class ContactUpdateRequest(BaseModel):
@@ -91,6 +104,9 @@ class ContactUpdateRequest(BaseModel):
     language: str | None = Field(default=None, min_length=2, max_length=2, description="ISO 639-1 code.")
     is_primary: bool | None = Field(default=None, description="Primary contact of the company.")
     legal_basis: LegalBasis | None = Field(default=None, description="GDPR legal basis.")
+    consent_ref: str | None = Field(default=None, max_length=255, description=CONSENT_REF_DESCRIPTION)
+
+    _consent_needs_ref = model_validator(mode="after")(require_consent_ref)
 
 
 class StageRequest(BaseModel):

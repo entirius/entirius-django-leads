@@ -54,9 +54,10 @@ class ContactListView(AdminView):
         company = self.get_in(
             Company.objects.filter(channel=self.channel(channel_idx)), body.pop("company_id"), "Company"
         )
+        consent_ref = body.pop("consent_ref")
         row = {**resolve_language(body), "email": body["email"] or "", "source": LeadSource.MANUAL}
         try:
-            contact = contact_service.create_contact(company, row, actor=request.user.username)
+            contact = contact_service.create_contact(company, row, actor=request.user.username, consent_ref=consent_ref)
         except contact_service.ContactExists as error:
             raise Conflict(str(error)) from None
         return Response(ContactResponse.of(contact).model_dump(mode="json"), status=201)
@@ -81,7 +82,11 @@ class ContactDetailView(AdminView):
         updates = parse(ContactUpdateRequest, request.data).model_dump(mode="json", exclude_unset=True)
         if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "is_primary")):
             raise ValidationError({"detail": ["null is only allowed for language and legal_basis"]})
+        consent_ref = updates.pop("consent_ref", None)
         contact = contact_service.update_contact(
-            self.contact(channel_idx, pk), resolve_language(updates), actor=request.user.username
+            self.contact(channel_idx, pk),
+            resolve_language(updates),
+            actor=request.user.username,
+            consent_ref=consent_ref,
         )
         return Response(ContactResponse.of(contact).model_dump(mode="json"))

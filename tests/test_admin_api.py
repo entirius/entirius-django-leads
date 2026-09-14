@@ -5,8 +5,8 @@ from django.contrib.admin import AdminSite
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from django_leads.admin import CompanyAdmin
-from django_leads.enums import ImportStatus
-from django_leads.models import Company, ImportBatch
+from django_leads.enums import ActivityKind, ImportStatus
+from django_leads.models import Activity, Company, Contact, ImportBatch
 from tests.conftest import api_url
 from tests.test_import import CSV
 
@@ -59,7 +59,13 @@ def test_L18_delete_stage_in_use_returns_409(admin_api, company):
 
 
 def test_contact_create_and_email_is_immutable(admin_api, company):
-    body = {"company_id": company.pk, "email": "Jan@Ogrod.pl", "language": "pl", "legal_basis": "consent"}
+    body = {
+        "company_id": company.pk,
+        "email": "Jan@Ogrod.pl",
+        "language": "pl",
+        "legal_basis": "consent",
+        "consent_ref": "signed form 2026-09",
+    }
     created = admin_api.post(api_url("contacts/"), body, format="json")
     assert created.status_code == 201 and created.json()["email"] == "jan@ogrod.pl"
     assert admin_api.post(api_url("contacts/"), body, format="json").status_code == 409
@@ -87,3 +93,31 @@ def test_activities_filtered_by_company(admin_api, company):
 
 def test_company_admin_cannot_add(rf):
     assert CompanyAdmin(Company, AdminSite()).has_add_permission(rf.get("/")) is False
+
+
+def test_admin_consent_without_ref_is_400(admin_api, company):
+    body = {"company_id": company.pk, "email": "jan@ogrod.pl", "legal_basis": "consent"}
+    assert admin_api.post(api_url("contacts/"), body, format="json").status_code == 400
+    assert admin_api.post(api_url("contacts/"), {**body, "consent_ref": "  "}, format="json").status_code == 400
+    created = admin_api.post(api_url("contacts/"), {**body, "legal_basis": None}, format="json")
+    url = api_url(f"contacts/{created.json()['id']}/")
+    assert admin_api.patch(url, {"legal_basis": "consent"}, format="json").status_code == 400
+    assert Contact.objects.get().legal_basis is None
+    assert not Activity.objects.filter(kind=ActivityKind.LEGAL_BASIS).exists()
+
+
+def test_admin_consent_with_ref_writes_activity(admin_api, company):
+    body = {"company_id": company.pk, "email": "jan@ogrod.pl", "legal_basis": "legitimate_interest"}
+    created = admin_api.post(api_url("contacts/"), body, format="json")
+    url = api_url(f"contacts/{created.json()['id']}/")
+    patch = {"legal_basis": "consent", "consent_ref": "call 2026-09-14"}
+    assert admin_api.patch(url, patch, format="json").json()["legal_basis"] == "consent"
+    refs = Activity.objects.filter(kind=ActivityKind.LEGAL_BASIS).order_by("id").values_list("data", flat=True)
+    assert [data["consent_ref"] for data in refs] == ["admin:operator", "admin:operator:call 2026-09-14"]
+
+
+def test_dev_import_now_runs_in_the_request(admin_api, channel):
+    upload = SimpleUploadedFile("leads.csv", CSV.encode(), content_type="text/csv")
+    response = admin_api.post(api_url("test/import-now/"), {"file": upload}, format="multipart")
+    assert response.status_code == 200
+    assert (response.json()["status"], response.json()["created_count"]) == (ImportStatus.DONE, 3)
