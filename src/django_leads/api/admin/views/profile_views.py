@@ -33,7 +33,7 @@ class _ProfileView(AdminView):
         try:
             profile = config_service.save_profile(profile, fields)
         except config_service.ProfileExists as error:
-            raise Conflict(str(error)) from None
+            raise Conflict(str(error), code="profile_exists") from None
         return self.dump(profile, self.detail_item)
 
 

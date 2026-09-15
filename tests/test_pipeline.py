@@ -496,7 +496,7 @@ def test_L15_create_customer_absent_without_accounts_and_links_by_email_address(
             reload_urls()
         with mock.patch.object(customer_link_service, "find_customer_uid", return_value=None) as find:
             response = admin_api.post(url)
-        assert response.status_code == 409 and response.json()["error"] == "NotImplemented"
+        assert response.status_code == 409 and response.json()["error"] == "NOT_IMPLEMENTED"
         find.assert_called_once_with("piotr@example-shop-4.test")
         uid = "0b8f5d3e-7c1a-4d2b-9a55-3f1e2d4c5b6a"
         with mock.patch.object(customer_link_service, "find_customer_uid", return_value=uid):

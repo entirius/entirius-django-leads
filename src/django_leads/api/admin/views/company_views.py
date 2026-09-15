@@ -71,9 +71,9 @@ class CompanyListView(AdminView):
         try:
             company = company_service.create_company(self.channel(channel_idx), row, actor=request.user.username)
         except company_service.CompanyExists as error:
-            raise Conflict(str(error)) from None
+            raise Conflict(str(error), code="domain_exists") from None
         except stage_service.NoStages as error:
-            raise Conflict(str(error)) from None
+            raise Conflict(str(error), code="no_stages") from None
         return Response(detail(company), status=201)
 
 

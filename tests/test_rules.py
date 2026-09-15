@@ -161,7 +161,7 @@ def test_manual_communicate_single_gate_evaluation(shop, communicate, admin_api)
     body = {"template_key": "lead.cold.b2b", "contact_id": contact.pk}
     with mock.patch.object(recipient_service, "block_reason", wraps=recipient_service.block_reason) as gate:
         response = admin_api.post(f"/api/leads/v2/admin/default-europe/companies/{shop.pk}/communicate/", body)
-    assert response.status_code == 409 and response.json()["error"] == "NotEligible"
+    assert response.status_code == 409 and response.json()["error"] == "NOT_ELIGIBLE"
     assert gate.call_count == 1
     assert activity_messages(shop, ActivityKind.BLOCKED) == ["blocked: opted_out"]
     communicate.assert_not_called()

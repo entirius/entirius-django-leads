@@ -43,11 +43,11 @@ class CompanyCommunicateView(CompanyActionView):
         try:
             message = outreach_service.request_draft(company, contact, body.template_key, actor=request.user.username)
         except CommunicatorChannel.DoesNotExist:
-            raise Conflict("communicator channel not configured") from None
+            raise Conflict("communicator channel not configured", code="communicator_channel_missing") from None
         if isinstance(message, outreach_service.Blocked):
-            return Response({"error": "NotEligible", "detail": f"contact not eligible: {message.reason}"}, status=409)
+            raise Conflict(f"contact not eligible: {message.reason}", code="not_eligible")
         if message is None:
-            raise Conflict("no draft: see the company timeline")
+            raise Conflict("no draft: see the company timeline", code="no_draft")
         return Response(DraftResponse(message_id=message.pk, status=message.status).model_dump(), status=201)
 
 
