@@ -78,7 +78,8 @@ Same rule applies to PR descriptions: no `Generated with [Claude Code]` footer.
   the lead id); an unreachable broker is logged (lead id + error class) and left to the sweep; other failures are
   logged, never raised. Never writes `django_contact_forms.Lead`.
 - Admin API v2 (`JWTAuthentication` + `IsAdminUser`): `api/leads/v2/admin/<channel_idx>/` — `companies/`
-  (`?stage=&search=&sort=`), `companies/<id>/`, `companies/<id>/transition/`, `contacts/`, `stages/`,
+  (`?stage=&search=&sort=&company_type=&do_not_contact=&has_reply=`; `has_reply` = an `Exists()` over `reply`
+  activities), `companies/<id>/`, `companies/<id>/transition/`, `contacts/`, `stages/`,
   `activities/?company=`, `imports/`, `rules/`, `rule-runs/?company=`, `analysis-profiles/`, `recipient-profiles/`,
   `companies/<id>/{communicate,request-audit,create-customer}/`; development `test/import-now/` (multipart
   upload imported in the request — no worker), `test/evaluate/`, `test/rotate-now/`, `test/anonymise-now/` (`{as_of}`,

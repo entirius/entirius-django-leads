@@ -18,6 +18,8 @@
 - Stage rules (`stage_entered` / `intel_ready`) with a `RuleRun` per evaluation and a cooldown per (rule, company);
   drafts only through communicator `communicate()` (review required).
 - siteintel intel analysis through the toolbox (`AnalysisProfile`): hooks, platform, company type.
+- Admin API: `companies/` filters `company_type`, `do_not_contact` and `has_reply` server-side; counts and paging
+  follow the filters, invalid values are a 400.
 - Recipient pick: primary contact or a validated toolbox pick (`RecipientPickProfile`).
 - Rotation to the next contact after a finished sequence, `unresponsive` after `LEADS_ROTATION_MAX`.
 - communicator receivers: reply → `on_reply` stage + notification, reviewer skip → `do_not_contact`, sent → timeline.

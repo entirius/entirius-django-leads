@@ -33,6 +33,36 @@ def test_search_and_stage_filter(admin_api, company, channel):
     assert admin_api.get(api_url("companies/?stage=contacted")).json()["count"] == 0
 
 
+def test_company_list_filters_by_company_type(admin_api, company, shop):
+    Company.objects.filter(pk=shop.pk).update(company_type="RETAILER")
+    body = admin_api.get(api_url("companies/?company_type=RETAILER")).json()
+    assert body["count"] == 1 and body["results"][0]["id"] == shop.pk
+
+
+def test_company_list_filters_do_not_contact(admin_api, company, shop):
+    Company.objects.filter(pk=company.pk).update(do_not_contact=True)
+    assert [row["id"] for row in admin_api.get(api_url("companies/?do_not_contact=true")).json()["results"]] == [
+        company.pk
+    ]
+    assert admin_api.get(api_url("companies/?do_not_contact=false")).json()["count"] == 1
+
+
+def test_company_list_has_reply_counts_each_company_once(admin_api, company, shop):
+    Activity.objects.create(company=shop, kind=ActivityKind.REPLY, message="reply 1")
+    Activity.objects.create(company=shop, kind=ActivityKind.REPLY, message="reply 2")
+    Activity.objects.create(company=company, kind=ActivityKind.NOTE, message="note")
+    replied = admin_api.get(api_url(f"companies/?stage={shop.stage.key}&has_reply=true")).json()
+    assert replied["count"] == 1 and len(replied["results"]) == 1 and replied["results"][0]["id"] == shop.pk
+    not_replied = admin_api.get(api_url("companies/?has_reply=false")).json()
+    assert [row["id"] for row in not_replied["results"]] == [company.pk]
+
+
+def test_company_list_rejects_unknown_company_type(admin_api, company):
+    response = admin_api.get(api_url("companies/?company_type=BANK"))
+    assert response.status_code == 400
+    assert admin_api.get(api_url("companies/?has_reply=maybe")).status_code == 400
+
+
 def test_create_company_conflict_on_same_registrable_domain(admin_api, company):
     response = admin_api.post(api_url("companies/"), {"domain": "https://www.ogrod.pl/x"}, format="json")
     assert response.status_code == 409
