@@ -8,6 +8,9 @@
   `LEADS_INTEL_RETRY_LIMIT` (3) times, then evaluates the `intel_ready` rules. Budget, model and schema failures
   stay failed. The alert fires on the first and the final failure only. Development endpoint
   `test/retry-analyses/`.
+- An analysis retry superseded by a newer audit of the domain or a later successful analysis ends `failed/superseded`
+  without spending a retry; `retry_failed_analyses` runs once at a time (`QueueOnce`). Draft retries in communicator
+  honour the outreach gate (`do_not_contact`, opt-out, anonymised, no legal basis) through `draft_retry_requested`.
 
 ## 0.1.0 (unreleased)
 

@@ -84,10 +84,14 @@ def retry_failed_analyses() -> dict[str, int]:
 
 
 def _retry(claim: Claim) -> bool | None:
-    """True analysed, False failed again, None when the audit is no longer valid or another run took the claim."""
+    """True analysed, False failed again, None when the audit is no longer valid, superseded or another run took the
+    claim. Invalid and superseded claims end `failed` without spending a retry."""
     audit = Audit.objects.filter(pk=claim.key.split(":")[1]).first()
     if audit is None or audit.status not in REUSABLE_AUDIT_STATUSES or audit.expires_at <= timezone.now():
         claim_service.finish(claim, ClaimState.FAILED, "audit_invalid")
+        return None
+    if _superseded(claim, audit):
+        claim_service.finish(claim, ClaimState.FAILED, "superseded")
         return None
     taken = Claim.objects.filter(pk=claim.pk, state=ClaimState.RETRY).update(
         state=ClaimState.CLAIMED, attempted_at=timezone.now()
@@ -96,6 +100,17 @@ def _retry(claim: Claim) -> bool | None:
         return None
     sources = sorted(audit.reports.filter(status__in=SUCCEEDED_REPORT_STATUSES).values_list("source", flat=True))
     return _run_claimed(claim, claim.company, audit, sources)
+
+
+def _superseded(claim: Claim, audit: Audit) -> bool:
+    """A newer audit of the domain (manual re-audit during the outage) or a later successful analysis of the company."""
+    newer_audits = Audit.objects.filter(
+        domain=audit.domain, channel_idx=audit.channel_idx, created_at__gt=audit.created_at
+    )
+    later_analyses = Claim.objects.filter(
+        company=claim.company_id, key__startswith="intel:", state=ClaimState.DONE, pk__gt=claim.pk
+    )
+    return newer_audits.exists() or later_analyses.exists()
 
 
 def _run_claimed(claim: Claim, company: Company, audit: Audit, succeeded_sources: list[str]) -> bool:
