@@ -1,0 +1,33 @@
+# ERD configuration for django-leads — consumed by the ERD tooling (skill entirius-backend:erd-verify).
+app_label: django_leads
+groups:
+  - name: pipeline
+    title: "Channels, Stages & Companies"
+    models:
+      - Channel
+      - Stage
+      - Company
+      - Contact
+  - name: timeline
+    title: "Activities & Imports"
+    models:
+      - Channel
+      - Company
+      - Contact
+      - Activity
+      - ImportBatch
+  - name: rules
+    title: "Rules, Claims & Prompt Profiles"
+    models:
+      - Channel
+      - Stage
+      - Company
+      - StageRule
+      - RuleRun
+      - Claim
+      - AnalysisProfile
+      - RecipientPickProfile
+  - name: gdpr
+    title: "Erased Addresses"
+    models:
+      - ErasedAddress

@@ -1,0 +1,3775 @@
+# Generated from the Volkanos service schema (manage.py spectacular), filtered to /api/leads/.
+openapi: 3.1.0
+info:
+  title: django-leads Admin API v2
+  version: 0.1.0
+paths:
+  /api/leads/v2/admin/{channel_idx}/activities/:
+    get:
+      operationId: leads_activities_list
+      summary: Timeline of the channel, newest first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: company
+        schema:
+          type: integer
+        description: Company id.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads activities
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/analysis-profiles/:
+    get:
+      operationId: leads_analysis_profiles_list
+      summary: Profiles of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads analysis profiles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProfileListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_analysis_profiles_create
+      summary: Add a profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads analysis profiles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalysisProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalysisProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProfileDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/analysis-profiles/{id}/:
+    get:
+      operationId: api_leads_v2_admin_analysis_profiles_retrieve
+      summary: One profile with its prompt
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads analysis profiles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProfileDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_analysis_profiles_partial_update
+      summary: Update a profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads analysis profiles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAnalysisProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAnalysisProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAnalysisProfileUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProfileDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_analysis_profiles_destroy
+      summary: Delete a profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads analysis profiles
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/:
+    get:
+      operationId: leads_companies_list
+      summary: Companies of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: company_type
+        schema:
+          type: string
+        description: MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN.
+      - in: query
+        name: do_not_contact
+        schema:
+          type: boolean
+        description: do_not_contact flag.
+      - in: query
+        name: has_reply
+        schema:
+          type: boolean
+        description: At least one reply activity (true) or none (false).
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Substring of name or domain.
+      - in: query
+        name: sort
+        schema:
+          type: string
+        description: name, domain, stage_entered_at, last_activity_at; `-` prefix.
+      - in: query
+        name: stage
+        schema:
+          type: string
+        description: Stage key.
+      tags:
+      - Leads companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_companies_create
+      description: The domain is stored registrable; an existing domain in the channel is a 409.
+      summary: Create a company by hand
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/:
+    get:
+      operationId: api_leads_v2_admin_companies_retrieve
+      summary: One company with contacts and its last 20 activities
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_companies_partial_update
+      description: Stage, domain, hooks and customer link are not editable here.
+      summary: Update editable company fields
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/communicate/:
+    post:
+      operationId: api_leads_v2_admin_companies_communicate_create
+      description: No rule conditions or cooldown. 409 when the outreach gate refuses the contact (do_not_contact, opted_out,
+        anonymised, no_legal_basis) or no draft can be built (no clause set); 400 for a foreign or email-less contact.
+      summary: Request a reviewable draft for a contact
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunicateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommunicateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommunicateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/create-customer/:
+    post:
+      operationId: api_leads_v2_admin_companies_create_customer_create
+      description: 409 (code not_implemented) when no Customer matches — v1 never creates accounts.
+      summary: Link the Customer owning the primary contact's email
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerLinkResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/request-audit/:
+    post:
+      operationId: api_leads_v2_admin_companies_request_audit_create
+      summary: Request a siteintel audit of the company domain
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads companies
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRequestedResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/transition/:
+    post:
+      operationId: api_leads_v2_admin_companies_transition_create
+      summary: Move a company to another stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/contacts/:
+    get:
+      operationId: leads_contacts_list
+      summary: Contacts of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: company
+        schema:
+          type: integer
+        description: Company id.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads contacts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_contacts_create
+      summary: Add a contact to a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads contacts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContactCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContactCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/contacts/{id}/:
+    get:
+      operationId: api_leads_v2_admin_contacts_retrieve
+      summary: One contact
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads contacts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_contacts_partial_update
+      summary: Update editable contact fields
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads contacts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedContactUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedContactUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedContactUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/imports/:
+    get:
+      operationId: leads_imports_list
+      summary: Import batches of the channel, newest first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatchListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_imports_create
+      summary: Upload a CSV; the import runs on the leads queue
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatchResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/imports/{id}/:
+    get:
+      operationId: api_leads_v2_admin_imports_retrieve
+      summary: One import batch with its report
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatchDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/recipient-profiles/:
+    get:
+      operationId: leads_recipient_profiles_list
+      summary: Profiles of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads recipient profiles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_recipient_profiles_create
+      summary: Add a profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads recipient profiles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/recipient-profiles/{id}/:
+    get:
+      operationId: api_leads_v2_admin_recipient_profiles_retrieve
+      summary: One profile with its prompt
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads recipient profiles
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_recipient_profiles_partial_update
+      summary: Update a profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads recipient profiles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_recipient_profiles_destroy
+      summary: Delete a profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads recipient profiles
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/rule-runs/:
+    get:
+      operationId: leads_rule_runs_list
+      summary: Rule runs of the channel, newest first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: company
+        schema:
+          type: integer
+        description: Company id.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads rules
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleRunListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/rules/:
+    get:
+      operationId: leads_rules_list
+      summary: Rules of the channel in evaluation order
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads rules
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_rules_create
+      summary: Add a rule
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RuleRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/rules/{id}/:
+    get:
+      operationId: api_leads_v2_admin_rules_retrieve
+      summary: One rule
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads rules
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_rules_partial_update
+      summary: Update a rule
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads rules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRuleUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRuleUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRuleUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_rules_destroy
+      summary: Delete a rule and its runs
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads rules
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/stages/:
+    get:
+      operationId: leads_stages_list
+      summary: Stages of the channel in pipeline order
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads stages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_stages_create
+      summary: Add a stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/stages/{id}/:
+    get:
+      operationId: api_leads_v2_admin_stages_retrieve
+      summary: One stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads stages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_stages_partial_update
+      summary: Update a stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStageUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStageUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStageUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_stages_destroy
+      description: 409 while companies sit in the stage — move them first.
+      summary: Delete a stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads stages
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/test/anonymise-now/:
+    post:
+      operationId: api_leads_v2_admin_test_anonymise_now_create
+      description: Every channel, in this process; `as_of` moves the clock the retention cutoff is computed from.
+      summary: Run the daily retention task now (development only)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads (development)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevAnonymiseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DevAnonymiseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DevAnonymiseRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevAnonymiseResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/test/evaluate/:
+    post:
+      operationId: api_leads_v2_admin_test_evaluate_create
+      description: Answers 404 outside `ENVIRONMENT == "development"`, even when a host mounts the URL.
+      summary: Evaluate the rules of a trigger now (development only)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads (development)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevEvaluateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DevEvaluateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DevEvaluateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevEvaluateResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/test/import-now/:
+    post:
+      operationId: api_leads_v2_admin_test_import_now_create
+      description: The upload runs in this process — no worker, so no shared `LEADS_IMPORT_TMP_DIR` is needed.
+      summary: Upload a CSV and import it now (development only)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads (development)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatchDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/test/rotate-now/:
+    post:
+      operationId: api_leads_v2_admin_test_rotate_now_create
+      description: Answers 404 outside `ENVIRONMENT == "development"`, even when a host mounts the URL.
+      summary: Run the daily rotation scan of this channel now (development only)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads (development)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevRotateResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/gdpr/erase/:
+    post:
+      operationId: api_leads_v2_admin_gdpr_erase_create
+      description: Pseudonymises in every module (rows stay), suppresses the address in communicator and logs the request
+        on every affected company. Irreversible.
+      summary: Erase everything held about an email (GDPR art. 17)
+      tags:
+      - Leads GDPR
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GdprRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GdprRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GdprRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GdprEraseResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+  /api/leads/v2/admin/gdpr/export/:
+    post:
+      operationId: api_leads_v2_admin_gdpr_export_create
+      description: Leads, communicator, agreements and any other installed app with GDPR hooks.
+      summary: Export everything held about an email (GDPR art. 15)
+      tags:
+      - Leads GDPR
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GdprRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GdprRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GdprRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GdprExportResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+components:
+  schemas:
+    ActivityListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Timeline entries, newest first.
+          items:
+            $ref: '#/components/schemas/ActivityResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: ActivityListResponse
+      type: object
+    ActivityResponse:
+      properties:
+        id:
+          description: Activity id.
+          examples:
+          - 1
+          title: Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 100
+          title: Company Id
+          type: integer
+        contact_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Contact id.
+          examples:
+          - null
+          title: Contact Id
+        kind:
+          description: Activity kind.
+          examples:
+          - import
+          title: Kind
+          type: string
+        message:
+          description: Short description.
+          examples:
+          - import matched
+          title: Message
+          type: string
+        data:
+          additionalProperties: true
+          description: Structured details.
+          examples:
+          - {}
+          title: Data
+          type: object
+        actor:
+          description: Username, system or import:<batch id>.
+          examples:
+          - system
+          title: Actor
+          type: string
+        created_at:
+          description: Created.
+          examples:
+          - '2026-09-13T12:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+      required:
+      - id
+      - company_id
+      - contact_id
+      - kind
+      - message
+      - data
+      - actor
+      - created_at
+      title: ActivityResponse
+      type: object
+    AnalysisProfileDetailResponse:
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.analysis
+          title: Key
+          type: string
+        model:
+          description: Toolbox model.
+          examples:
+          - fake-chat
+          title: Model
+          type: string
+        prompt_text:
+          description: Prompt with placeholders.
+          examples:
+          - '...'
+          title: Prompt Text
+          type: string
+        json_schema:
+          additionalProperties: true
+          description: Output JSON schema.
+          examples:
+          - {}
+          title: Json Schema
+          type: object
+        is_active:
+          description: Used by the analysis.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - key
+      - model
+      - prompt_text
+      - json_schema
+      - is_active
+      title: AnalysisProfileDetailResponse
+      type: object
+    AnalysisProfileListResponse:
+      properties:
+        results:
+          description: Profiles of the channel.
+          items:
+            $ref: '#/components/schemas/AnalysisProfileResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: AnalysisProfileListResponse
+      type: object
+    AnalysisProfileRequest:
+      additionalProperties: false
+      properties:
+        key:
+          description: Profile key.
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_.]+$
+          title: Key
+          type: string
+        prompt_text:
+          description: Prompt with placeholders.
+          minLength: 1
+          title: Prompt Text
+          type: string
+        json_schema:
+          additionalProperties: true
+          description: Output JSON schema.
+          title: Json Schema
+          type: object
+        model:
+          description: Toolbox model.
+          examples:
+          - fake-chat
+          maxLength: 128
+          minLength: 1
+          title: Model
+          type: string
+        is_active:
+          default: true
+          description: Used by the analysis.
+          title: Is Active
+          type: boolean
+      required:
+      - key
+      - prompt_text
+      - model
+      title: AnalysisProfileRequest
+      type: object
+    AnalysisProfileResponse:
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.analysis
+          title: Key
+          type: string
+        model:
+          description: Toolbox model.
+          examples:
+          - fake-chat
+          title: Model
+          type: string
+        is_active:
+          description: Used by the analysis.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - key
+      - model
+      - is_active
+      title: AnalysisProfileResponse
+      type: object
+    AuditRequestedResponse:
+      properties:
+        audit_id:
+          description: siteintel audit id.
+          examples:
+          - 6f1c...
+          title: Audit Id
+          type: string
+        status:
+          description: Audit status.
+          examples:
+          - pending
+          title: Status
+          type: string
+      required:
+      - audit_id
+      - status
+      title: AuditRequestedResponse
+      type: object
+    CommunicateRequest:
+      additionalProperties: false
+      properties:
+        template_key:
+          description: Communicator template.
+          examples:
+          - lead.cold.b2b
+          maxLength: 128
+          minLength: 1
+          title: Template Key
+          type: string
+        contact_id:
+          description: Contact of the company.
+          examples:
+          - 102
+          title: Contact Id
+          type: integer
+      required:
+      - template_key
+      - contact_id
+      title: CommunicateRequest
+      type: object
+    CompanyCreateRequest:
+      additionalProperties: false
+      properties:
+        domain:
+          description: Domain or URL; stored registrable.
+          maxLength: 253
+          minLength: 1
+          title: Domain
+          type: string
+        name:
+          default: ''
+          description: Company name; the domain when empty.
+          maxLength: 255
+          title: Name
+          type: string
+        website:
+          anyOf:
+          - format: uri
+            maxLength: 2083
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Website URL.
+          title: Website
+        company_type:
+          $ref: '#/components/schemas/CompanyType'
+          default: UNKNOWN
+          description: Company type.
+        industry:
+          default: ''
+          description: Industry.
+          maxLength: 128
+          title: Industry
+          type: string
+      required:
+      - domain
+      title: CompanyCreateRequest
+      type: object
+    CompanyDetailResponse:
+      properties:
+        id:
+          description: Company id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        name:
+          description: Name.
+          examples:
+          - Example Shop
+          title: Name
+          type: string
+        domain:
+          description: Registrable domain.
+          examples:
+          - example-shop-2.test
+          title: Domain
+          type: string
+        website:
+          description: Website.
+          examples:
+          - ''
+          title: Website
+          type: string
+        company_type:
+          description: MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN.
+          examples:
+          - RETAILER
+          title: Company Type
+          type: string
+        industry:
+          description: Industry.
+          examples:
+          - ''
+          title: Industry
+          type: string
+        description:
+          description: Description.
+          examples:
+          - ''
+          title: Description
+          type: string
+        platform:
+          description: Shop platform.
+          examples:
+          - ''
+          title: Platform
+          type: string
+        hooks:
+          description: Outreach hooks (read-only).
+          examples:
+          - []
+          items: {}
+          title: Hooks
+          type: array
+        stage:
+          $ref: '#/components/schemas/StageResponse'
+          description: Current stage.
+        stage_entered_at:
+          description: Entered the current stage.
+          examples:
+          - '2026-09-13T12:00:00Z'
+          format: date-time
+          title: Stage Entered At
+          type: string
+        source:
+          description: csv, form, manual or connector.
+          examples:
+          - csv
+          title: Source
+          type: string
+        external_ref:
+          description: External reference.
+          examples:
+          - ''
+          title: External Ref
+          type: string
+        do_not_contact:
+          description: Never contact.
+          examples:
+          - false
+          title: Do Not Contact
+          type: boolean
+        customer_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Linked customer uid (read-only).
+          examples:
+          - null
+          title: Customer Uid
+        rotation_count:
+          description: Contact rotations.
+          examples:
+          - 0
+          title: Rotation Count
+          type: integer
+        last_activity_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Last timeline entry.
+          examples:
+          - null
+          title: Last Activity At
+        contacts:
+          description: Contacts of the company.
+          items:
+            $ref: '#/components/schemas/ContactResponse'
+          title: Contacts
+          type: array
+        activities:
+          description: Last 20 timeline entries, newest first.
+          items:
+            $ref: '#/components/schemas/ActivityResponse'
+          title: Activities
+          type: array
+      required:
+      - id
+      - name
+      - domain
+      - website
+      - company_type
+      - industry
+      - description
+      - platform
+      - hooks
+      - stage
+      - stage_entered_at
+      - source
+      - external_ref
+      - do_not_contact
+      - customer_uid
+      - rotation_count
+      - last_activity_at
+      - contacts
+      - activities
+      title: CompanyDetailResponse
+      type: object
+    CompanyListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Companies of the page.
+          items:
+            $ref: '#/components/schemas/CompanyResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: CompanyListResponse
+      type: object
+    CompanyResponse:
+      properties:
+        id:
+          description: Company id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        name:
+          description: Name.
+          examples:
+          - Example Shop
+          title: Name
+          type: string
+        domain:
+          description: Registrable domain.
+          examples:
+          - example-shop-2.test
+          title: Domain
+          type: string
+        website:
+          description: Website.
+          examples:
+          - ''
+          title: Website
+          type: string
+        company_type:
+          description: MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN.
+          examples:
+          - RETAILER
+          title: Company Type
+          type: string
+        industry:
+          description: Industry.
+          examples:
+          - ''
+          title: Industry
+          type: string
+        description:
+          description: Description.
+          examples:
+          - ''
+          title: Description
+          type: string
+        platform:
+          description: Shop platform.
+          examples:
+          - ''
+          title: Platform
+          type: string
+        hooks:
+          description: Outreach hooks (read-only).
+          examples:
+          - []
+          items: {}
+          title: Hooks
+          type: array
+        stage:
+          $ref: '#/components/schemas/StageResponse'
+          description: Current stage.
+        stage_entered_at:
+          description: Entered the current stage.
+          examples:
+          - '2026-09-13T12:00:00Z'
+          format: date-time
+          title: Stage Entered At
+          type: string
+        source:
+          description: csv, form, manual or connector.
+          examples:
+          - csv
+          title: Source
+          type: string
+        external_ref:
+          description: External reference.
+          examples:
+          - ''
+          title: External Ref
+          type: string
+        do_not_contact:
+          description: Never contact.
+          examples:
+          - false
+          title: Do Not Contact
+          type: boolean
+        customer_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Linked customer uid (read-only).
+          examples:
+          - null
+          title: Customer Uid
+        rotation_count:
+          description: Contact rotations.
+          examples:
+          - 0
+          title: Rotation Count
+          type: integer
+        last_activity_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Last timeline entry.
+          examples:
+          - null
+          title: Last Activity At
+      required:
+      - id
+      - name
+      - domain
+      - website
+      - company_type
+      - industry
+      - description
+      - platform
+      - hooks
+      - stage
+      - stage_entered_at
+      - source
+      - external_ref
+      - do_not_contact
+      - customer_uid
+      - rotation_count
+      - last_activity_at
+      title: CompanyResponse
+      type: object
+    CompanyType:
+      enum:
+      - MANUFACTURER
+      - WHOLESALE
+      - RETAILER
+      - UNKNOWN
+      title: CompanyType
+      type: string
+    ContactCreateRequest:
+      additionalProperties: false
+      properties:
+        company_id:
+          description: Company of the contact.
+          examples:
+          - 101
+          title: Company Id
+          type: integer
+        email:
+          anyOf:
+          - format: email
+            type: string
+          - type: 'null'
+          default: null
+          description: Email; immutable once set.
+          title: Email
+        first_name:
+          default: ''
+          description: First name.
+          maxLength: 128
+          title: First Name
+          type: string
+        last_name:
+          default: ''
+          description: Last name.
+          maxLength: 128
+          title: Last Name
+          type: string
+        job_title:
+          default: ''
+          description: Job title.
+          maxLength: 128
+          title: Job Title
+          type: string
+        phone:
+          default: ''
+          description: Phone.
+          maxLength: 32
+          title: Phone
+          type: string
+        language:
+          anyOf:
+          - maxLength: 2
+            minLength: 2
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 639-1 code.
+          title: Language
+        is_primary:
+          default: false
+          description: Primary contact of the company.
+          title: Is Primary
+          type: boolean
+        legal_basis:
+          anyOf:
+          - $ref: '#/components/schemas/LegalBasis'
+          - type: 'null'
+          default: null
+          description: GDPR legal basis.
+        consent_ref:
+          anyOf:
+          - maxLength: 255
+            type: string
+          - type: 'null'
+          default: null
+          description: Where consent was given (document, call, form); required when legal_basis is consent.
+          title: Consent Ref
+      required:
+      - company_id
+      title: ContactCreateRequest
+      type: object
+    ContactListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Contacts of the page.
+          items:
+            $ref: '#/components/schemas/ContactResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: ContactListResponse
+      type: object
+    ContactResponse:
+      properties:
+        id:
+          description: Contact id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 100
+          title: Company Id
+          type: integer
+        email:
+          description: Email; empty when unknown.
+          examples:
+          - jan@example-shop-2.test
+          title: Email
+          type: string
+        first_name:
+          description: First name.
+          examples:
+          - Jan
+          title: First Name
+          type: string
+        last_name:
+          description: Last name.
+          examples:
+          - Kowalski
+          title: Last Name
+          type: string
+        job_title:
+          description: Job title.
+          examples:
+          - Owner
+          title: Job Title
+          type: string
+        phone:
+          description: Phone.
+          examples:
+          - ''
+          title: Phone
+          type: string
+        language:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ISO 639-1 code.
+          examples:
+          - pl
+          title: Language
+        is_primary:
+          description: Primary contact.
+          examples:
+          - true
+          title: Is Primary
+          type: boolean
+        source:
+          description: csv, form, manual or connector.
+          examples:
+          - csv
+          title: Source
+          type: string
+        legal_basis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: GDPR legal basis; null when none.
+          examples:
+          - consent
+          title: Legal Basis
+        opt_out_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Opted out.
+          examples:
+          - null
+          title: Opt Out At
+        anonymised_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Anonymised.
+          examples:
+          - null
+          title: Anonymised At
+      required:
+      - id
+      - company_id
+      - email
+      - first_name
+      - last_name
+      - job_title
+      - phone
+      - language
+      - is_primary
+      - source
+      - legal_basis
+      - opt_out_at
+      - anonymised_at
+      title: ContactResponse
+      type: object
+    ContactStrategy:
+      enum:
+      - primary
+      - ai_pick
+      title: ContactStrategy
+      type: string
+    CustomerLinkResponse:
+      properties:
+        customer_uid:
+          description: Linked customer uid.
+          examples:
+          - 0b8f...
+          title: Customer Uid
+          type: string
+      required:
+      - customer_uid
+      title: CustomerLinkResponse
+      type: object
+    DevAnonymiseRequest:
+      additionalProperties: false
+      properties:
+        as_of:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          default: null
+          description: Clock of the retention run; now when omitted.
+          examples:
+          - '2026-09-15T06:00:00Z'
+          title: As Of
+      title: DevAnonymiseRequest
+      type: object
+    DevAnonymiseResponse:
+      properties:
+        anonymised:
+          additionalProperties:
+            type: integer
+          description: Anonymised contacts per channel idx.
+          examples:
+          - default-europe: 1
+          title: Anonymised
+          type: object
+      required:
+      - anonymised
+      title: DevAnonymiseResponse
+      type: object
+    DevEvaluateRequest:
+      additionalProperties: false
+      properties:
+        company_id:
+          description: Company id.
+          examples:
+          - 102
+          title: Company Id
+          type: integer
+        trigger:
+          $ref: '#/components/schemas/RuleTrigger'
+          description: stage_entered or intel_ready.
+        stage_key:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          default: null
+          description: Stage; default the company's stage.
+          title: Stage Key
+      required:
+      - company_id
+      - trigger
+      title: DevEvaluateRequest
+      type: object
+    DevEvaluateResponse:
+      properties:
+        runs:
+          description: Runs of this evaluation, in rule order.
+          items:
+            $ref: '#/components/schemas/RuleRunResponse'
+          title: Runs
+          type: array
+      required:
+      - runs
+      title: DevEvaluateResponse
+      type: object
+    DevRotateResponse:
+      properties:
+        rotated:
+          description: Threads that rotated or parked a company.
+          examples:
+          - 1
+          title: Rotated
+          type: integer
+      required:
+      - rotated
+      title: DevRotateResponse
+      type: object
+    DraftResponse:
+      properties:
+        message_id:
+          description: Communicator message id.
+          examples:
+          - 7
+          title: Message Id
+          type: integer
+        status:
+          description: Message status.
+          examples:
+          - review_required
+          title: Status
+          type: string
+      required:
+      - message_id
+      - status
+      title: DraftResponse
+      type: object
+    GdprEraseResponse:
+      properties:
+        modules:
+          additionalProperties:
+            additionalProperties:
+              type: integer
+            type: object
+          description: App name → rows touched per kind.
+          examples:
+          - django_leads:
+              activities: 4
+              contacts: 1
+          title: Modules
+          type: object
+      required:
+      - modules
+      title: GdprEraseResponse
+      type: object
+    GdprExportResponse:
+      properties:
+        email:
+          description: Normalised address of the data subject.
+          examples:
+          - jan@example-shop-2.test
+          title: Email
+          type: string
+        generated_at:
+          description: When the export was built.
+          examples:
+          - '2026-09-14T06:00:00Z'
+          format: date-time
+          title: Generated At
+          type: string
+        modules:
+          additionalProperties:
+            additionalProperties: true
+            type: object
+          description: App name → rows keyed by model name; apps without GDPR hooks are absent.
+          examples:
+          - django_leads:
+              Activity: []
+              Company: []
+              Contact: []
+          title: Modules
+          type: object
+      required:
+      - email
+      - generated_at
+      - modules
+      title: GdprExportResponse
+      type: object
+    GdprRequest:
+      additionalProperties: false
+      properties:
+        email:
+          description: Address of the data subject.
+          examples:
+          - jan@example-shop-2.test
+          maxLength: 254
+          title: Email
+          type: string
+      required:
+      - email
+      title: GdprRequest
+      type: object
+    ImportBatchDetailResponse:
+      properties:
+        id:
+          description: Batch id.
+          examples:
+          - 1
+          title: Id
+          type: integer
+        source:
+          description: Source.
+          examples:
+          - csv
+          title: Source
+          type: string
+        filename:
+          description: Uploaded file name.
+          examples:
+          - leads.csv
+          title: Filename
+          type: string
+        status:
+          description: pending, running, done or failed.
+          examples:
+          - done
+          title: Status
+          type: string
+        created_count:
+          description: Rows that created a company.
+          examples:
+          - 8
+          title: Created Count
+          type: integer
+        matched_count:
+          description: Rows that matched a company.
+          examples:
+          - 1
+          title: Matched Count
+          type: integer
+        skipped_count:
+          description: Rows skipped.
+          examples:
+          - 3
+          title: Skipped Count
+          type: integer
+        row_count:
+          description: Data rows processed so far.
+          examples:
+          - 12
+          title: Row Count
+          type: integer
+        size_bytes:
+          description: Uploaded file size.
+          examples:
+          - 1024
+          title: Size Bytes
+          type: integer
+        created_by:
+          description: Uploader.
+          examples:
+          - admin
+          title: Created By
+          type: string
+        created_at:
+          description: Uploaded.
+          examples:
+          - '2026-09-13T12:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+        report:
+          description: Skipped rows (row number and reason code, no row values), capped at LEADS_IMPORT_REPORT_MAX.
+          items:
+            $ref: '#/components/schemas/ImportReportEntry'
+          title: Report
+          type: array
+      required:
+      - id
+      - source
+      - filename
+      - status
+      - created_count
+      - matched_count
+      - skipped_count
+      - row_count
+      - size_bytes
+      - created_by
+      - created_at
+      - report
+      title: ImportBatchDetailResponse
+      type: object
+    ImportBatchListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Batches, newest first.
+          items:
+            $ref: '#/components/schemas/ImportBatchResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: ImportBatchListResponse
+      type: object
+    ImportBatchResponse:
+      properties:
+        id:
+          description: Batch id.
+          examples:
+          - 1
+          title: Id
+          type: integer
+        source:
+          description: Source.
+          examples:
+          - csv
+          title: Source
+          type: string
+        filename:
+          description: Uploaded file name.
+          examples:
+          - leads.csv
+          title: Filename
+          type: string
+        status:
+          description: pending, running, done or failed.
+          examples:
+          - done
+          title: Status
+          type: string
+        created_count:
+          description: Rows that created a company.
+          examples:
+          - 8
+          title: Created Count
+          type: integer
+        matched_count:
+          description: Rows that matched a company.
+          examples:
+          - 1
+          title: Matched Count
+          type: integer
+        skipped_count:
+          description: Rows skipped.
+          examples:
+          - 3
+          title: Skipped Count
+          type: integer
+        row_count:
+          description: Data rows processed so far.
+          examples:
+          - 12
+          title: Row Count
+          type: integer
+        size_bytes:
+          description: Uploaded file size.
+          examples:
+          - 1024
+          title: Size Bytes
+          type: integer
+        created_by:
+          description: Uploader.
+          examples:
+          - admin
+          title: Created By
+          type: string
+        created_at:
+          description: Uploaded.
+          examples:
+          - '2026-09-13T12:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+      required:
+      - id
+      - source
+      - filename
+      - status
+      - created_count
+      - matched_count
+      - skipped_count
+      - row_count
+      - size_bytes
+      - created_by
+      - created_at
+      title: ImportBatchResponse
+      type: object
+    ImportReportEntry:
+      properties:
+        row:
+          description: CSV line number (header = 1); 0 for a file-level failure.
+          examples:
+          - 2
+          title: Row
+          type: integer
+        reason:
+          description: Skip reason or file-level error code.
+          examples:
+          - no_domain_no_email
+          title: Reason
+          type: string
+      required:
+      - row
+      - reason
+      title: ImportReportEntry
+      type: object
+    LegalBasis:
+      description: GDPR legal basis for processing — the platform-wide definition.
+      enum:
+      - consent
+      - legitimate_interest
+      - contract
+      title: LegalBasis
+      type: string
+    PatchedAnalysisProfileUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_.]+$
+            type: string
+          - type: 'null'
+          default: null
+          title: Key
+        prompt_text:
+          anyOf:
+          - minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Prompt with placeholders.
+          title: Prompt Text
+        json_schema:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Output JSON schema.
+          title: Json Schema
+        model:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Toolbox model.
+          title: Model
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Used by the analysis.
+          title: Is Active
+      title: AnalysisProfileUpdateRequest
+      type: object
+    PatchedCompanyUpdateRequest:
+      additionalProperties: false
+      properties:
+        name:
+          anyOf:
+          - maxLength: 255
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Company name.
+          title: Name
+        website:
+          anyOf:
+          - format: uri
+            maxLength: 2083
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Website URL.
+          title: Website
+        company_type:
+          anyOf:
+          - $ref: '#/components/schemas/CompanyType'
+          - type: 'null'
+          default: null
+          description: Company type.
+        industry:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          default: null
+          description: Industry.
+          title: Industry
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Free-text description.
+          title: Description
+        do_not_contact:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Never contact this company.
+          title: Do Not Contact
+        external_ref:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          default: null
+          description: Reference in an external system.
+          title: External Ref
+      title: CompanyUpdateRequest
+      type: object
+    PatchedContactUpdateRequest:
+      additionalProperties: false
+      properties:
+        first_name:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          default: null
+          description: First name.
+          title: First Name
+        last_name:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          default: null
+          description: Last name.
+          title: Last Name
+        job_title:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          default: null
+          description: Job title.
+          title: Job Title
+        phone:
+          anyOf:
+          - maxLength: 32
+            type: string
+          - type: 'null'
+          default: null
+          description: Phone.
+          title: Phone
+        language:
+          anyOf:
+          - maxLength: 2
+            minLength: 2
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 639-1 code.
+          title: Language
+        is_primary:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Primary contact of the company.
+          title: Is Primary
+        legal_basis:
+          anyOf:
+          - $ref: '#/components/schemas/LegalBasis'
+          - type: 'null'
+          default: null
+          description: GDPR legal basis.
+        consent_ref:
+          anyOf:
+          - maxLength: 255
+            type: string
+          - type: 'null'
+          default: null
+          description: Where consent was given (document, call, form); required when legal_basis is consent.
+          title: Consent Ref
+      title: ContactUpdateRequest
+      type: object
+    PatchedProfileUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_.]+$
+            type: string
+          - type: 'null'
+          default: null
+          title: Key
+        prompt_text:
+          anyOf:
+          - minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Prompt with placeholders.
+          title: Prompt Text
+        json_schema:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Output JSON schema.
+          title: Json Schema
+        model:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Toolbox model.
+          title: Model
+      title: ProfileUpdateRequest
+      type: object
+    PatchedRuleUpdateRequest:
+      additionalProperties: false
+      properties:
+        trigger:
+          anyOf:
+          - $ref: '#/components/schemas/RuleTrigger'
+          - type: 'null'
+          default: null
+          description: stage_entered or intel_ready.
+        stage_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: Stage; null clears it.
+          examples:
+          - 102
+          title: Stage Id
+        action:
+          anyOf:
+          - $ref: '#/components/schemas/RuleAction'
+          - type: 'null'
+          default: null
+          description: request_audit or communicate.
+        template_key:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          default: null
+          description: Communicator template.
+          title: Template Key
+        contact_strategy:
+          anyOf:
+          - $ref: '#/components/schemas/ContactStrategy'
+          - type: 'null'
+          default: null
+          description: primary or ai_pick.
+        require_hooks:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Skip companies without hooks.
+          title: Require Hooks
+        require_email:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Skip companies without a contact email.
+          title: Require Email
+        cooldown_hours:
+          anyOf:
+          - maximum: 8760
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: No re-run within.
+          title: Cooldown Hours
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Evaluated at all.
+          title: Is Active
+        order:
+          anyOf:
+          - maximum: 32767
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: Evaluation order.
+          title: Order
+      title: RuleUpdateRequest
+      type: object
+    PatchedStageUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_]+$
+            type: string
+          - type: 'null'
+          default: null
+          description: Slug.
+          title: Key
+        label:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Label.
+          title: Label
+        order:
+          anyOf:
+          - maximum: 32767
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: Position in the pipeline.
+          title: Order
+        kind:
+          anyOf:
+          - $ref: '#/components/schemas/StageKind'
+          - type: 'null'
+          default: null
+          description: open, won, lost or unresponsive.
+        is_terminal:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: No further stages after this one.
+          title: Is Terminal
+        on_reply:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Companies move here when a contact replies.
+          title: On Reply
+      title: StageUpdateRequest
+      type: object
+    ProfileDetailResponse:
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.analysis
+          title: Key
+          type: string
+        model:
+          description: Toolbox model.
+          examples:
+          - fake-chat
+          title: Model
+          type: string
+        prompt_text:
+          description: Prompt with placeholders.
+          examples:
+          - '...'
+          title: Prompt Text
+          type: string
+        json_schema:
+          additionalProperties: true
+          description: Output JSON schema.
+          examples:
+          - {}
+          title: Json Schema
+          type: object
+      required:
+      - id
+      - key
+      - model
+      - prompt_text
+      - json_schema
+      title: ProfileDetailResponse
+      type: object
+    ProfileListResponse:
+      properties:
+        results:
+          description: Profiles of the channel.
+          items:
+            $ref: '#/components/schemas/ProfileResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ProfileListResponse
+      type: object
+    ProfileRequest:
+      additionalProperties: false
+      properties:
+        key:
+          description: Profile key.
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_.]+$
+          title: Key
+          type: string
+        prompt_text:
+          description: Prompt with placeholders.
+          minLength: 1
+          title: Prompt Text
+          type: string
+        json_schema:
+          additionalProperties: true
+          description: Output JSON schema.
+          title: Json Schema
+          type: object
+        model:
+          description: Toolbox model.
+          examples:
+          - fake-chat
+          maxLength: 128
+          minLength: 1
+          title: Model
+          type: string
+      required:
+      - key
+      - prompt_text
+      - model
+      title: ProfileRequest
+      type: object
+    ProfileResponse:
+      description: List shape — the prompt is never listed.
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.analysis
+          title: Key
+          type: string
+        model:
+          description: Toolbox model.
+          examples:
+          - fake-chat
+          title: Model
+          type: string
+      required:
+      - id
+      - key
+      - model
+      title: ProfileResponse
+      type: object
+    RuleAction:
+      enum:
+      - request_audit
+      - communicate
+      title: RuleAction
+      type: string
+    RuleListResponse:
+      properties:
+        results:
+          description: Rules in evaluation order.
+          items:
+            $ref: '#/components/schemas/RuleResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: RuleListResponse
+      type: object
+    RuleRequest:
+      additionalProperties: false
+      properties:
+        trigger:
+          $ref: '#/components/schemas/RuleTrigger'
+          description: stage_entered or intel_ready.
+          examples:
+          - stage_entered
+        stage_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: Stage; required for stage_entered.
+          examples:
+          - 102
+          title: Stage Id
+        action:
+          $ref: '#/components/schemas/RuleAction'
+          default: communicate
+          description: request_audit or communicate.
+        template_key:
+          default: ''
+          description: Communicator template; for communicate.
+          maxLength: 128
+          title: Template Key
+          type: string
+        contact_strategy:
+          $ref: '#/components/schemas/ContactStrategy'
+          default: primary
+          description: primary or ai_pick.
+        require_hooks:
+          default: true
+          description: Skip companies without hooks.
+          title: Require Hooks
+          type: boolean
+        require_email:
+          default: true
+          description: Skip companies without a contact email.
+          title: Require Email
+          type: boolean
+        cooldown_hours:
+          default: 24
+          description: No re-run for the company within.
+          maximum: 8760
+          minimum: 0
+          title: Cooldown Hours
+          type: integer
+        is_active:
+          default: true
+          description: Evaluated at all.
+          title: Is Active
+          type: boolean
+        order:
+          default: 0
+          description: Evaluation order.
+          maximum: 32767
+          minimum: 0
+          title: Order
+          type: integer
+      required:
+      - trigger
+      title: RuleRequest
+      type: object
+    RuleResponse:
+      properties:
+        id:
+          description: Rule id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        trigger:
+          description: stage_entered or intel_ready.
+          examples:
+          - stage_entered
+          title: Trigger
+          type: string
+        stage_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Stage id.
+          examples:
+          - 102
+          title: Stage Id
+        action:
+          description: request_audit or communicate.
+          examples:
+          - communicate
+          title: Action
+          type: string
+        template_key:
+          description: Communicator template.
+          examples:
+          - lead.cold.b2b
+          title: Template Key
+          type: string
+        contact_strategy:
+          description: primary or ai_pick.
+          examples:
+          - primary
+          title: Contact Strategy
+          type: string
+        require_hooks:
+          description: Skip companies without hooks.
+          examples:
+          - true
+          title: Require Hooks
+          type: boolean
+        require_email:
+          description: Skip companies without a contact email.
+          examples:
+          - true
+          title: Require Email
+          type: boolean
+        cooldown_hours:
+          description: No re-run within.
+          examples:
+          - 24
+          title: Cooldown Hours
+          type: integer
+        is_active:
+          description: Evaluated at all.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+        order:
+          description: Evaluation order.
+          examples:
+          - 0
+          title: Order
+          type: integer
+      required:
+      - id
+      - trigger
+      - stage_id
+      - action
+      - template_key
+      - contact_strategy
+      - require_hooks
+      - require_email
+      - cooldown_hours
+      - is_active
+      - order
+      title: RuleResponse
+      type: object
+    RuleRunListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Runs, newest first.
+          items:
+            $ref: '#/components/schemas/RuleRunResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: RuleRunListResponse
+      type: object
+    RuleRunResponse:
+      properties:
+        id:
+          description: Run id.
+          examples:
+          - 1
+          title: Id
+          type: integer
+        rule_id:
+          description: Rule id.
+          examples:
+          - 100
+          title: Rule Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 102
+          title: Company Id
+          type: integer
+        fired_at:
+          description: Evaluated.
+          examples:
+          - '2026-09-13T12:00:00Z'
+          format: date-time
+          title: Fired At
+          type: string
+        outcome:
+          description: fired, skipped, blocked or cooldown; empty while claimed.
+          examples:
+          - fired
+          title: Outcome
+          type: string
+        detail:
+          description: Short reason.
+          examples:
+          - message 7 review_required
+          title: Detail
+          type: string
+      required:
+      - id
+      - rule_id
+      - company_id
+      - fired_at
+      - outcome
+      - detail
+      title: RuleRunResponse
+      type: object
+    RuleTrigger:
+      enum:
+      - stage_entered
+      - intel_ready
+      title: RuleTrigger
+      type: string
+    StageKind:
+      enum:
+      - open
+      - won
+      - lost
+      - unresponsive
+      title: StageKind
+      type: string
+    StageListResponse:
+      properties:
+        results:
+          description: Stages in pipeline order.
+          items:
+            $ref: '#/components/schemas/StageResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: StageListResponse
+      type: object
+    StageRequest:
+      additionalProperties: false
+      properties:
+        key:
+          description: Slug.
+          examples:
+          - new
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - New
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+        order:
+          default: 0
+          description: Position in the pipeline.
+          maximum: 32767
+          minimum: 0
+          title: Order
+          type: integer
+        kind:
+          $ref: '#/components/schemas/StageKind'
+          default: open
+          description: open, won, lost or unresponsive.
+        is_terminal:
+          default: false
+          description: No further stages after this one.
+          title: Is Terminal
+          type: boolean
+        on_reply:
+          default: false
+          description: Companies move here when a contact replies.
+          title: On Reply
+          type: boolean
+      required:
+      - key
+      - label
+      title: StageRequest
+      type: object
+    StageResponse:
+      properties:
+        id:
+          description: Stage id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Slug.
+          examples:
+          - new
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - New
+          title: Label
+          type: string
+        order:
+          description: Position in the pipeline.
+          examples:
+          - 0
+          title: Order
+          type: integer
+        kind:
+          description: open, won, lost or unresponsive.
+          examples:
+          - open
+          title: Kind
+          type: string
+        is_terminal:
+          description: No further stages.
+          examples:
+          - false
+          title: Is Terminal
+          type: boolean
+        on_reply:
+          description: Target on a reply.
+          examples:
+          - false
+          title: On Reply
+          type: boolean
+      required:
+      - id
+      - key
+      - label
+      - order
+      - kind
+      - is_terminal
+      - on_reply
+      title: StageResponse
+      type: object
+    TransitionRequest:
+      additionalProperties: false
+      properties:
+        stage_key:
+          description: Target stage key.
+          examples:
+          - contacted
+          maxLength: 64
+          minLength: 1
+          title: Stage Key
+          type: string
+      required:
+      - stage_key
+      title: TransitionRequest
+      type: object
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
