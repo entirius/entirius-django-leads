@@ -7,13 +7,23 @@
 import logging
 
 from django.conf import settings
+from django.utils import timezone
+from django_siteintel.enums import REUSABLE_AUDIT_STATUSES, SUCCEEDED_REPORT_STATUSES
 from django_siteintel.models import Audit
 from django_siteintel.services.audit_service import request_audit
-from django_utils.toolbox import ToolboxClient, ToolboxError
+from django_utils.toolbox import (
+    ToolboxClient,
+    ToolboxConnectionError,
+    ToolboxError,
+    ToolboxStatus,
+    ToolboxTimeoutError,
+    status,
+)
 from django_utils.toolbox.schemas import CompletionRequest
 
+from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, ClaimState, CompanyType, RuleTrigger
-from django_leads.models import AnalysisProfile, Company
+from django_leads.models import AnalysisProfile, Claim, Company
 from django_leads.services import activity_service, alert_service, claim_service, rule_service
 from django_leads.settings import LEADS_ANALYSIS_MAX_HOOKS
 from django_leads.utils.domains import registrable_domain
@@ -26,11 +36,12 @@ SOURCES = ("lighthouse", "urlscan", "heuristic")
 
 
 class AnalysisFailed(Exception):
-    """The analysis produced no usable result; `code` goes to the timeline."""
+    """The analysis produced no usable result; `code` goes to the timeline, `transient` makes it retryable."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, transient: bool = False) -> None:
         super().__init__(code)
         self.code = code
+        self.transient = transient
 
 
 def request_audit_for(company: Company, *, actor: str) -> Audit:
@@ -54,15 +65,58 @@ def analyse_audit(audit_id: str, succeeded_sources: list[str], *, run_id: str = 
     claim = claim_service.take(company, f"intel:{audit_id}:{run_id}") if company else None
     if claim is None:
         return None
+    _run_claimed(claim, company, audit, succeeded_sources)
+    return company
+
+
+def retry_failed_analyses() -> dict[str, int]:
+    """Beat: analyses that failed transiently (claim `retry`) run again once `status()` reports the toolbox
+    reachable, while their audit is still valid."""
+    counts = {"recovered": 0, "failed": 0}
+    if status() != ToolboxStatus.CONFIGURED:
+        return counts
+    claims = Claim.objects.filter(key__startswith="intel:", state=ClaimState.RETRY).select_related("company__channel")
+    for claim in claims.order_by("pk"):
+        outcome = _retry(claim)
+        if outcome is not None:
+            counts["recovered" if outcome else "failed"] += 1
+    return counts
+
+
+def _retry(claim: Claim) -> bool | None:
+    """True analysed, False failed again, None when the audit is no longer valid or another run took the claim."""
+    audit = Audit.objects.filter(pk=claim.key.split(":")[1]).first()
+    if audit is None or audit.status not in REUSABLE_AUDIT_STATUSES or audit.expires_at <= timezone.now():
+        claim_service.finish(claim, ClaimState.FAILED, "audit_invalid")
+        return None
+    taken = Claim.objects.filter(pk=claim.pk, state=ClaimState.RETRY).update(
+        state=ClaimState.CLAIMED, attempted_at=timezone.now()
+    )
+    if not taken:
+        return None
+    sources = sorted(audit.reports.filter(status__in=SUCCEEDED_REPORT_STATUSES).values_list("source", flat=True))
+    return _run_claimed(claim, claim.company, audit, sources)
+
+
+def _run_claimed(claim: Claim, company: Company, audit: Audit, succeeded_sources: list[str]) -> bool:
     try:
         _analyse_sources(company, audit, succeeded_sources)
     except AnalysisFailed as error:
-        claim_service.finish(claim, ClaimState.FAILED, error.code[:64])
-        _analysis_failed(company, error.code)
-        return company
+        state = _finish_failed(claim, error)
+        _analysis_failed(company, error.code, alert=claim.failures == 1 or state == ClaimState.FAILED)
+        return False
     claim_service.finish(claim, ClaimState.DONE)
-    rule_service.evaluate_rules(company, RuleTrigger.INTEL_READY, event=f"audit:{audit_id}")
-    return company
+    rule_service.evaluate_rules(company, RuleTrigger.INTEL_READY, event=f"audit:{audit.pk}")
+    return True
+
+
+def _finish_failed(claim: Claim, error: AnalysisFailed) -> str:
+    """`retry` for a transient failure while retries remain (`LEADS_INTEL_RETRY_LIMIT`), else `failed` for good."""
+    failures = claim.failures + 1
+    retryable = error.transient and failures <= leads_settings.LEADS_INTEL_RETRY_LIMIT
+    state = ClaimState.RETRY if retryable else ClaimState.FAILED
+    claim_service.finish(claim, state, error.code[:64], failures=failures)
+    return state
 
 
 def _analyse_sources(company: Company, audit: Audit, succeeded_sources: list[str]) -> None:
@@ -89,7 +143,7 @@ def _analyse(company: Company, audit: Audit) -> None:
         with ToolboxClient(settings.AI_TOOLBOX_CHANNEL) as client:
             response = client.complete(request)
     except ToolboxError as error:
-        raise AnalysisFailed(error.code or type(error).__name__) from None
+        raise AnalysisFailed(error.code or type(error).__name__, transient=is_transient(error)) from None
     _apply(company, response.parsed, usage=response.usage.model_dump())
 
 
@@ -113,7 +167,13 @@ def _apply(company: Company, parsed: dict | None, *, usage: dict) -> None:
     activity_service.record(company, ActivityKind.INTEL, "intel analysed", data=data)
 
 
-def _analysis_failed(company: Company, code: str) -> None:
+def is_transient(error: ToolboxError) -> bool:
+    """Toolbox unreachable, timed out or 5xx — worth a retry; budget, model, schema and auth errors are not."""
+    return isinstance(error, ToolboxConnectionError | ToolboxTimeoutError) or error.status_code >= 500
+
+
+def _analysis_failed(company: Company, code: str, *, alert: bool = True) -> None:
     logger.warning("leads: intel analysis of company %s failed: %s", company.pk, code)
     activity_service.record(company, ActivityKind.INTEL, f"analysis failed: {code}")
-    alert_service.alert(company, severity="medium", title="Intel analysis failed")
+    if alert:
+        alert_service.alert(company, severity="medium", title="Intel analysis failed")

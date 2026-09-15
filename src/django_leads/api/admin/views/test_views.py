@@ -1,7 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Development-only endpoints for BDD: synchronous CSV import, rule evaluation, rotation scan and retention run.
+"""Development-only endpoints for BDD: synchronous CSV import, rule evaluation, rotation scan, retention run and
+intel analysis retry.
 
 404 outside `ENVIRONMENT == "development"`.
 """
@@ -21,11 +22,12 @@ from django_leads.schemas.requests import DevAnonymiseRequest, DevEvaluateReques
 from django_leads.schemas.responses import (
     DevAnonymiseResponse,
     DevEvaluateResponse,
+    DevRetryAnalysesResponse,
     DevRotateResponse,
     ImportBatchDetailResponse,
     RuleRunResponse,
 )
-from django_leads.services import import_service, rotation_service, rule_service
+from django_leads.services import import_service, intel_service, rotation_service, rule_service
 from django_leads.tasks import anonymise_inactive
 
 _TAGS = ["Leads (development)"]
@@ -113,3 +115,17 @@ class DevAnonymiseNowView(DevelopmentView):
         self.channel(channel_idx)
         counts = anonymise_inactive(as_of=body.as_of.isoformat() if body.as_of else None)
         return Response(DevAnonymiseResponse(anonymised=counts).model_dump())
+
+
+class DevRetryAnalysesView(DevelopmentView):
+    @extend_schema(
+        tags=_TAGS,
+        summary="Run the intel analysis retry now (development only)",
+        description="Every channel, in this process; nothing is retried while the toolbox status is not `configured`.",
+        request=None,
+        responses={200: DevRetryAnalysesResponse, **ERROR_RESPONSES},
+    )
+    def post(self, request: Request, channel_idx: str) -> Response:
+        self.channel(channel_idx)
+        counts = intel_service.retry_failed_analyses()
+        return Response(DevRetryAnalysesResponse(**counts).model_dump())

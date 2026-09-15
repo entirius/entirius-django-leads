@@ -65,6 +65,7 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | `LEADS_ROTATION_MAX` | `2` | rotations to the next contact before the company parks in the `unresponsive` stage |
 | `LEADS_ROTATION_RETRY_HOURS` | `24` | wait before a rotation that produced no draft is tried again |
 | `LEADS_ROTATION_MAX_FAILURES` | `3` | no-draft attempts before the rotation gives up |
+| `LEADS_INTEL_RETRY_LIMIT` | `3` | beat retries of an intel analysis that failed transiently (toolbox down, timeout, 5xx) |
 | `LEADS_CLAIM_STALE_MINUTES` | `30` | a `claimed` rule run or claim older than this is failed `outcome_unknown`, never retried |
 | `LEADS_NOTIFY_ROLE` | `"sales_admin"` | notifications recipient role of replies and failed analyses |
 | `LEADS_ANALYSIS_MAX_HOOKS` | `10` | hooks kept from one intel analysis |
@@ -84,12 +85,14 @@ Every task runs on `LEADS_QUEUE_DEFAULT`. The host owns the beat schedule — th
 | `django_leads.analyse_intel` | siteintel `report_ready` receiver | — |
 | `django_leads.rotate_thread` | communicator `sequence_finished` receiver | — |
 | `django_leads.fail_stale_import_batches` | beat | every 10 minutes |
+| `django_leads.retry_failed_analyses` | beat | every 10 minutes |
 | `django_leads.rotate_unresponsive` | beat | daily |
 | `django_leads.anonymise_inactive` | beat | daily |
 
 ```python
 CELERY_BEAT_SCHEDULE = {
     "leads-fail-stale-imports": {"task": "django_leads.fail_stale_import_batches", "schedule": 600},
+    "leads-retry-analyses": {"task": "django_leads.retry_failed_analyses", "schedule": 600},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
 }

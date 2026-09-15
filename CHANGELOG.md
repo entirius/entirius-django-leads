@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Intel recovery after a toolbox outage.** An analysis that failed transiently (`ToolboxConnectionError`, timeout,
+  HTTP 5xx) leaves its claim in `retry`; new beat task `django_leads.retry_failed_analyses` (host schedule every
+  10 min) runs it again once `status()` reports the toolbox reachable and the audit is still valid, at most
+  `LEADS_INTEL_RETRY_LIMIT` (3) times, then evaluates the `intel_ready` rules. Budget, model and schema failures
+  stay failed. The alert fires on the first and the final failure only. Development endpoint
+  `test/retry-analyses/`.
+
 ## 0.1.0 (unreleased)
 
 Initial release. Leads and B2B pipeline for Volkanos: prospect companies and their contacts in a per-channel

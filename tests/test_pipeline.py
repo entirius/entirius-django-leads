@@ -18,7 +18,15 @@ from django_communicator import signals as communicator_signals
 from django_communicator.models import Channel as CommunicatorChannel
 from django_communicator.models import Thread
 from django_siteintel.models import Audit, Report
-from django_utils.toolbox import ToolboxBudgetExceededError
+from django_utils.toolbox import (
+    ToolboxBudgetExceededError,
+    ToolboxConnectionError,
+    ToolboxModelNotAllowedError,
+    ToolboxServerError,
+    ToolboxStatus,
+    ToolboxTimeoutError,
+    ToolboxValidationError,
+)
 from django_utils.toolbox.schemas import CompletionResponse
 
 from django_leads.enums import ActivityKind, ContactStrategy, RuleTrigger, StageKind
@@ -537,3 +545,126 @@ def reload_urls() -> None:
     for module in (admin_urls, urls, tests.urls):
         importlib.reload(module)
     clear_url_caches()
+
+
+# --- FIX-16 item 1: transiently failed analyses are retried by beat once the toolbox is reachable ---
+
+
+@pytest.fixture
+def reachable():
+    with mock.patch("django_leads.services.intel_service.status", return_value=ToolboxStatus.CONFIGURED) as probe:
+        yield probe
+
+
+@pytest.fixture
+def valid_audit(audit) -> Audit:
+    Audit.objects.filter(pk=audit.pk).update(status="completed")
+    audit.reports.update(status="completed")
+    return audit
+
+
+def _failed_analysis(shop, audit, toolbox, error) -> Claim:
+    toolbox.complete.side_effect = error
+    with mock.patch("django_leads.services.alert_service.alert"):
+        intel_service.analyse_audit(str(audit.pk), ["lighthouse"], run_id="task-1")
+    toolbox.complete.side_effect = None
+    toolbox.complete.return_value = completion(ANALYSIS)
+    return Claim.objects.get(key=f"intel:{audit.pk}:task-1")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ToolboxConnectionError(0, "Connection failed: ConnectError"),
+        ToolboxTimeoutError(504, "Timeout", "UPSTREAM_TIMEOUT"),
+        ToolboxServerError(502, "Bad gateway"),
+    ],
+)
+def test_item1_transient_failure_is_retried_and_analysed(shop, valid_audit, toolbox, reachable, error):
+    claim = _failed_analysis(shop, valid_audit, toolbox, error)
+    assert (claim.state, claim.failures) == ("retry", 1)
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 1, "failed": 0}
+
+    claim.refresh_from_db()
+    shop.refresh_from_db()
+    assert claim.state == "done" and shop.platform == "Magento 2"
+    assert "intel analysed" in messages(shop, ActivityKind.INTEL)
+    assert toolbox.complete.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ToolboxBudgetExceededError(402, "Budget exceeded.", "BUDGET_EXCEEDED"),
+        ToolboxModelNotAllowedError(403, "Model not allowed.", "MODEL_NOT_ALLOWED"),
+        ToolboxValidationError(422, "Invalid.", "SCHEMA_INVALID"),
+        ToolboxServerError(200, "Toolbox response does not match the contract"),
+    ],
+)
+def test_item1_permanent_failure_is_never_retried(shop, valid_audit, toolbox, reachable, error):
+    claim = _failed_analysis(shop, valid_audit, toolbox, error)
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert claim.state == "failed" and toolbox.complete.call_count == 1
+
+
+def test_item1_unreachable_toolbox_is_a_no_op(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    reachable.return_value = ToolboxStatus.UNREACHABLE
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert claim.state == "retry" and toolbox.complete.call_count == 1
+
+
+def test_item1_attempts_are_capped_and_alert_first_and_last(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    toolbox.complete.side_effect = ToolboxServerError(500, "Server error")
+
+    with mock.patch("django_leads.services.alert_service.alert") as alert:
+        results = [intel_service.retry_failed_analyses() for _ in range(4)]
+
+    claim.refresh_from_db()
+    assert results == [{"recovered": 0, "failed": 1}] * 3 + [{"recovered": 0, "failed": 0}]
+    assert (claim.state, claim.failures) == ("failed", 4)
+    assert toolbox.complete.call_count == 4 and alert.call_count == 1
+    assert not RuleRun.objects.exists()
+
+
+def test_item1_expired_audit_is_not_retried(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    Audit.objects.filter(pk=valid_audit.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert (claim.state, claim.detail) == ("failed", "audit_invalid") and toolbox.complete.call_count == 1
+
+
+def test_item1_taken_retry_claim_is_not_repeated(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    Claim.objects.filter(pk=claim.pk).update(state="claimed")
+
+    assert intel_service._retry(claim) is None
+    assert toolbox.complete.call_count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_item1_no_toolbox_call_inside_atomic_on_retry(shop, valid_audit, toolbox, reachable):
+    _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+
+    def answer(request):
+        assert not connection.in_atomic_block
+        return completion(ANALYSIS)
+
+    toolbox.complete.side_effect = answer
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 1, "failed": 0}
+
+
+def test_item1_dev_retry_endpoint_runs_the_retry(channel, admin_api):
+    with mock.patch.object(intel_service, "retry_failed_analyses", return_value={"recovered": 1, "failed": 0}) as run:
+        response = admin_api.post(f"/api/leads/v2/admin/{channel.idx}/test/retry-analyses/")
+    assert (response.status_code, response.json()) == (200, {"recovered": 1, "failed": 0})
+    run.assert_called_once_with()
