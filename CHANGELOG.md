@@ -46,3 +46,6 @@ L-06 … L-12, L-14, L-16, L-17, L-19 in the zeno BDD suite.
   `test/rotate-now/`, `test/anonymise-now/`.
 - **Docs** — `docs/` (`install`, `api`, `concept`, `operations`, `testing`, `gotchas`), `docs/openapi.yaml`, ERD
   config.
+- **Fix: CSV header whitespace** — a padded header (e.g. `" domain"`) matched a known column but its values were
+  read through the unstripped key and came back empty; header and value lookup now go through the same
+  stripped-name mapping.

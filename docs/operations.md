@@ -18,7 +18,9 @@ stages.
 ### CSV format
 
 UTF-8 (a BOM is accepted), header row required — the batch fails `missing_header` when no header matches a known
-column. Columns (all optional, unknown ones ignored): `company_name`, `domain`, `website`, `company_type`,
+column after stripping surrounding whitespace (`" domain "` matches `domain`); values are then read through that
+same stripped mapping, so a padded header never imports empty values. Columns (all optional, unknown ones ignored):
+`company_name`, `domain`, `website`, `company_type`,
 `industry`, `first_name`, `last_name`, `email`, `job_title`, `language` (ISO 639-1), `legal_basis` (`consent`,
 `legitimate_interest`, `contract`), `phone`.
 

@@ -84,6 +84,35 @@ def test_missing_header_fails_the_batch(channel):
     assert batch.status == ImportStatus.FAILED and batch.report == [{"row": 0, "reason": "missing_header"}]
 
 
+def test_item4_whitespace_header_reads_its_own_column():
+    padded = HEADER.replace("domain", " domain ")
+    csv_text = f"{padded}\nLesna, lesna-shop.pl ,,,,,,,,,,\n"
+    rows = list(import_service.parse_rows(io.StringIO(csv_text)))
+    assert rows == [
+        {
+            "company_name": "Lesna",
+            "domain": "lesna-shop.pl",
+            "website": "",
+            "company_type": "",
+            "industry": "",
+            "first_name": "",
+            "last_name": "",
+            "email": "",
+            "job_title": "",
+            "language": "",
+            "legal_basis": "",
+            "phone": "",
+        }
+    ]
+
+
+def test_item4_whitespace_header_imports_correctly(channel):
+    padded = HEADER.replace("domain", " domain ")
+    batch = run(channel, f"{padded}\nLesna, lesna-shop.pl ,,,,,,,,,,\n")
+    assert batch.status == ImportStatus.DONE and counts(batch) == (1, 0, 0)
+    assert Company.objects.get().domain == "lesna-shop.pl"
+
+
 def test_L02_overlong_values_skip_row_not_batch(channel):
     batch = run(
         channel,
