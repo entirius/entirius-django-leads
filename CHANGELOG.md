@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 — 2026-09-15
 
 Initial release. Leads and B2B pipeline for Volkanos: prospect companies and their contacts in a per-channel
 pipeline, rules that decide when outreach may happen, and drafts requested from communicator — never sent by leads
