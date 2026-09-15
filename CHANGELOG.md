@@ -53,3 +53,4 @@ L-06 … L-12, L-14, L-16, L-17, L-19 in the zeno BDD suite.
   snake_case `code` (`stage_exists`, `stage_not_empty`, `domain_exists`, `no_stages`, `contact_exists`,
   `profile_exists`, `communicator_channel_missing`, `not_eligible`, `no_draft`, `not_implemented`), replacing the
   ad-hoc `NotEligible` / `NotImplemented` bodies on `communicate/` and `create-customer/`. See `docs/api.md`.
+  Requires `entirius-django-utils>=2.1.0` (its v2 handler keeps a 409's code and message); the floor is declared.
