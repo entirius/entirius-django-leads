@@ -53,13 +53,6 @@ twenty = "django_leads.connectors.twenty:TwentyConnector"
 Repository = "https://github.com/entirius/entirius-django-leads"
 
 # agreements 2.1.0, utils 2.1.0 and the leads-platform modules are not on PyPI until their releases — resolve the sibling clones.
-[tool.uv.sources]
-entirius-django-agreements = { path = "../entirius-django-agreements", editable = true }
-entirius-django-contact-forms = { path = "../entirius-django-contact-forms", editable = true }
-entirius-django-communicator = { path = "../entirius-django-communicator", editable = true }
-entirius-django-siteintel = { path = "../entirius-django-siteintel", editable = true }
-entirius-django-notifications = { path = "../entirius-django-notifications", editable = true }
-entirius-django-utils = { path = "../entirius-django-utils", editable = true }
 
 [build-system]
 requires = ["hatchling"]
