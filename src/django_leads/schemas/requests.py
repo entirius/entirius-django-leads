@@ -21,6 +21,16 @@ class CompanyListQuery(BaseModel):
     sort: str = Field(
         default="name", description="name, domain, stage_entered_at or last_activity_at; `-` for descending."
     )
+    company_type: str = Field(default="", description="Company type filter; blank = any.", examples=["RETAILER"])
+    do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
+    has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
+
+    @field_validator("company_type")
+    @classmethod
+    def company_type_in_choices(cls, value: str) -> str:
+        if value and value not in CompanyType.values:
+            raise ValueError(f"company_type must be one of {CompanyType.values}")
+        return value
 
     @field_validator("sort")
     @classmethod

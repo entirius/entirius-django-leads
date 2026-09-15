@@ -7,11 +7,11 @@
 from typing import Any
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
 from django_leads.enums import ActivityKind, CompanyType
-from django_leads.models import Channel, Company, Stage
+from django_leads.models import Activity, Channel, Company, Stage
 from django_leads.services import activity_service, stage_service
 
 FILL_FIELDS = ("name", "website", "company_type", "industry")
@@ -91,7 +91,16 @@ def update_company(company: Company, updates: dict[str, Any]) -> Company:
     return company
 
 
-def list_companies(channel: Channel, *, stage: str = "", search: str = "", sort: str = "name") -> QuerySet[Company]:
+def list_companies(
+    channel: Channel,
+    *,
+    stage: str = "",
+    search: str = "",
+    sort: str = "name",
+    company_type: str = "",
+    do_not_contact: bool | None = None,
+    has_reply: bool | None = None,
+) -> QuerySet[Company]:
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema."""
     if sort.lstrip("-") not in SORT_FIELDS:
         raise ValueError(f"unknown sort {sort!r}")
@@ -100,4 +109,19 @@ def list_companies(channel: Channel, *, stage: str = "", search: str = "", sort:
         companies = companies.filter(stage__key=stage)
     if search:
         companies = companies.filter(Q(name__icontains=search) | Q(domain__icontains=search))
+    companies = filter_flags(companies, company_type, do_not_contact, has_reply)
     return companies.order_by(sort, "id")
+
+
+def filter_flags(
+    companies: QuerySet[Company], company_type: str, do_not_contact: bool | None, has_reply: bool | None
+) -> QuerySet[Company]:
+    """`has_reply` is an `Exists()` subquery — one row per company, so counts and paging stay exact."""
+    if company_type:
+        companies = companies.filter(company_type=company_type)
+    if do_not_contact is not None:
+        companies = companies.filter(do_not_contact=do_not_contact)
+    if has_reply is not None:
+        replies = Activity.objects.filter(company=OuterRef("pk"), kind=ActivityKind.REPLY)
+        companies = companies.filter(Exists(replies)) if has_reply else companies.exclude(Exists(replies))
+    return companies
