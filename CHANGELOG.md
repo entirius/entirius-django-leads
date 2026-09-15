@@ -11,6 +11,8 @@
 - An analysis retry superseded by a newer audit of the domain or a later successful analysis ends `failed/superseded`
   without spending a retry; `retry_failed_analyses` runs once at a time (`QueueOnce`). Draft retries in communicator
   honour the outreach gate (`do_not_contact`, opt-out, anonymised, no legal basis) through `draft_retry_requested`.
+- Only a newer audit that completed (or partially completed) supersedes an analysis retry — a failed re-audit leaves
+  the retry valid. A draft retry refused by the outreach gate records one `blocked: <reason>` Activity per draft.
 
 ## 0.1.0 (unreleased)
 

@@ -103,9 +103,13 @@ def _retry(claim: Claim) -> bool | None:
 
 
 def _superseded(claim: Claim, audit: Audit) -> bool:
-    """A newer audit of the domain (manual re-audit during the outage) or a later successful analysis of the company."""
+    """A newer successful audit of the domain (manual re-audit during the outage) or a later successful analysis of
+    the company. A newer audit that failed or is still in flight leaves the retry valid."""
     newer_audits = Audit.objects.filter(
-        domain=audit.domain, channel_idx=audit.channel_idx, created_at__gt=audit.created_at
+        domain=audit.domain,
+        channel_idx=audit.channel_idx,
+        created_at__gt=audit.created_at,
+        status__in=REUSABLE_AUDIT_STATUSES,
     )
     later_analyses = Claim.objects.filter(
         company=claim.company_id, key__startswith="intel:", state=ClaimState.DONE, pk__gt=claim.pk

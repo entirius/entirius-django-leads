@@ -677,7 +677,7 @@ def test_item1_analysis_superseded_by_a_newer_audit_is_skipped(shop, valid_audit
     claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
     Audit.objects.create(
         domain=valid_audit.domain, url=valid_audit.url, channel_idx=valid_audit.channel_idx, requested_by="re-audit",
-        expires_at="2030-01-01T00:00:00Z",
+        expires_at="2030-01-01T00:00:00Z", status="completed",
     )  # fmt: skip
 
     assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
@@ -745,3 +745,36 @@ def test_item3_retry_failed_analyses_runs_once_at_a_time(tmp_path):
     finally:
         current_app.conf.update(ONCE=None)
     assert result.state == "REJECTED" and not run.called
+
+
+# --- FIX-16b ---
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("failed", "done"), ("partially_completed", "failed")])
+def test_item1_only_a_successful_newer_audit_supersedes(shop, valid_audit, toolbox, reachable, status, outcome):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    Audit.objects.create(
+        domain=valid_audit.domain, url=valid_audit.url, channel_idx=valid_audit.channel_idx, requested_by="re-audit",
+        expires_at="2030-01-01T00:00:00Z", status=status,
+    )  # fmt: skip
+
+    intel_service.retry_failed_analyses()
+
+    claim.refresh_from_db()
+    assert claim.state == outcome
+    assert ("intel analysed" in messages(shop, ActivityKind.INTEL)) is (outcome == "done")
+
+
+def test_item2_refused_draft_retry_records_one_blocked_activity(shop):
+    from django_communicator.services import draft_retry_service
+
+    message = _outage_draft(shop, "piotr@example-shop-4.test")
+    Company.objects.filter(pk=shop.pk).update(do_not_contact=True)
+
+    with mock.patch("django_communicator.services.drafting_service.generate"):
+        draft_retry_service.retry(message)
+        draft_retry_service.retry(message)
+
+    assert messages(shop, ActivityKind.BLOCKED) == ["blocked: do_not_contact"]
+    activity = Activity.objects.get(company=shop, kind=ActivityKind.BLOCKED)
+    assert (activity.contact.email, activity.data) == ("piotr@example-shop-4.test", {"message_id": message.pk})

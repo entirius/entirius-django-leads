@@ -14,7 +14,7 @@ from django_communicator.signals import (
 )
 
 from django_leads.enums import ActivityKind
-from django_leads.models import Company, Stage
+from django_leads.models import Activity, Company, Stage
 from django_leads.services import activity_service, alert_service, recipient_service, stage_service
 from django_leads.signals._deferred import after_commit
 from django_leads.utils.refs import company_from_ref
@@ -49,16 +49,27 @@ def on_sequence_finished(sender, thread, **kwargs) -> None:
 
 
 def on_draft_retry_requested(sender, message, **kwargs) -> str | None:
-    """Synchronous: the reason the outreach gate refuses the thread's contact now, None when it may be drafted."""
+    """Synchronous: the reason the outreach gate refuses the thread's contact now, None when it may be drafted.
+    A refusal leaves one `blocked: <reason>` Activity per draft, like `outreach_service.request_draft`."""
     thread = message.thread
     company = company_from_ref(thread.subject_ref)
     if company is None:
         return None
     contact = company.contacts.filter(email__iexact=thread.recipient_email).first()
-    if contact is None:
-        return "no_contact"
-    contact.company = company
-    return recipient_service.block_reason(contact)
+    if contact is not None:
+        contact.company = company
+    reason = recipient_service.block_reason(contact) if contact else "no_contact"
+    if reason:
+        record_retry_blocked(company, contact, message, reason)
+    return reason
+
+
+def record_retry_blocked(company, contact, message, reason: str) -> None:
+    blocked = Activity.objects.filter(company=company, kind=ActivityKind.BLOCKED, data__message_id=message.pk)
+    if blocked.exists():
+        return
+    data = {"message_id": message.pk}
+    activity_service.record(company, ActivityKind.BLOCKED, f"blocked: {reason}", contact=contact, data=data)
 
 
 def record_reply(thread, reply) -> None:
