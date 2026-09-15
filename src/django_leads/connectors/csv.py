@@ -16,12 +16,15 @@ CSV_COLUMNS = tuple(field.name for field in fields(CandidateRow) if field.name !
 
 
 def parse_rows(file: Iterable[str]) -> Iterator[dict[str, str]]:
-    """Stream CSV rows as dicts of the known columns; the header row is required."""
+    """Stream CSV rows as dicts of the known columns; the header row is required. Header names are matched
+    stripped of surrounding whitespace, and values are read through that same stripped-to-raw mapping so a
+    header like `" domain"` reads its own column instead of an empty one."""
     reader = csv.DictReader(file)
-    if not reader.fieldnames or not set(CSV_COLUMNS) & {name.strip() for name in reader.fieldnames}:
+    raw_names = {name.strip(): name for name in reader.fieldnames or ()}
+    if not set(CSV_COLUMNS) & set(raw_names):
         raise ImportFailed("missing_header")
     for raw in reader:
-        yield {column: (raw.get(column) or "").strip() for column in CSV_COLUMNS}
+        yield {column: (raw.get(raw_names.get(column, column)) or "").strip() for column in CSV_COLUMNS}
 
 
 class CsvConnector:

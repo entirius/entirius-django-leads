@@ -6,6 +6,7 @@ from unittest import mock
 import pytest
 
 from django_leads.models import Stage
+from django_leads.services import outreach_service
 from tests.conftest import api_url
 
 pytestmark = pytest.mark.django_db
@@ -29,7 +30,8 @@ def test_profiles_never_list_the_prompt(admin_api, channel):
     body = {"key": "leads.analysis", "prompt_text": "secret {company_name}", "model": "fake-chat"}
     created = admin_api.post(api_url("analysis-profiles/"), body, format="json")
     assert created.status_code == 201 and created.json()["prompt_text"] == body["prompt_text"]
-    assert admin_api.post(api_url("analysis-profiles/"), body, format="json").status_code == 409
+    dup = admin_api.post(api_url("analysis-profiles/"), body, format="json")
+    assert dup.status_code == 409 and dup.json()["error"] == "PROFILE_EXISTS"
     listed = admin_api.get(api_url("analysis-profiles/")).json()["results"]
     assert listed and "prompt_text" not in listed[0]
     assert (
@@ -64,3 +66,19 @@ def test_manual_communicate_rejects_foreign_contact(admin_api, shop, company):
     foreign = company.contacts.create(email="x@ogrod.pl", source="csv")
     body = {"template_key": "lead.cold.b2b", "contact_id": foreign.pk}
     assert admin_api.post(api_url(f"companies/{shop.pk}/communicate/"), body, format="json").status_code == 400
+
+
+def test_item5_communicate_conflict_codes(admin_api, shop):
+    from django_communicator.models import Channel as CommunicatorChannel
+
+    contact = shop.contacts.get(is_primary=True)
+    body = {"template_key": "lead.cold.b2b", "contact_id": contact.pk}
+    url = api_url(f"companies/{shop.pk}/communicate/")
+
+    with mock.patch.object(outreach_service, "request_draft", side_effect=CommunicatorChannel.DoesNotExist):
+        response = admin_api.post(url, body, format="json")
+    assert response.status_code == 409 and response.json()["error"] == "COMMUNICATOR_CHANNEL_MISSING"
+
+    with mock.patch.object(outreach_service, "request_draft", return_value=None):
+        response = admin_api.post(url, body, format="json")
+    assert response.status_code == 409 and response.json()["error"] == "NO_DRAFT"

@@ -124,10 +124,20 @@ Validation and DRF errors go through the host's v2 exception handler:
 | 400 | schema validation (unknown field, bad enum, `sort` outside the allowlist, `consent` without `consent_ref`, null where not allowed); unknown `language`; missing, oversized or non-UTF-8 upload; `contact_id` not a contact with an email in the company; rule `clean()` (stage required / from another channel, template required) |
 | 401 / 403 | no or invalid JWT / not staff |
 | 404 | unknown channel, row of another channel, unknown `stage_key`, development endpoint outside development |
-| 409 | duplicate company domain, stage key or profile key; stage still holding companies; channel without stages on company create; communicate without a communicator channel or without a possible draft (no clause set) |
-| 409 `NotEligible` | `communicate/`: the outreach gate refused — body `{"error": "NotEligible", "detail": "contact not eligible: <reason>"}` |
-| 409 `NotImplemented` | `create-customer/`: no Customer owns the email — body `{"error": "NotImplemented", "detail": "…"}` |
+| 409 | one of the codes below |
 
-The two named 409 bodies are built by the view and do not carry `message` / `debug_id`. Every other 409 passes
-through the v2 handler, which keeps no detail for that status: the body is
-`{"error": "INVALID_REQUEST", "message": "An error occurred.", …}` — read the cause from the table above.
+Every 409 uses the same v2 shape, `{error, message, debug_id, details}` — `error` is the code below,
+upper-cased; `message` is human-readable; `details` is empty for these (no field-level errors).
+
+| Code (`error`) | Raised by |
+|---|---|
+| `STAGE_EXISTS` | `POST`/`PATCH stages/`: another stage of the channel already has this key |
+| `STAGE_NOT_EMPTY` | `DELETE stages/<pk>/`: the stage still holds companies |
+| `DOMAIN_EXISTS` | `POST companies/`: another company of the channel already has this registrable domain |
+| `NO_STAGES` | `POST companies/`: the channel has no pipeline yet |
+| `CONTACT_EXISTS` | `POST contacts/`: the company already has a contact with this email |
+| `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient}-profiles/`: another profile of the channel already has this key |
+| `COMMUNICATOR_CHANNEL_MISSING` | `communicate/`: no communicator channel is configured |
+| `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `no_legal_basis`) |
+| `NO_DRAFT` | `communicate/`: no draft could be built (no clause set) — see the company timeline |
+| `NOT_IMPLEMENTED` | `create-customer/`: no Customer owns the primary contact's email — v1 never creates accounts |

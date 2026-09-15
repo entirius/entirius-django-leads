@@ -6,7 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from django_leads.admin import CompanyAdmin
 from django_leads.enums import ActivityKind, ImportStatus
-from django_leads.models import Activity, Company, Contact, ImportBatch
+from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, Stage
 from tests.conftest import api_url
 from tests.test_import import CSV
 
@@ -65,7 +65,21 @@ def test_company_list_rejects_unknown_company_type(admin_api, company):
 
 def test_create_company_conflict_on_same_registrable_domain(admin_api, company):
     response = admin_api.post(api_url("companies/"), {"domain": "https://www.ogrod.pl/x"}, format="json")
-    assert response.status_code == 409
+    assert response.status_code == 409 and response.json()["error"] == "DOMAIN_EXISTS"
+
+
+def test_item5_no_stages_conflict_code(admin_api):
+    Channel.objects.create(idx="no-stages")
+    response = admin_api.post("/api/leads/v2/admin/no-stages/companies/", {"domain": "a.pl"}, format="json")
+    assert response.status_code == 409 and response.json()["error"] == "NO_STAGES"
+
+
+def test_item5_stage_exists_conflict_code(admin_api, channel):
+    response = admin_api.post(api_url("stages/"), {"key": "new", "label": "Duplicate"}, format="json")
+    assert response.status_code == 409 and response.json()["error"] == "STAGE_EXISTS"
+    stage = Stage.objects.get(channel=channel, key="contacted")
+    response = admin_api.patch(api_url(f"stages/{stage.pk}/"), {"key": "new"}, format="json")
+    assert response.status_code == 409 and response.json()["error"] == "STAGE_EXISTS"
 
 
 def test_patch_company_rejects_stage_and_domain(admin_api, company):
@@ -83,7 +97,8 @@ def test_transition_and_detail(admin_api, company):
 
 
 def test_L18_delete_stage_in_use_returns_409(admin_api, company):
-    assert admin_api.delete(api_url(f"stages/{company.stage_id}/")).status_code == 409
+    response = admin_api.delete(api_url(f"stages/{company.stage_id}/"))
+    assert response.status_code == 409 and response.json()["error"] == "STAGE_NOT_EMPTY"
     won = admin_api.get(api_url("stages/")).json()["results"][-1]
     assert admin_api.delete(api_url(f"stages/{won['id']}/")).status_code == 204
 
@@ -98,7 +113,8 @@ def test_contact_create_and_email_is_immutable(admin_api, company):
     }
     created = admin_api.post(api_url("contacts/"), body, format="json")
     assert created.status_code == 201 and created.json()["email"] == "jan@ogrod.pl"
-    assert admin_api.post(api_url("contacts/"), body, format="json").status_code == 409
+    dup = admin_api.post(api_url("contacts/"), body, format="json")
+    assert dup.status_code == 409 and dup.json()["error"] == "CONTACT_EXISTS"
     url = api_url(f"contacts/{created.json()['id']}/")
     assert admin_api.patch(url, {"email": "x@ogrod.pl"}, format="json").status_code == 400
     assert admin_api.patch(url, {"job_title": "CEO"}, format="json").json()["job_title"] == "CEO"

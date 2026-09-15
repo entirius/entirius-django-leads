@@ -7,22 +7,19 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_leads.api.admin.views._base import ERROR_RESPONSES
+from django_leads.api.admin.views._base import ERROR_RESPONSES, Conflict
 from django_leads.api.admin.views.company_action_views import CompanyActionView
 from django_leads.schemas.responses import CustomerLinkResponse
 from django_leads.services import customer_link_service
 
-NOT_IMPLEMENTED = {
-    "error": "NotImplemented",
-    "detail": "Customer creation is not implemented in v1 — create the account first, then link",
-}
+NOT_IMPLEMENTED_MESSAGE = "Customer creation is not implemented in v1 — create the account first, then link"
 
 
 class CompanyCreateCustomerView(CompanyActionView):
     @extend_schema(
         tags=["Leads companies"],
         summary="Link the Customer owning the primary contact's email",
-        description="409 NotImplemented when no Customer matches — v1 never creates accounts.",
+        description="409 (code not_implemented) when no Customer matches — v1 never creates accounts.",
         request=None,
         responses={200: CustomerLinkResponse, **ERROR_RESPONSES, 409: None},
     )
@@ -31,5 +28,5 @@ class CompanyCreateCustomerView(CompanyActionView):
         try:
             uid = customer_link_service.link_customer(company, actor=request.user.username)
         except customer_link_service.NoCustomer:
-            return Response(NOT_IMPLEMENTED, status=409)
+            raise Conflict(NOT_IMPLEMENTED_MESSAGE, code="not_implemented") from None
         return Response(CustomerLinkResponse(customer_uid=uid).model_dump())

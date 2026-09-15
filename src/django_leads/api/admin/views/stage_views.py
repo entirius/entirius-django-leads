@@ -43,7 +43,7 @@ class StageListView(AdminView):
         try:
             stage = stage_service.create_stage(self.channel(channel_idx), fields)
         except stage_service.StageExists as error:
-            raise Conflict(str(error)) from None
+            raise Conflict(str(error), code="stage_exists") from None
         return Response(dump(stage), status=201)
 
 
@@ -68,7 +68,7 @@ class StageDetailView(AdminView):
         try:
             stage = stage_service.update_stage(self.stage(channel_idx, pk), updates)
         except stage_service.StageExists as error:
-            raise Conflict(str(error)) from None
+            raise Conflict(str(error), code="stage_exists") from None
         return Response(dump(stage))
 
     @extend_schema(
@@ -81,5 +81,5 @@ class StageDetailView(AdminView):
         try:
             stage_service.delete_stage(self.stage(channel_idx, pk))
         except stage_service.StageInUse as error:
-            raise Conflict(str(error)) from None
+            raise Conflict(str(error), code="stage_not_empty") from None
         return Response(status=204)

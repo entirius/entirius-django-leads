@@ -59,7 +59,7 @@ class ContactListView(AdminView):
         try:
             contact = contact_service.create_contact(company, row, actor=request.user.username, consent_ref=consent_ref)
         except contact_service.ContactExists as error:
-            raise Conflict(str(error)) from None
+            raise Conflict(str(error), code="contact_exists") from None
         return Response(ContactResponse.of(contact).model_dump(mode="json"), status=201)
 
 

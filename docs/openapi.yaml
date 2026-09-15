@@ -468,7 +468,7 @@ paths:
   /api/leads/v2/admin/{channel_idx}/companies/{id}/create-customer/:
     post:
       operationId: api_leads_v2_admin_companies_create_customer_create
-      description: 409 NotImplemented when no Customer matches — v1 never creates accounts.
+      description: 409 (code not_implemented) when no Customer matches — v1 never creates accounts.
       summary: Link the Customer owning the primary contact's email
       parameters:
       - in: path
