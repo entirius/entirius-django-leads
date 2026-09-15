@@ -17,12 +17,17 @@ groups:
       - Activity
       - ImportBatch
   - name: rules
-    title: "Rules & Prompt Profiles"
+    title: "Rules, Claims & Prompt Profiles"
     models:
       - Channel
       - Stage
       - Company
       - StageRule
       - RuleRun
+      - Claim
       - AnalysisProfile
       - RecipientPickProfile
+  - name: gdpr
+    title: "Erased Addresses"
+    models:
+      - ErasedAddress
