@@ -1,7 +1,7 @@
 
 [project]
 name = "entirius-django-leads"
-version = "0.1.0"
+version = "0.2.0"
 description = "Leads and B2B pipeline for the Volkanos platform: companies, contacts, stages, rules and recipient selection"
 authors = [{ name = "Entirius" }]
 maintainers = [
@@ -25,7 +25,7 @@ dependencies = [
     "entirius-django-utils>=2.1.0",
     "entirius-django-regional>=2.0.1",
     "entirius-django-agreements>=2.1.0",
-    "entirius-django-communicator>=0.1.0",
+    "entirius-django-communicator>=0.2.0",
     "entirius-django-siteintel>=0.1.0",
 ]
 

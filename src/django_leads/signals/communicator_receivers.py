@@ -2,13 +2,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-"""communicator → leads timeline: replies, reviewer skips, sends and finished sequences."""
+"""communicator → leads timeline: replies, reviewer skips, sends and finished sequences; the outreach gate on draft
+retries."""
 
-from django_communicator.signals import company_skipped, message_sent, reply_received, sequence_finished
+from django_communicator.signals import (
+    company_skipped,
+    draft_retry_requested,
+    message_sent,
+    reply_received,
+    sequence_finished,
+)
 
 from django_leads.enums import ActivityKind
-from django_leads.models import Company, Stage
-from django_leads.services import activity_service, alert_service, stage_service
+from django_leads.models import Activity, Company, Stage
+from django_leads.services import activity_service, alert_service, recipient_service, stage_service
 from django_leads.signals._deferred import after_commit
 from django_leads.utils.refs import company_from_ref
 
@@ -20,6 +27,7 @@ def connect() -> None:
     company_skipped.connect(on_company_skipped, dispatch_uid="django_leads.on_company_skipped")
     message_sent.connect(on_message_sent, dispatch_uid="django_leads.on_message_sent")
     sequence_finished.connect(on_sequence_finished, dispatch_uid="django_leads.on_sequence_finished")
+    draft_retry_requested.connect(on_draft_retry_requested, dispatch_uid="django_leads.on_draft_retry_requested")
 
 
 def on_reply_received(sender, thread, reply, **kwargs) -> None:
@@ -38,6 +46,30 @@ def on_sequence_finished(sender, thread, **kwargs) -> None:
     from django_leads.tasks import rotate_thread
 
     after_commit(lambda: rotate_thread.delay(thread.pk), "on_sequence_finished")
+
+
+def on_draft_retry_requested(sender, message, **kwargs) -> str | None:
+    """Synchronous: the reason the outreach gate refuses the thread's contact now, None when it may be drafted.
+    A refusal leaves one `blocked: <reason>` Activity per draft, like `outreach_service.request_draft`."""
+    thread = message.thread
+    company = company_from_ref(thread.subject_ref)
+    if company is None:
+        return None
+    contact = company.contacts.filter(email__iexact=thread.recipient_email).first()
+    if contact is not None:
+        contact.company = company
+    reason = recipient_service.block_reason(contact) if contact else "no_contact"
+    if reason:
+        record_retry_blocked(company, contact, message, reason)
+    return reason
+
+
+def record_retry_blocked(company, contact, message, reason: str) -> None:
+    blocked = Activity.objects.filter(company=company, kind=ActivityKind.BLOCKED, data__message_id=message.pk)
+    if blocked.exists():
+        return
+    data = {"message_id": message.pk}
+    activity_service.record(company, ActivityKind.BLOCKED, f"blocked: {reason}", contact=contact, data=data)
 
 
 def record_reply(thread, reply) -> None:

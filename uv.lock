@@ -652,7 +652,7 @@ wheels = [
 
 [[package]]
 name = "entirius-django-communicator"
-version = "0.1.0"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "celery" },
@@ -672,9 +672,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "redis" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/af/1e/192b43e070a034fb920b458b1455ba12756441674753ee34a98f84fe4399/entirius_django_communicator-0.1.0.tar.gz", hash = "sha256:61ead5c3c6476681b656b04a33671059a4f500397e3f2f8ff971ac21704c7160", size = 194366, upload-time = "2026-09-15T18:12:23.52Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/9d/68e27f4f1fa5b9cb69d1e455f894209d73b6b34643ad9cf4210f6dd33b78/entirius_django_communicator-0.2.0.tar.gz", hash = "sha256:8301db9cb7fae07c08cb53df45ba9db34c5f442fcdb2c39ef8aa90683f01a61d", size = 200132, upload-time = "2026-09-16T06:22:52.715Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/54/56d3d60f960bec71b003614c94704c7aa4f144a992a495f6cc01ff33ac32/entirius_django_communicator-0.1.0-py3-none-any.whl", hash = "sha256:d44e56d80a60d112789eb03f00128a30b1c4f0cf052c46a38bb6d881e3e3a8e6", size = 122959, upload-time = "2026-09-15T18:12:22.32Z" },
+    { url = "https://files.pythonhosted.org/packages/40/f2/6e92a8510f7d238538d428e67fbcab41b9a75af255bb6e60d8f2af8f71b7/entirius_django_communicator-0.2.0-py3-none-any.whl", hash = "sha256:5350a44a754032aaa81f30aff1210395708d8ce4c4580fac370ad3d8a9867727", size = 128030, upload-time = "2026-09-16T06:22:51.605Z" },
 ]
 
 [[package]]
@@ -725,7 +725,7 @@ wheels = [
 
 [[package]]
 name = "entirius-django-leads"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "celery" },
@@ -775,7 +775,7 @@ requires-dist = [
     { name = "djangorestframework-simplejwt", specifier = ">=5.3" },
     { name = "drf-spectacular", specifier = ">=0.27" },
     { name = "entirius-django-agreements", specifier = ">=2.1.0" },
-    { name = "entirius-django-communicator", specifier = ">=0.1.0" },
+    { name = "entirius-django-communicator", specifier = ">=0.2.0" },
     { name = "entirius-django-contact-forms", marker = "extra == 'contact-forms'" },
     { name = "entirius-django-contact-forms", marker = "extra == 'test'" },
     { name = "entirius-django-notifications", marker = "extra == 'notifications'", specifier = ">=0.1.0" },
@@ -855,7 +855,7 @@ wheels = [
 
 [[package]]
 name = "entirius-django-utils"
-version = "2.1.0"
+version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -873,9 +873,9 @@ dependencies = [
     { name = "python-slugify" },
     { name = "webargs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/ee/ec2780bee626e2b97055904d4a163f7b75219bd037d0aba9703c92bac718/entirius_django_utils-2.1.0.tar.gz", hash = "sha256:24f1cb35368a5c5e02fc0037f8b7aa18ef80dedbad3c61b0154f650e1b30b18a", size = 85771, upload-time = "2026-09-15T16:01:41.269Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/e3/9329ba03c6a8d2f0d46da2f1ecebaaf9bb716b64bb00359bb830772cc97b/entirius_django_utils-2.2.0.tar.gz", hash = "sha256:77d2b8f2b0f6dab687a62aa1e856fe269e389da6c9460d35cadfbec7e29f3cef", size = 87695, upload-time = "2026-09-16T06:19:49.916Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/ab/39d505b1cfb5fa70efccae54731c6068b124b95d6696245056c59d5484d5/entirius_django_utils-2.1.0-py3-none-any.whl", hash = "sha256:d5080a99d67c9b5ac449dc6bd692d67103909944e29809880b95183641a965c0", size = 40073, upload-time = "2026-09-15T16:01:40.205Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/a3/b808f760630020c7270dd3ab16c3a15adea25edb2efc8bfe6ae07321801a/entirius_django_utils-2.2.0-py3-none-any.whl", hash = "sha256:728039494fac0940f7fbc7c77f3736dac80e56c24f79ac3c50ebc394beaff6ef", size = 41338, upload-time = "2026-09-16T06:19:48.941Z" },
 ]
 
 [[package]]

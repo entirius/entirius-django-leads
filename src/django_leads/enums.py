@@ -80,7 +80,7 @@ class RuleOutcome(models.TextChoices):
 
 
 class ClaimState(models.TextChoices):
-    """Lifecycle of a claim around a paid call: `retry` waits for the next rotation attempt, `failed` is final."""
+    """Lifecycle of a claim around a paid call: `retry` waits for the next rotation or intel retry, `failed` is final."""
 
     CLAIMED = "claimed", "Claimed"
     DONE = "done", "Done"

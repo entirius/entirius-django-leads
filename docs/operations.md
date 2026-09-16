@@ -103,6 +103,15 @@ stage, and the contact has no Activity of its own after the cutoff. Shorten or l
 | Rotation scan | `tasks.rotate_unresponsive.delay()` | `POST test/rotate-now/` (this channel) |
 | Retention at a given clock | `tasks.anonymise_inactive.delay(as_of="<ISO>")` | `POST test/anonymise-now/` `{as_of}` (every channel) |
 | Sweep | `tasks.fail_stale_import_batches.delay()` | — |
+| Intel analysis retry | `tasks.retry_failed_analyses.delay()` | `POST test/retry-analyses/` (every channel) |
+
+**After a toolbox outage** analyses ended `analysis failed: <code>`. A transient failure (`ToolboxConnectionError`,
+`ToolboxTimeoutError`, HTTP 5xx) leaves its claim `intel:<audit>:<run>` in `retry`; the beat
+`retry_failed_analyses` runs it again once `status()` is `configured`, while the audit is still valid (completed or
+partially completed, not expired — otherwise the claim fails `audit_invalid`), at most `LEADS_INTEL_RETRY_LIMIT`
+times. A success writes `intel analysed` and evaluates the `intel_ready` rules as the first run would have. The
+alert fires on the first failure and on the one that ends the retries. Budget, model, schema and auth failures
+fail the claim at once. Drafts that failed during the outage are communicator's (`retry_failed_drafts`).
 
 Rules and rotation request real drafts; with `ai_pick` or an analysis they call the toolbox and spend its budget.
 
