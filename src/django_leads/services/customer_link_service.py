@@ -24,6 +24,19 @@ def link_customer(company: Company, *, actor: str) -> str:
     return str(uid)
 
 
+def find_customer_name(uid) -> str:
+    """Display name of a linked Customer — the company card shows it instead of the uid.
+    Empty when accounts is absent or the customer is gone: the uid stays the source of truth."""
+    if not uid:
+        return ""
+    try:
+        from django_accounts.models import Customer
+    except ImportError:
+        return ""
+    customer = Customer.objects.filter(uid=uid).select_related("user").first()
+    return f"{customer.first_name} {customer.last_name}".strip() if customer else ""
+
+
 def find_customer_uid(email: str):
     """`Customer.email` is a property returning an allauth EmailAddress — match through a verified EmailAddress only
     (an unverified address proves nothing about who owns the account)."""

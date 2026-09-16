@@ -98,6 +98,9 @@ class CompanyResponse(BaseModel):
 class CompanyDetailResponse(CompanyResponse):
     contacts: list[ContactResponse] = Field(description="Contacts of the company.")
     activities: list[ActivityResponse] = Field(description="Last 20 timeline entries, newest first.")
+    customer_name: str = Field(
+        default="", description="Name of the linked customer; empty without accounts.", examples=["Jan Kowalski"]
+    )
 
 
 class ImportBatchResponse(BaseModel):

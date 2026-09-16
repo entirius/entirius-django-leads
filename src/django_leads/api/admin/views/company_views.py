@@ -27,7 +27,7 @@ from django_leads.schemas.responses import (
     CompanyResponse,
     ContactResponse,
 )
-from django_leads.services import company_service, lead_type_service, stage_service
+from django_leads.services import company_service, customer_link_service, lead_type_service, stage_service
 
 _TAGS = ["Leads companies"]
 RECENT_ACTIVITIES = 20
@@ -44,7 +44,12 @@ def unknown_lead_type_as_400() -> Iterator[None]:
 def detail(company: Company) -> dict:
     contacts = [ContactResponse.of(contact) for contact in company.contacts.select_related("language")]
     activities = [ActivityResponse.model_validate(row) for row in company.activities.all()[:RECENT_ACTIVITIES]]
-    body = CompanyDetailResponse(**CompanyResponse.of(company).model_dump(), contacts=contacts, activities=activities)
+    body = CompanyDetailResponse(
+        **CompanyResponse.of(company).model_dump(),
+        contacts=contacts,
+        activities=activities,
+        customer_name=customer_link_service.find_customer_name(company.customer_uid),
+    )
     return body.model_dump(mode="json")
 
 

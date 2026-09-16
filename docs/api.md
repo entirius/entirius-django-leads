@@ -33,8 +33,10 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 `CompanyResponse`: `id, name, domain, website, lead_type, industry, description, platform, hooks, stage
 {id, key, label, order, kind, is_terminal, on_reply}, stage_entered_at, source, external_ref, do_not_contact,
-customer_uid, rotation_count, last_activity_at`. `CompanyDetailResponse` adds `contacts` (all) and `activities`
-(last 20, newest first). `stage`, `domain`, `hooks` and `customer_uid` are not writable here.
+customer_uid, rotation_count, last_activity_at`. `CompanyDetailResponse` adds `contacts` (all), `activities`
+(last 20, newest first) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
+the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks` and `customer_uid` are not
+writable here.
 
 `communicate/` skips rule conditions and cooldown, not the outreach gate (`concept.md` § Outreach gate).
 `create-customer/` links the Customer owning the primary contact's email through a **verified** allauth
