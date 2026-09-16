@@ -46,6 +46,9 @@ item below: the rule, then where it is enforced.
 - **No toolbox call inside a transaction or under a row lock** (`test_no_toolbox_call_inside_atomic`). Claims are
   committed before the paid call and completed after it.
 - **A claim is never retried after `LEADS_CLAIM_STALE_MINUTES`** (`outcome_unknown`): the call may have been paid.
+- **Only a transient toolbox failure leaves an intel claim in `retry`** (`intel_service.is_transient`). The retry
+  takes the claim `retry → claimed` by compare-and-set before its one completion; a `claimed` retry that never
+  finishes stays claimed — never re-run.
   Rotation's `retry` state is the only automatic second attempt, and only after no draft was produced.
 - **Skipped, blocked and cooldown runs never start a cooldown.** Counting them would silence a company after one
   missing email.

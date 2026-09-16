@@ -231,6 +231,11 @@ class DevRotateResponse(BaseModel):
     rotated: int = Field(description="Threads that rotated or parked a company.", examples=[1])
 
 
+class DevRetryAnalysesResponse(BaseModel):
+    recovered: int = Field(description="Analyses that succeeded on retry.", examples=[1])
+    failed: int = Field(description="Analyses whose retry failed again.", examples=[0])
+
+
 class DevAnonymiseResponse(BaseModel):
     anonymised: dict[str, int] = Field(
         description="Anonymised contacts per channel idx.", examples=[{"default-europe": 1}]

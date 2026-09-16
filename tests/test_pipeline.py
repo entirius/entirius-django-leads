@@ -18,7 +18,15 @@ from django_communicator import signals as communicator_signals
 from django_communicator.models import Channel as CommunicatorChannel
 from django_communicator.models import Thread
 from django_siteintel.models import Audit, Report
-from django_utils.toolbox import ToolboxBudgetExceededError
+from django_utils.toolbox import (
+    ToolboxBudgetExceededError,
+    ToolboxConnectionError,
+    ToolboxModelNotAllowedError,
+    ToolboxServerError,
+    ToolboxStatus,
+    ToolboxTimeoutError,
+    ToolboxValidationError,
+)
 from django_utils.toolbox.schemas import CompletionResponse
 
 from django_leads.enums import ActivityKind, ContactStrategy, RuleTrigger, StageKind
@@ -537,3 +545,236 @@ def reload_urls() -> None:
     for module in (admin_urls, urls, tests.urls):
         importlib.reload(module)
     clear_url_caches()
+
+
+# --- FIX-16 item 1: transiently failed analyses are retried by beat once the toolbox is reachable ---
+
+
+@pytest.fixture
+def reachable():
+    with mock.patch("django_leads.services.intel_service.status", return_value=ToolboxStatus.CONFIGURED) as probe:
+        yield probe
+
+
+@pytest.fixture
+def valid_audit(audit) -> Audit:
+    Audit.objects.filter(pk=audit.pk).update(status="completed")
+    audit.reports.update(status="completed")
+    return audit
+
+
+def _failed_analysis(shop, audit, toolbox, error) -> Claim:
+    toolbox.complete.side_effect = error
+    with mock.patch("django_leads.services.alert_service.alert"):
+        intel_service.analyse_audit(str(audit.pk), ["lighthouse"], run_id="task-1")
+    toolbox.complete.side_effect = None
+    toolbox.complete.return_value = completion(ANALYSIS)
+    return Claim.objects.get(key=f"intel:{audit.pk}:task-1")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ToolboxConnectionError(0, "Connection failed: ConnectError"),
+        ToolboxTimeoutError(504, "Timeout", "UPSTREAM_TIMEOUT"),
+        ToolboxServerError(502, "Bad gateway"),
+    ],
+)
+def test_item1_transient_failure_is_retried_and_analysed(shop, valid_audit, toolbox, reachable, error):
+    claim = _failed_analysis(shop, valid_audit, toolbox, error)
+    assert (claim.state, claim.failures) == ("retry", 1)
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 1, "failed": 0}
+
+    claim.refresh_from_db()
+    shop.refresh_from_db()
+    assert claim.state == "done" and shop.platform == "Magento 2"
+    assert "intel analysed" in messages(shop, ActivityKind.INTEL)
+    assert toolbox.complete.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ToolboxBudgetExceededError(402, "Budget exceeded.", "BUDGET_EXCEEDED"),
+        ToolboxModelNotAllowedError(403, "Model not allowed.", "MODEL_NOT_ALLOWED"),
+        ToolboxValidationError(422, "Invalid.", "SCHEMA_INVALID"),
+        ToolboxServerError(200, "Toolbox response does not match the contract"),
+    ],
+)
+def test_item1_permanent_failure_is_never_retried(shop, valid_audit, toolbox, reachable, error):
+    claim = _failed_analysis(shop, valid_audit, toolbox, error)
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert claim.state == "failed" and toolbox.complete.call_count == 1
+
+
+def test_item1_unreachable_toolbox_is_a_no_op(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    reachable.return_value = ToolboxStatus.UNREACHABLE
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert claim.state == "retry" and toolbox.complete.call_count == 1
+
+
+def test_item1_attempts_are_capped_and_alert_first_and_last(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    toolbox.complete.side_effect = ToolboxServerError(500, "Server error")
+
+    with mock.patch("django_leads.services.alert_service.alert") as alert:
+        results = [intel_service.retry_failed_analyses() for _ in range(4)]
+
+    claim.refresh_from_db()
+    assert results == [{"recovered": 0, "failed": 1}] * 3 + [{"recovered": 0, "failed": 0}]
+    assert (claim.state, claim.failures) == ("failed", 4)
+    assert toolbox.complete.call_count == 4 and alert.call_count == 1
+    assert not RuleRun.objects.exists()
+
+
+def test_item1_expired_audit_is_not_retried(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    Audit.objects.filter(pk=valid_audit.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert (claim.state, claim.detail) == ("failed", "audit_invalid") and toolbox.complete.call_count == 1
+
+
+def test_item1_taken_retry_claim_is_not_repeated(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    Claim.objects.filter(pk=claim.pk).update(state="claimed")
+
+    assert intel_service._retry(claim) is None
+    assert toolbox.complete.call_count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_item1_no_toolbox_call_inside_atomic_on_retry(shop, valid_audit, toolbox, reachable):
+    _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+
+    def answer(request):
+        assert not connection.in_atomic_block
+        return completion(ANALYSIS)
+
+    toolbox.complete.side_effect = answer
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 1, "failed": 0}
+
+
+def test_item1_dev_retry_endpoint_runs_the_retry(channel, admin_api):
+    with mock.patch.object(intel_service, "retry_failed_analyses", return_value={"recovered": 1, "failed": 0}) as run:
+        response = admin_api.post(f"/api/leads/v2/admin/{channel.idx}/test/retry-analyses/")
+    assert (response.status_code, response.json()) == (200, {"recovered": 1, "failed": 0})
+    run.assert_called_once_with()
+
+
+# --- FIX-16a ---
+
+
+def test_item1_analysis_superseded_by_a_newer_audit_is_skipped(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    Audit.objects.create(
+        domain=valid_audit.domain, url=valid_audit.url, channel_idx=valid_audit.channel_idx, requested_by="re-audit",
+        expires_at="2030-01-01T00:00:00Z", status="completed",
+    )  # fmt: skip
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert (claim.state, claim.detail, claim.failures) == ("failed", "superseded", 1)
+    assert toolbox.complete.call_count == 1 and not RuleRun.objects.exists()
+
+
+def test_item1_analysis_superseded_by_a_later_successful_analysis_is_skipped(shop, valid_audit, toolbox, reachable):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    intel_service.analyse_audit(str(valid_audit.pk), ["lighthouse"], run_id="task-2")
+
+    assert intel_service.retry_failed_analyses() == {"recovered": 0, "failed": 0}
+    claim.refresh_from_db()
+    assert (claim.state, claim.detail) == ("failed", "superseded")
+    assert messages(shop, ActivityKind.INTEL).count("intel analysed") == 1
+    assert toolbox.complete.call_count == 2
+
+
+def _outage_draft(shop, recipient_email: str):
+    from django_communicator.models import Message
+
+    channel = CommunicatorChannel.objects.create(idx="default-europe", label="Europe")
+    thread = Thread.objects.create(
+        channel=channel, subject_ref=f"leads.Company:{shop.pk}", recipient_email=recipient_email
+    )
+    detail = "ToolboxConnectionError - HTTP 0"
+    return Message.objects.create(thread=thread, status="failed", failure_code="upstream", failure_detail=detail)
+
+
+def test_item2_do_not_contact_set_during_outage_does_not_revive_the_draft(shop):
+    from django_communicator.services import draft_retry_service
+
+    message = _outage_draft(shop, "piotr@example-shop-4.test")
+    Company.objects.filter(pk=shop.pk).update(do_not_contact=True)
+
+    with mock.patch("django_communicator.services.drafting_service.generate") as generate:
+        assert draft_retry_service.retry(message) is None
+
+    message.refresh_from_db()
+    assert (message.status, message.draft_retries) == ("failed", 0) and not generate.called
+    assert message.failure_detail.endswith("\nretry: blocked_by_subject do_not_contact")
+
+
+@pytest.mark.parametrize(
+    ("email", "reason"), [("PIOTR@example-shop-4.test", None), ("gone@example.test", "no_contact")]
+)
+def test_item2_draft_retry_gate_follows_the_thread_contact(shop, email, reason):
+    message = _outage_draft(shop, email)
+
+    assert communicator_receivers.on_draft_retry_requested(type(message), message) == reason
+
+
+def test_item3_retry_failed_analyses_runs_once_at_a_time(tmp_path):
+    from celery import current_app
+
+    from django_leads.tasks.intel_tasks import retry_failed_analyses
+
+    config = {"backend": "celery_once.backends.File", "settings": {"location": str(tmp_path), "default_timeout": 60}}
+    current_app.conf.update(ONCE=config)
+    try:
+        retry_failed_analyses.once_backend.raise_or_lock(retry_failed_analyses.get_key(), timeout=60)
+        with mock.patch.object(intel_service, "retry_failed_analyses") as run:
+            result = retry_failed_analyses.apply_async()
+    finally:
+        current_app.conf.update(ONCE=None)
+    assert result.state == "REJECTED" and not run.called
+
+
+# --- FIX-16b ---
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("failed", "done"), ("partially_completed", "failed")])
+def test_item1_only_a_successful_newer_audit_supersedes(shop, valid_audit, toolbox, reachable, status, outcome):
+    claim = _failed_analysis(shop, valid_audit, toolbox, ToolboxConnectionError(0, "down"))
+    Audit.objects.create(
+        domain=valid_audit.domain, url=valid_audit.url, channel_idx=valid_audit.channel_idx, requested_by="re-audit",
+        expires_at="2030-01-01T00:00:00Z", status=status,
+    )  # fmt: skip
+
+    intel_service.retry_failed_analyses()
+
+    claim.refresh_from_db()
+    assert claim.state == outcome
+    assert ("intel analysed" in messages(shop, ActivityKind.INTEL)) is (outcome == "done")
+
+
+def test_item2_refused_draft_retry_records_one_blocked_activity(shop):
+    from django_communicator.services import draft_retry_service
+
+    message = _outage_draft(shop, "piotr@example-shop-4.test")
+    Company.objects.filter(pk=shop.pk).update(do_not_contact=True)
+
+    with mock.patch("django_communicator.services.drafting_service.generate"):
+        draft_retry_service.retry(message)
+        draft_retry_service.retry(message)
+
+    assert messages(shop, ActivityKind.BLOCKED) == ["blocked: do_not_contact"]
+    activity = Activity.objects.get(company=shop, kind=ActivityKind.BLOCKED)
+    assert (activity.contact.email, activity.data) == ("piotr@example-shop-4.test", {"message_id": message.pk})

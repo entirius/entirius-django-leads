@@ -112,6 +112,7 @@ Routed and answering only with `ENVIRONMENT == "development"` (404 otherwise). U
 | POST | `<channel_idx>/test/import-now/` | multipart `file`, as `imports/` | 200 `ImportBatchDetailResponse` — imported in the request, no worker or shared temp dir |
 | POST | `<channel_idx>/test/evaluate/` | `company_id`, `trigger`, `stage_key` (default: the company's stage) | 200 `{runs: [RuleRunResponse]}` — no event key, so no redelivery dedupe |
 | POST | `<channel_idx>/test/rotate-now/` | — | 200 `{rotated}` — the daily rotation scan, this channel only |
+| POST | `<channel_idx>/test/retry-analyses/` | — | 200 `{recovered, failed}` — the intel analysis retry in-process, **every** channel |
 | POST | `<channel_idx>/test/anonymise-now/` | `as_of` (aware datetime, optional) | 200 `{anonymised: {channel_idx: count}}` — the retention task in-process, **every** channel |
 
 ## Errors
