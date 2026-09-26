@@ -702,6 +702,7 @@ paths:
           description: No response body
     patch:
       operationId: api_leads_v2_admin_contacts_partial_update
+      description: '`email` only while the contact has none (400 once set, 409 when the company already has it).'
       summary: Update editable contact fields
       parameters:
       - in: path
@@ -736,6 +737,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/ContactResponse'
           description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_contacts_destroy
+      description: 204 when the contact was never used and is gone; 200 with the anonymised row when outreach or GDPR history
+        hangs on it (thread, outreach activity, consent, opt-out).
+      summary: 'Remove a contact: deleted when never used, anonymised when used'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads contacts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+          description: ''
+        '204':
+          description: No response body
         '400':
           description: No response body
         '401':
@@ -3346,6 +3386,14 @@ components:
     PatchedContactUpdateRequest:
       additionalProperties: false
       properties:
+        email:
+          anyOf:
+          - format: email
+            type: string
+          - type: 'null'
+          default: null
+          description: Email; only while the contact has none.
+          title: Email
         first_name:
           anyOf:
           - maxLength: 128

@@ -47,12 +47,23 @@ customer_uid, rotation_count, last_activity_at`. `CompanyDetailResponse` adds `c
 | GET | `<channel_idx>/contacts/` | `company` (id), paging | 200 `ContactListResponse` |
 | POST | `<channel_idx>/contacts/` | `company_id` (required), `email`, `first_name`, `last_name`, `job_title`, `phone`, `language` (ISO 639-1), `is_primary`, `legal_basis`, `consent_ref` | 201 `ContactResponse` |
 | GET | `<channel_idx>/contacts/<id>/` | — | 200 `ContactResponse` |
-| PATCH | `<channel_idx>/contacts/<id>/` | any of `first_name`, `last_name`, `job_title`, `phone`, `language` (null clears), `is_primary`, `legal_basis` (null clears), `consent_ref` | 200 `ContactResponse` |
+| PATCH | `<channel_idx>/contacts/<id>/` | any of `email` (only while the contact has none), `first_name`, `last_name`, `job_title`, `phone`, `language` (null clears), `is_primary`, `legal_basis` (null clears), `consent_ref` | 200 `ContactResponse` |
+| DELETE | `<channel_idx>/contacts/<id>/` | — | 204 — the contact was never used and is deleted; 200 `ContactResponse` — it was used and is anonymised instead |
 
 `ContactResponse`: `id, company_id, email, first_name, last_name, job_title, phone, language, is_primary, source,
-legal_basis, opt_out_at, anonymised_at`. `email` is immutable — it is not a PATCH field. `legal_basis` is one of
+legal_basis, opt_out_at, anonymised_at`. `email` is set once: a contact without one may get it by PATCH (409
+`CONTACT_EXISTS` when the company already has it), a set email never changes (400). `legal_basis` is one of
 `consent`, `legitimate_interest`, `contract`; `consent` requires a non-blank `consent_ref` (≤ 255), recorded in the
 `legal_basis` Activity as `admin:<user>:<consent_ref>`; other bases as `admin:<user>`.
+
+A company has at most one primary contact: `is_primary: true` on create or PATCH unsets the others. Removing the
+primary promotes nobody — the rules then take the first eligible contact by id.
+
+DELETE decides by use (`contact_service.is_used`): a contact that opted out, has a recorded consent (`legal_basis`
+`consent` or a `consent_ref`), an outreach Activity (draft, sent, reply, bounce, opt-out) or a communicator thread to its
+email under the company's `subject_ref` is anonymised like retention does it (`anonymised_at` set, personal fields
+blanked, timeline and thread kept, never a recipient again); any other contact is deleted and a `contact removed` note
+stays on the timeline. Removing an anonymised contact answers 200 and changes nothing.
 
 ## Stages
 
@@ -155,7 +166,7 @@ upper-cased; `message` is human-readable; `details` is empty for these (no field
 | `LEAD_TYPE_IN_USE` | `DELETE lead-types/<pk>/`: companies of the channel still carry the code — retype them or deactivate the type |
 | `DOMAIN_EXISTS` | `POST companies/`: another company of the channel already has this registrable domain |
 | `NO_STAGES` | `POST companies/`: the channel has no pipeline yet |
-| `CONTACT_EXISTS` | `POST contacts/`: the company already has a contact with this email |
+| `CONTACT_EXISTS` | `POST contacts/`, `PATCH contacts/<id>/` (`email`): the company already has a contact with this email |
 | `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient}-profiles/`: another profile of the channel already has this key |
 | `COMMUNICATOR_CHANNEL_MISSING` | `communicate/`: no communicator channel is configured |
 | `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `no_legal_basis`) |

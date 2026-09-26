@@ -17,6 +17,11 @@
   `company_type_guess` for one release) is kept only when it is an active code.
 - Outreach passes the company's lead type to communicator `communicate(audience=…)`, so one rule template key picks
   the lead-type variant of the template (needs django-communicator with template audiences).
+- Admin API `DELETE contacts/<id>/`: a never-used contact is deleted (204, `contact removed` note on the timeline);
+  a used one — thread, outreach Activity, consent, opt-out — is anonymised instead (200 with the row).
+- One primary contact per company: making a contact primary (create or PATCH) unsets the others.
+- `PATCH contacts/<id>/` takes `email` while the contact has none (409 `CONTACT_EXISTS` on a duplicate); a set email
+  stays immutable (400).
 
 ## 0.2.0 — 2026-09-16
 

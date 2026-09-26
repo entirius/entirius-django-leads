@@ -1,13 +1,17 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import pytest
 from django.contrib.admin import AdminSite
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
+from django_agreements.enums import LegalBasis
 
 from django_leads.admin import CompanyAdmin
 from django_leads.enums import ActivityKind, ImportStatus
 from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, LeadType, Stage
-from tests.conftest import api_url
+from django_leads.services import recipient_service
+from tests.conftest import CHANNEL_IDX, api_url
 from tests.test_import import CSV
 
 
@@ -220,3 +224,102 @@ def test_lead_type_of_another_channel_is_not_found(admin_api, company, polish):
     assert admin_api.get(api_url(f"lead-types/{foreign.pk}/")).status_code == 404
     assert admin_api.patch(api_url(f"lead-types/{foreign.pk}/"), {"label": "x"}, format="json").status_code == 404
     assert admin_api.delete(api_url(f"lead-types/{foreign.pk}/")).status_code == 404
+
+
+# UX-011: contacts are managed in the company card — remove (delete or anonymise) and one primary per company.
+def _thread_to(contact: Contact) -> None:
+    from django_communicator.models import Channel as CommunicatorChannel
+    from django_communicator.models import Thread
+
+    channel = CommunicatorChannel.objects.create(idx=CHANNEL_IDX, label="Default")
+    Thread.objects.create(
+        channel=channel, subject_ref=f"leads.Company:{contact.company_id}", recipient_email=contact.email.upper()
+    )
+
+
+def test_remove_unused_contact_deletes_it(admin_api, shop):
+    ola = shop.contacts.get(email="ola@example-shop-4.test")
+    response = admin_api.delete(api_url(f"contacts/{ola.pk}/"))
+    assert response.status_code == 204
+    assert not Contact.objects.filter(pk=ola.pk).exists()
+    removed = Activity.objects.get(company=shop, message="contact removed")
+    assert (removed.contact_id, removed.actor) == (None, "operator")
+
+
+@pytest.mark.parametrize("use", ["thread", "activity", "opt_out", "consent"])
+def test_remove_used_contact_anonymises_it(admin_api, shop, use):
+    ola = shop.contacts.get(email="ola@example-shop-4.test")
+    if use == "thread":
+        _thread_to(ola)
+    elif use == "activity":
+        Activity.objects.create(company=shop, contact=ola, kind=ActivityKind.SENT, message="sent")
+    elif use == "opt_out":
+        Contact.objects.filter(pk=ola.pk).update(opt_out_at=timezone.now())
+    else:
+        Contact.objects.filter(pk=ola.pk).update(legal_basis=LegalBasis.CONSENT)
+    response = admin_api.delete(api_url(f"contacts/{ola.pk}/"))
+    assert response.status_code == 200 and response.json()["anonymised_at"]
+    ola.refresh_from_db()
+    assert ola.anonymised_at and ola.email != "ola@example-shop-4.test"
+    assert Activity.objects.filter(contact=ola, kind=ActivityKind.ANONYMISED).count() == 1
+
+
+def test_thread_of_another_company_does_not_make_a_contact_used(admin_api, shop, company):
+    ola = shop.contacts.get(email="ola@example-shop-4.test")
+    twin = Contact.objects.create(company=company, email=ola.email, legal_basis=LegalBasis.LEGITIMATE_INTEREST)
+    _thread_to(twin)
+    assert admin_api.delete(api_url(f"contacts/{ola.pk}/")).status_code == 204
+
+
+def test_remove_contact_of_another_channel_is_404(admin_api, shop, polish):
+    other = Channel.objects.create(idx="default-local", name="Local", default_language=polish)
+    stage = Stage.objects.create(channel=other, key="new", label="New")
+    elsewhere = Company.objects.create(
+        channel=other, domain="elsewhere.pl", stage=stage, stage_entered_at=timezone.now(), source="manual"
+    )
+    contact = Contact.objects.create(company=elsewhere, email="jan@elsewhere.pl", source="manual")
+    assert admin_api.delete(api_url(f"contacts/{contact.pk}/")).status_code == 404
+    assert Contact.objects.filter(pk=contact.pk).exists()
+
+
+def test_customer_cannot_remove_a_contact(customer_api, shop):
+    ola = shop.contacts.get(email="ola@example-shop-4.test")
+    assert customer_api.delete(api_url(f"contacts/{ola.pk}/")).status_code == 403
+    assert Contact.objects.filter(pk=ola.pk).exists()
+
+
+def test_recipient_pick_skips_an_anonymised_contact(admin_api, shop):
+    piotr = shop.contacts.get(email="piotr@example-shop-4.test")
+    Activity.objects.create(company=shop, contact=piotr, kind=ActivityKind.REPLY, message="reply")
+    assert admin_api.delete(api_url(f"contacts/{piotr.pk}/")).status_code == 200
+    assert [contact.email for contact in recipient_service.candidates(shop)] == ["ola@example-shop-4.test"]
+
+
+def test_one_primary_per_company(admin_api, shop):
+    piotr, ola = shop.contacts.get(email__startswith="piotr"), shop.contacts.get(email__startswith="ola")
+    assert admin_api.patch(api_url(f"contacts/{ola.pk}/"), {"is_primary": True}, format="json").status_code == 200
+    assert list(shop.contacts.filter(is_primary=True).values_list("pk", flat=True)) == [ola.pk]
+    body = {"company_id": shop.pk, "email": "nowa@sklep.pl", "is_primary": True}  # EmailStr refuses .test
+    created = admin_api.post(api_url("contacts/"), body, format="json").json()
+    assert list(shop.contacts.filter(is_primary=True).values_list("pk", flat=True)) == [created["id"]]
+    assert admin_api.delete(api_url(f"contacts/{created['id']}/")).status_code == 204
+    assert not shop.contacts.filter(is_primary=True).exists()  # removing the primary promotes nobody
+    assert recipient_service.candidates(shop)[0].pk == piotr.pk  # the rules take the first by pk
+
+
+def test_contact_without_email_gets_one_once(admin_api, shop):
+    marek = shop.contacts.get(first_name="Marek")
+    url = api_url(f"contacts/{marek.pk}/")
+    taken = admin_api.patch(url, {"email": "Piotr@Example-Shop-4.pl"}, format="json")
+    assert taken.status_code == 200 and taken.json()["email"] == "piotr@example-shop-4.pl"
+    assert admin_api.patch(url, {"email": "marek@sklep.pl"}, format="json").status_code == 400
+    assert admin_api.patch(url, {"email": None}, format="json").status_code == 400
+
+
+def test_setting_an_email_the_company_has_is_409(admin_api, shop):
+    Contact.objects.create(company=shop, email="ola@sklep.pl", source="manual")
+    marek = shop.contacts.get(first_name="Marek")
+    response = admin_api.patch(api_url(f"contacts/{marek.pk}/"), {"email": "Ola@Sklep.pl"}, format="json")
+    assert response.status_code == 409 and response.json()["error"] == "CONTACT_EXISTS"
+    marek.refresh_from_db()
+    assert marek.email == ""

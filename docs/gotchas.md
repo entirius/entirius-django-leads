@@ -78,7 +78,8 @@ item below: the rule, then where it is enforced.
 
 ## GDPR and retention
 
-- **Rows are never deleted** — anonymisation clears personal fields and keeps company, stage and timeline.
+- **Rows are never deleted** — anonymisation clears personal fields and keeps company, stage and timeline. The one
+  delete is an operator removing a contact nothing used (`contact_service.remove_contact`); a used one is anonymised.
 - **A blank email must never reach `contacts_of_email`** — it would match every contact without an address; it raises
   `ValueError`, and the command and API validate first.
 - **`anonymise_contact` re-reads the contact `select_for_update(of=self)` and skips one already anonymised,** so erase

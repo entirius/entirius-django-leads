@@ -113,6 +113,7 @@ class ContactCreateRequest(BaseModel):
 class ContactUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    email: EmailStr | None = Field(default=None, description="Email; only while the contact has none.")
     first_name: str | None = Field(default=None, max_length=128, description="First name.")
     last_name: str | None = Field(default=None, max_length=128, description="Last name.")
     job_title: str | None = Field(default=None, max_length=128, description="Job title.")
