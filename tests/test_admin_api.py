@@ -6,7 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from django_leads.admin import CompanyAdmin
 from django_leads.enums import ActivityKind, ImportStatus
-from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, Stage
+from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, LeadType, Stage
 from tests.conftest import api_url
 from tests.test_import import CSV
 
@@ -33,9 +33,9 @@ def test_search_and_stage_filter(admin_api, company, channel):
     assert admin_api.get(api_url("companies/?stage=contacted")).json()["count"] == 0
 
 
-def test_company_list_filters_by_company_type(admin_api, company, shop):
-    Company.objects.filter(pk=shop.pk).update(company_type="RETAILER")
-    body = admin_api.get(api_url("companies/?company_type=RETAILER")).json()
+def test_company_list_filters_by_lead_type(admin_api, company, shop):
+    Company.objects.filter(pk=shop.pk).update(lead_type="RETAILER")
+    body = admin_api.get(api_url("companies/?lead_type=RETAILER")).json()
     assert body["count"] == 1 and body["results"][0]["id"] == shop.pk
 
 
@@ -57,8 +57,8 @@ def test_company_list_has_reply_counts_each_company_once(admin_api, company, sho
     assert [row["id"] for row in not_replied["results"]] == [company.pk]
 
 
-def test_company_list_rejects_unknown_company_type(admin_api, company):
-    response = admin_api.get(api_url("companies/?company_type=BANK"))
+def test_company_list_rejects_unknown_lead_type(admin_api, company):
+    response = admin_api.get(api_url("companies/?lead_type=BANK"))
     assert response.status_code == 400
     assert admin_api.get(api_url("companies/?has_reply=maybe")).status_code == 400
 
@@ -167,3 +167,56 @@ def test_dev_import_now_runs_in_the_request(admin_api, channel):
     response = admin_api.post(api_url("test/import-now/"), {"file": upload}, format="multipart")
     assert response.status_code == 200
     assert (response.json()["status"], response.json()["created_count"]) == (ImportStatus.DONE, 3)
+
+
+# UX-003: lead types — configuration per channel, CRUD like stages, a type in use cannot be deleted.
+def test_lead_types_list_create_and_code_is_fixed(admin_api, channel):
+    assert [row["code"] for row in admin_api.get(api_url("lead-types/")).json()["results"]] == [
+        "MANUFACTURER",
+        "WHOLESALE",
+        "RETAILER",
+    ]
+    created = admin_api.post(api_url("lead-types/"), {"code": "AGENCY", "label": "Agency", "order": 40}, format="json")
+    assert created.status_code == 201 and created.json()["is_active"] is True
+    url = api_url(f"lead-types/{created.json()['id']}/")
+    assert admin_api.patch(url, {"label": "Web agency"}, format="json").json()["label"] == "Web agency"
+    assert admin_api.patch(url, {"code": "SHOP"}, format="json").status_code == 400
+    assert admin_api.post(api_url("lead-types/"), {"code": "AGENCY", "label": "x"}, format="json").status_code == 409
+    assert admin_api.post(api_url("lead-types/"), {"code": "UNKNOWN", "label": "x"}, format="json").status_code == 409
+    assert admin_api.post(api_url("lead-types/"), {"code": "agency", "label": "x"}, format="json").status_code == 400
+
+
+def test_lead_type_in_use_cannot_be_deleted(admin_api, company):
+    retailer = LeadType.objects.get(channel=company.channel, code="RETAILER")
+    Company.objects.filter(pk=company.pk).update(lead_type="RETAILER")
+    response = admin_api.delete(api_url(f"lead-types/{retailer.pk}/"))
+    assert response.status_code == 409 and LeadType.objects.filter(pk=retailer.pk).exists()
+    Company.objects.filter(pk=company.pk).update(lead_type="UNKNOWN")
+    assert admin_api.delete(api_url(f"lead-types/{retailer.pk}/")).status_code == 204
+
+
+def test_filter_and_edit_accept_only_active_lead_types(admin_api, company):
+    LeadType.objects.filter(channel=company.channel, code="WHOLESALE").update(is_active=False)
+    assert admin_api.get(api_url("companies/?lead_type=WHOLESALE")).status_code == 400
+    assert admin_api.get(api_url("companies/?lead_type=UNKNOWN")).json()["count"] == 1
+    url = api_url(f"companies/{company.pk}/")
+    assert admin_api.patch(url, {"lead_type": "WHOLESALE"}, format="json").status_code == 400
+    assert admin_api.patch(url, {"lead_type": "RETAILER"}, format="json").json()["lead_type"] == "RETAILER"
+    created = admin_api.post(api_url("companies/"), {"domain": "new-shop.pl", "lead_type": "BANK"}, format="json")
+    assert created.status_code == 400
+
+
+def test_a_deactivated_lead_type_does_not_block_other_edits(admin_api, company):
+    Company.objects.filter(pk=company.pk).update(lead_type="WHOLESALE")
+    LeadType.objects.filter(channel=company.channel, code="WHOLESALE").update(is_active=False)
+    url = api_url(f"companies/{company.pk}/")
+    response = admin_api.patch(url, {"name": "Renamed", "lead_type": "WHOLESALE"}, format="json")
+    assert response.status_code == 200 and response.json()["name"] == "Renamed"
+
+
+def test_lead_type_of_another_channel_is_not_found(admin_api, company, polish):
+    other = Channel.objects.create(idx="other-europe", name="Other", default_language=polish)
+    foreign = LeadType.objects.create(channel=other, code="AGENCY", label="Agency", order=0)
+    assert admin_api.get(api_url(f"lead-types/{foreign.pk}/")).status_code == 404
+    assert admin_api.patch(api_url(f"lead-types/{foreign.pk}/"), {"label": "x"}, format="json").status_code == 404
+    assert admin_api.delete(api_url(f"lead-types/{foreign.pk}/")).status_code == 404

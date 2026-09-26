@@ -25,6 +25,11 @@ item below: the rule, then where it is enforced.
 
 ## Import
 
+- **A lead type is a code, not a foreign key.** `Company.lead_type` keeps the string even when the `LeadType` row
+  turns inactive; only the filter, create/patch, the import and the intel guess check `lead_type_service.active_codes`.
+  The code is fixed after create (companies and communicator template audiences hold it) and a type in use cannot be
+  deleted — deactivate it instead.
+
 - **No CSV content in the broker, the database or the logs.** The task message is the batch id; the report keeps row
   numbers and reason codes only. A new skip reason is a code, never the offending value.
 - **Only `OperationalError` may leave `run_file`** — it is the task retry. Anything else must end the batch

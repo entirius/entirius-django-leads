@@ -22,16 +22,16 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `-` prefix; default `name`), `company_type` (`MANUFACTURER`, `WHOLESALE`, `RETAILER`, `UNKNOWN`), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), paging | 200 `CompanyListResponse` |
-| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `company_type`, `industry` | 201 `CompanyDetailResponse`; Activity `note` "company created" |
+| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), paging | 200 `CompanyListResponse` |
+| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry` | 201 `CompanyDetailResponse`; Activity `note` "company created" |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
-| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `company_type`, `industry`, `description`, `do_not_contact`, `external_ref` | 200 `CompanyDetailResponse` |
+| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact`, `external_ref` | 200 `CompanyDetailResponse` |
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
 | POST | `<channel_idx>/companies/<id>/communicate/` | `template_key`, `contact_id` | 201 `{message_id, status}` — a reviewable communicator draft |
 | POST | `<channel_idx>/companies/<id>/request-audit/` | — | 202 `{audit_id, status}`; Activity `intel` "audit requested" |
 | POST | `<channel_idx>/companies/<id>/create-customer/` | — (routed only with `django_accounts`) | 200 `{customer_uid}` |
 
-`CompanyResponse`: `id, name, domain, website, company_type, industry, description, platform, hooks, stage
+`CompanyResponse`: `id, name, domain, website, lead_type, industry, description, platform, hooks, stage
 {id, key, label, order, kind, is_terminal, on_reply}, stage_entered_at, source, external_ref, do_not_contact,
 customer_uid, rotation_count, last_activity_at`. `CompanyDetailResponse` adds `contacts` (all) and `activities`
 (last 20, newest first). `stage`, `domain`, `hooks` and `customer_uid` are not writable here.
@@ -63,6 +63,23 @@ legal_basis, opt_out_at, anonymised_at`. `email` is immutable — it is not a PA
 | GET | `<channel_idx>/stages/<id>/` | — | 200 `StageResponse` |
 | PATCH | `<channel_idx>/stages/<id>/` | any field of POST, no nulls | 200 `StageResponse` |
 | DELETE | `<channel_idx>/stages/<id>/` | — | 204 |
+
+## Lead types
+
+The kinds of lead a channel works with — configuration, not code. `Company.lead_type` holds the `code`; `UNKNOWN`
+is built in, never a row, always valid. An inactive type still reads on its companies but is not accepted by the
+filter, create/patch, the import (reads as `UNKNOWN`) or the intel guess. A communicator template targets a lead
+type through its `audience` (cascade in `concept.md` § Outreach).
+
+| Method | Path | Body | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/lead-types/` | — | 200 `{results: [LeadTypeResponse]}` in `order`, inactive ones included |
+| POST | `<channel_idx>/lead-types/` | `code` (upper-case `A-Z0-9_`, required), `label` (required), `order` (0–32767), `is_active` | 201 `LeadTypeResponse` |
+| GET | `<channel_idx>/lead-types/<id>/` | — | 200 `LeadTypeResponse` |
+| PATCH | `<channel_idx>/lead-types/<id>/` | any of `label`, `order`, `is_active`, no nulls — the code is fixed | 200 `LeadTypeResponse` |
+| DELETE | `<channel_idx>/lead-types/<id>/` | — | 204 |
+
+`LeadTypeResponse`: `id, code, label, order, is_active`.
 
 ## Timeline and imports
 
@@ -134,6 +151,8 @@ upper-cased; `message` is human-readable; `details` is empty for these (no field
 |---|---|
 | `STAGE_EXISTS` | `POST`/`PATCH stages/`: another stage of the channel already has this key |
 | `STAGE_NOT_EMPTY` | `DELETE stages/<pk>/`: the stage still holds companies |
+| `LEAD_TYPE_EXISTS` | `POST lead-types/`: the channel already has this code, or the code is the built-in `UNKNOWN` |
+| `LEAD_TYPE_IN_USE` | `DELETE lead-types/<pk>/`: companies of the channel still carry the code — retype them or deactivate the type |
 | `DOMAIN_EXISTS` | `POST companies/`: another company of the channel already has this registrable domain |
 | `NO_STAGES` | `POST companies/`: the channel has no pipeline yet |
 | `CONTACT_EXISTS` | `POST contacts/`: the company already has a contact with this email |

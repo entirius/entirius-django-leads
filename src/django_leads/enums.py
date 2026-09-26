@@ -12,11 +12,8 @@ class StageKind(models.TextChoices):
     UNRESPONSIVE = "unresponsive", "Unresponsive"
 
 
-class CompanyType(models.TextChoices):
-    MANUFACTURER = "MANUFACTURER", "Manufacturer"
-    WHOLESALE = "WHOLESALE", "Wholesale"
-    RETAILER = "RETAILER", "Retailer"
-    UNKNOWN = "UNKNOWN", "Unknown"
+# The built-in lead type of a company nobody has typed yet; never a `LeadType` row, always accepted.
+UNKNOWN_LEAD_TYPE = "UNKNOWN"
 
 
 class LeadSource(models.TextChoices):

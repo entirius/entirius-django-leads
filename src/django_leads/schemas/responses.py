@@ -21,6 +21,16 @@ class StageResponse(BaseModel):
     on_reply: bool = Field(description="Target on a reply.", examples=[False])
 
 
+class LeadTypeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Lead type id.", examples=[100])
+    code: str = Field(description="Upper-case code; what companies and template audiences hold.", examples=["RETAILER"])
+    label: str = Field(description="Label.", examples=["Retailer"])
+    order: int = Field(description="Display order.", examples=[0])
+    is_active: bool = Field(description="Offered, filtered on and guessed.", examples=[True])
+
+
 class ContactResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,7 +74,7 @@ class CompanyResponse(BaseModel):
     name: str = Field(description="Name.", examples=["Example Shop"])
     domain: str = Field(description="Registrable domain.", examples=["example-shop-2.test"])
     website: str = Field(description="Website.", examples=[""])
-    company_type: str = Field(description="MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN.", examples=["RETAILER"])
+    lead_type: str = Field(description="Lead type code of the channel, or UNKNOWN.", examples=["RETAILER"])
     industry: str = Field(description="Industry.", examples=[""])
     description: str = Field(description="Description.", examples=[""])
     platform: str = Field(description="Shop platform.", examples=[""])
@@ -133,6 +143,12 @@ class ContactListResponse(_Page):
 
 class StageListResponse(BaseModel):
     results: list[StageResponse] = Field(description="Stages in pipeline order.")
+
+
+class LeadTypeListResponse(BaseModel):
+    results: list[LeadTypeResponse] = Field(
+        description="Lead types in display order (UNKNOWN is built in, never listed)."
+    )
 
 
 class ActivityListResponse(_Page):

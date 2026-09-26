@@ -29,13 +29,14 @@ from django_regional.models import Language
 from django_leads import settings as leads_settings
 from django_leads.connectors.base import ImportFailed
 from django_leads.connectors.csv import CsvConnector, parse_rows  # noqa: F401 — `parse_rows` kept importable here
-from django_leads.enums import ActivityKind, CompanyType, ImportStatus, LeadSource
+from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind, ImportStatus, LeadSource
 from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, Stage
 from django_leads.services import (
     activity_service,
     company_service,
     contact_service,
     erased_address_service,
+    lead_type_service,
     stage_service,
 )
 from django_leads.utils.domains import email_domain, registrable_domain
@@ -56,6 +57,7 @@ class Lookups:
 
     stage: Stage
     languages: dict[str, Language]
+    lead_types: frozenset[str]
 
 
 def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: str) -> ImportBatch:
@@ -64,7 +66,8 @@ def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: s
 
 def build_lookups(channel: Channel) -> Lookups:
     languages = {language.iso2.lower(): language for language in Language.objects.all()}
-    return Lookups(stage=stage_service.first_stage(channel), languages=languages)
+    lead_types = lead_type_service.active_codes(channel)
+    return Lookups(stage=stage_service.first_stage(channel), languages=languages, lead_types=lead_types)
 
 
 def upload_path(batch_id: int) -> Path:
@@ -184,8 +187,9 @@ def save_progress(batch: ImportBatch, outcomes: list[tuple[int, str, str]], last
     batch.save(update_fields=[*fields, "report"] if skipped[:room] else fields)
 
 
-def normalise_row(raw: dict[str, str], languages: dict[str, Language]) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """`(company row, contact row or None)`; raises `SkipRow` with the report reason."""
+def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """`(company row, contact row or None)`; raises `SkipRow` with the report reason. A lead type that is not an
+    active one of the channel reads as `UNKNOWN` — never a skip."""
     email = _row_email(raw)
     legal_basis = raw["legal_basis"].lower() or None
     if legal_basis and legal_basis not in LegalBasis.values:
@@ -194,14 +198,19 @@ def normalise_row(raw: dict[str, str], languages: dict[str, Language]) -> tuple[
         "domain": _row_domain(raw, email),
         "name": raw["company_name"],
         "website": raw["website"],
-        "company_type": raw["company_type"].upper() if raw["company_type"].upper() in CompanyType.values else "",
+        "lead_type": _row_lead_type(raw, lookups.lead_types),
         "industry": raw["industry"],
         "source": LeadSource.CSV,
     }
     _check_lengths(Company, company)
     if not (email or raw["first_name"] or raw["last_name"]):
         return company, None
-    return company, _contact_row(raw, email, legal_basis, languages)
+    return company, _contact_row(raw, email, legal_basis, lookups.languages)
+
+
+def _row_lead_type(raw: dict[str, str], lead_types: frozenset[str]) -> str:
+    code = raw["lead_type"].upper()
+    return code if code in lead_types else UNKNOWN_LEAD_TYPE
 
 
 def _contact_row(raw: dict[str, str], email: str, legal_basis: str | None, languages: dict[str, Language]) -> dict:
@@ -309,7 +318,7 @@ class _ChunkWriter:
         prepared = []
         for line, raw in rows:
             try:
-                prepared.append((line, *normalise_row(raw, self.lookups.languages)))
+                prepared.append((line, *normalise_row(raw, self.lookups)))
             except SkipRow as reason:
                 self.skipped.append((line, "skipped", str(reason)))
         return self._without_erased(prepared)

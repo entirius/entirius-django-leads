@@ -10,16 +10,16 @@ from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
-from django_leads.enums import ActivityKind, CompanyType
+from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind
 from django_leads.models import Activity, Channel, Company, Stage
-from django_leads.services import activity_service, stage_service
+from django_leads.services import activity_service, lead_type_service, stage_service
 
-FILL_FIELDS = ("name", "website", "company_type", "industry")
+FILL_FIELDS = ("name", "website", "lead_type", "industry")
 EDITABLE_FIELDS = frozenset(
-    {"name", "website", "company_type", "industry", "description", "do_not_contact", "external_ref"}
+    {"name", "website", "lead_type", "industry", "description", "do_not_contact", "external_ref"}
 )
 SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at"})
-EMPTY_VALUES = (None, "", CompanyType.UNKNOWN)
+EMPTY_VALUES = (None, "", UNKNOWN_LEAD_TYPE)
 
 
 class CompanyExists(Exception):
@@ -70,7 +70,9 @@ def upsert_company(channel: Channel, row: dict[str, Any]) -> tuple[Company, bool
 
 
 def create_company(channel: Channel, row: dict[str, Any], *, actor: str) -> Company:
-    """Manual create over the API — an existing domain is a conflict, never a silent match."""
+    """Manual create over the API — an existing domain is a conflict, never a silent match. The lead type must be an
+    active one of the channel (`UnknownLeadType`)."""
+    lead_type_service.check_code(channel, row.get("lead_type") or UNKNOWN_LEAD_TYPE)
     company = build_company(channel, row, stage_service.first_stage(channel))
     try:
         with transaction.atomic():
@@ -85,6 +87,8 @@ def update_company(company: Company, updates: dict[str, Any]) -> Company:
     invalid = set(updates) - EDITABLE_FIELDS
     if invalid:
         raise ValueError(f"fields not editable: {sorted(invalid)}")
+    if updates.get("lead_type", company.lead_type) != company.lead_type:  # a deactivated type stays editable around
+        lead_type_service.check_code(company.channel, updates["lead_type"])
     for field, value in updates.items():
         setattr(company, field, value)
     company.save(update_fields=[*updates, "modified_at"])
@@ -97,11 +101,12 @@ def list_companies(
     stage: str = "",
     search: str = "",
     sort: str = "name",
-    company_type: str = "",
+    lead_type: str = "",
     do_not_contact: bool | None = None,
     has_reply: bool | None = None,
 ) -> QuerySet[Company]:
-    """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema."""
+    """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
+    active lead type of the channel (`UnknownLeadType`)."""
     if sort.lstrip("-") not in SORT_FIELDS:
         raise ValueError(f"unknown sort {sort!r}")
     companies = Company.objects.filter(channel=channel).select_related("stage")
@@ -109,16 +114,18 @@ def list_companies(
         companies = companies.filter(stage__key=stage)
     if search:
         companies = companies.filter(Q(name__icontains=search) | Q(domain__icontains=search))
-    companies = filter_flags(companies, company_type, do_not_contact, has_reply)
+    if lead_type:
+        lead_type_service.check_code(channel, lead_type)
+    companies = filter_flags(companies, lead_type, do_not_contact, has_reply)
     return companies.order_by(sort, "id")
 
 
 def filter_flags(
-    companies: QuerySet[Company], company_type: str, do_not_contact: bool | None, has_reply: bool | None
+    companies: QuerySet[Company], lead_type: str, do_not_contact: bool | None, has_reply: bool | None
 ) -> QuerySet[Company]:
     """`has_reply` is an `Exists()` subquery — one row per company, so counts and paging stay exact."""
-    if company_type:
-        companies = companies.filter(company_type=company_type)
+    if lead_type:
+        companies = companies.filter(lead_type=lead_type)
     if do_not_contact is not None:
         companies = companies.filter(do_not_contact=do_not_contact)
     if has_reply is not None:

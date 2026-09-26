@@ -13,6 +13,8 @@ from django_leads.connectors.base import CandidateRow, ImportFailed
 from django_leads.models import Channel, Company
 
 CSV_COLUMNS = tuple(field.name for field in fields(CandidateRow) if field.name != "external_ref")
+# Older files name a column the way it used to be called; read when the current name is absent from the header.
+COLUMN_ALIASES = {"lead_type": "company_type"}
 
 
 def parse_rows(file: Iterable[str]) -> Iterator[dict[str, str]]:
@@ -21,6 +23,9 @@ def parse_rows(file: Iterable[str]) -> Iterator[dict[str, str]]:
     header like `" domain"` reads its own column instead of an empty one."""
     reader = csv.DictReader(file)
     raw_names = {name.strip(): name for name in reader.fieldnames or ()}
+    for column, old in COLUMN_ALIASES.items():
+        if column not in raw_names and old in raw_names:
+            raw_names[column] = raw_names[old]
     if not set(CSV_COLUMNS) & set(raw_names):
         raise ImportFailed("missing_header")
     for raw in reader:

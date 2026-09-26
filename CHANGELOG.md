@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **Release order:** outreach now calls `communicate(audience=…)`, which needs the next entirius-django-communicator
+  release (template `audience`, migration `0010`). Raise the `entirius-django-communicator` pin to that version when
+  releasing this module — against communicator 0.2.0 every communicate rule fails with `TypeError`.
+- **Lead types are configuration per channel** (`LeadType`: `code`, `label`, `order`, `is_active`), replacing the
+  hard-coded `CompanyType` enum. `Company.company_type` is renamed `lead_type` (migration `0007`, which also creates a
+  row for every code a company of a channel already carries); the API field, the company filter (`lead_type`) and the
+  outreach context field follow. `UNKNOWN` stays built in.
+- Admin API `lead-types/` (list, create, detail, patch, delete; `LEAD_TYPE_EXISTS`, `LEAD_TYPE_IN_USE`). The filter
+  and company create/patch accept only an active code of the channel or `UNKNOWN` (400 otherwise).
+- CSV import reads `lead_type`, still accepts a `company_type` column; a code outside the channel's active lead types
+  imports as `UNKNOWN` (it used to be stored blank).
+- Intel: the analysis prompt gets the channel's lead types as `{lead_types}`; the guess (`lead_type_guess`, or
+  `company_type_guess` for one release) is kept only when it is an active code.
+- Outreach passes the company's lead type to communicator `communicate(audience=…)`, so one rule template key picks
+  the lead-type variant of the template (needs django-communicator with template audiences).
+
 ## 0.2.0 — 2026-09-16
 
 - **Intel recovery after a toolbox outage.** An analysis that failed transiently (`ToolboxConnectionError`, timeout,

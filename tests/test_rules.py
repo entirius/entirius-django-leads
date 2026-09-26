@@ -9,7 +9,7 @@ import pytest
 from django.utils import timezone
 
 from django_leads.enums import ActivityKind, RuleAction, RuleOutcome, RuleTrigger
-from django_leads.models import Activity, Contact, RuleRun, Stage
+from django_leads.models import Activity, Company, Contact, RuleRun, Stage
 from django_leads.services import recipient_service, rule_service, stage_service
 
 pytestmark = pytest.mark.django_db
@@ -31,12 +31,15 @@ def activity_messages(company, kind: str) -> list[str]:
 
 
 def test_rule_fires_communicate_for_primary_contact(shop, make_rule, communicate):
+    Company.objects.filter(pk=shop.pk).update(lead_type="RETAILER")
+    shop.refresh_from_db()
     runs = rule_service.evaluate_rules(shop, RuleTrigger.STAGE_ENTERED, stage=make_rule().stage)
     assert [run.outcome for run in runs] == [RuleOutcome.FIRED]
     kwargs = communicate.call_args.kwargs
     assert kwargs["recipient"].email == "piotr@example-shop-4.test" and kwargs["requires_review"] is True
     assert kwargs["subject_ref"] == f"leads.Company:{shop.pk}" and kwargs["recipient"].legal_footer == "footer"
     assert kwargs["context"]["hooks"] == shop.hooks
+    assert kwargs["audience"] == "RETAILER" == kwargs["context"]["lead_type"]  # the template variant (UX-003)
     assert activity_messages(shop, ActivityKind.DRAFT)
 
 

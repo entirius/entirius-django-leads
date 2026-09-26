@@ -11,7 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from django_leads import settings as leads_settings
 from django_leads.enums import LeadSource, RuleTrigger, StageKind
-from django_leads.models import Channel, Company, Contact, Stage, StageRule
+from django_leads.models import Channel, Company, Contact, LeadType, Stage, StageRule
 from django_leads.services import company_service
 
 CHANNEL_IDX = "default-europe"
@@ -50,6 +50,10 @@ def channel(polish) -> Channel:
     Stage.objects.create(
         channel=channel, key="unresponsive", label="Unresponsive", order=40, kind=StageKind.UNRESPONSIVE
     )
+    for order, (code, label) in enumerate(
+        [("MANUFACTURER", "Manufacturer"), ("WHOLESALE", "Wholesale"), ("RETAILER", "Retailer")]
+    ):
+        LeadType.objects.create(channel=channel, code=code, label=label, order=order * 10)
     return channel
 
 
