@@ -11,6 +11,7 @@ from django_leads.api.admin.views import company_action_views as action
 from django_leads.api.admin.views import company_views as company
 from django_leads.api.admin.views import contact_views as contact
 from django_leads.api.admin.views import import_views as imports
+from django_leads.api.admin.views import lead_type_views as lead_type
 from django_leads.api.admin.views import profile_views as profile
 from django_leads.api.admin.views import rule_views as rule
 from django_leads.api.admin.views import stage_views as stage
@@ -28,6 +29,8 @@ urlpatterns = [
     path("contacts/<int:pk>/", contact.ContactDetailView.as_view(), name="admin-leads-contact"),
     path("stages/", stage.StageListView.as_view(), name="admin-leads-stages"),
     path("stages/<int:pk>/", stage.StageDetailView.as_view(), name="admin-leads-stage"),
+    path("lead-types/", lead_type.LeadTypeListView.as_view(), name="admin-leads-lead-types"),
+    path("lead-types/<int:pk>/", lead_type.LeadTypeDetailView.as_view(), name="admin-leads-lead-type"),
     path("activities/", activity.ActivityListView.as_view(), name="admin-leads-activities"),
     path("imports/", imports.ImportListView.as_view(), name="admin-leads-imports"),
     path("imports/<int:pk>/", imports.ImportDetailView.as_view(), name="admin-leads-import"),

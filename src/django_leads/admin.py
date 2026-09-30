@@ -10,6 +10,7 @@ from django_leads.models import (
     Company,
     Contact,
     ImportBatch,
+    LeadType,
     RecipientPickProfile,
     RuleRun,
     Stage,
@@ -31,12 +32,18 @@ class StageInline(admin.TabularInline):
     fields = ("order", "key", "label", "kind", "is_terminal", "on_reply")
 
 
+class LeadTypeInline(admin.TabularInline):
+    model = LeadType
+    extra = 0
+    fields = ("order", "code", "label", "is_active")
+
+
 @admin.register(Channel)
 class ChannelAdmin(admin.ModelAdmin):
     list_display = ("idx", "name", "default_language", "retention_days")
     search_fields = ("idx", "name")
     filter_horizontal = ("languages",)
-    inlines = [StageInline]
+    inlines = [StageInline, LeadTypeInline]
 
 
 class ContactInline(admin.TabularInline):

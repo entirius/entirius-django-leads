@@ -3,6 +3,9 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Admin API v2 — companies: list, create, detail, patch, stage transition."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
@@ -24,16 +27,29 @@ from django_leads.schemas.responses import (
     CompanyResponse,
     ContactResponse,
 )
-from django_leads.services import company_service, stage_service
+from django_leads.services import company_service, customer_link_service, lead_type_service, stage_service
 
 _TAGS = ["Leads companies"]
 RECENT_ACTIVITIES = 20
 
 
+@contextmanager
+def unknown_lead_type_as_400() -> Iterator[None]:
+    try:
+        yield
+    except lead_type_service.UnknownLeadType as error:
+        raise ValidationError({"lead_type": [str(error)]}) from None
+
+
 def detail(company: Company) -> dict:
     contacts = [ContactResponse.of(contact) for contact in company.contacts.select_related("language")]
     activities = [ActivityResponse.model_validate(row) for row in company.activities.all()[:RECENT_ACTIVITIES]]
-    body = CompanyDetailResponse(**CompanyResponse.of(company).model_dump(), contacts=contacts, activities=activities)
+    body = CompanyDetailResponse(
+        **CompanyResponse.of(company).model_dump(),
+        contacts=contacts,
+        activities=activities,
+        customer_name=customer_link_service.find_customer_name(company.customer_uid),
+    )
     return body.model_dump(mode="json")
 
 
@@ -46,7 +62,7 @@ class CompanyListView(AdminView):
             OpenApiParameter("stage", str, description="Stage key."),
             OpenApiParameter("search", str, description="Substring of name or domain."),
             OpenApiParameter("sort", str, description="name, domain, stage_entered_at, last_activity_at; `-` prefix."),
-            OpenApiParameter("company_type", str, description="MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN."),
+            OpenApiParameter("lead_type", str, description="Lead type code of the channel, or UNKNOWN."),
             OpenApiParameter("do_not_contact", bool, description="do_not_contact flag."),
             OpenApiParameter("has_reply", bool, description="At least one reply activity (true) or none (false)."),
             *PAGE_PARAMETERS,
@@ -55,7 +71,8 @@ class CompanyListView(AdminView):
     )
     def get(self, request: Request, channel_idx: str) -> Response:
         query = parse(CompanyListQuery, request.query_params.dict())
-        companies = company_service.list_companies(self.channel(channel_idx), **query.model_dump())
+        with unknown_lead_type_as_400():
+            companies = company_service.list_companies(self.channel(channel_idx), **query.model_dump())
         return self.paginated(request, companies, CompanyResponse.of)
 
     @extend_schema(
@@ -69,7 +86,8 @@ class CompanyListView(AdminView):
         body = parse(CompanyCreateRequest, request.data)
         row = {**body.model_dump(mode="json"), "source": LeadSource.MANUAL}
         try:
-            company = company_service.create_company(self.channel(channel_idx), row, actor=request.user.username)
+            with unknown_lead_type_as_400():
+                company = company_service.create_company(self.channel(channel_idx), row, actor=request.user.username)
         except company_service.CompanyExists as error:
             raise Conflict(str(error), code="domain_exists") from None
         except stage_service.NoStages as error:
@@ -102,7 +120,8 @@ class CompanyDetailView(AdminView):
         updates = {field: "" if value is None and field == "website" else value for field, value in updates.items()}
         if None in updates.values():
             raise ValidationError({"detail": ["null is only allowed for website"]})
-        company = company_service.update_company(self.company(channel_idx, pk), updates)
+        with unknown_lead_type_as_400():
+            company = company_service.update_company(self.company(channel_idx, pk), updates)
         return Response(detail(company))
 
 

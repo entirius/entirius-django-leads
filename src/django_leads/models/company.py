@@ -5,7 +5,7 @@
 from django.db import models
 from django_utils.models.base_model import BaseModel
 
-from django_leads.enums import CompanyType, LeadSource
+from django_leads.enums import UNKNOWN_LEAD_TYPE, LeadSource
 
 
 class Company(BaseModel):
@@ -15,7 +15,8 @@ class Company(BaseModel):
     name = models.CharField(max_length=255)
     domain = models.CharField(max_length=253)
     website = models.URLField(blank=True, default="")
-    company_type = models.CharField(max_length=16, choices=CompanyType.choices, default=CompanyType.UNKNOWN)
+    # The code of a `LeadType` of the channel (no FK: import, AI guess and filters work with strings)
+    lead_type = models.CharField(max_length=32, default=UNKNOWN_LEAD_TYPE)
     industry = models.CharField(max_length=128, blank=True, default="")
     description = models.TextField(blank=True, default="")
     platform = models.CharField(max_length=64, blank=True, default="")

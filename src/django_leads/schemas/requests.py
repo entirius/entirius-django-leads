@@ -8,9 +8,12 @@ from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 
-from django_leads.enums import CompanyType, ContactStrategy, RuleAction, RuleTrigger, StageKind
+from django_leads.enums import UNKNOWN_LEAD_TYPE, ContactStrategy, RuleAction, RuleTrigger, StageKind
 from django_leads.services.company_service import SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
+
+# Format only — whether a code is an active lead type of the channel is the service's call (`lead_type_service`).
+LEAD_TYPE_PATTERN = r"^[A-Z0-9_]+$"
 
 
 class CompanyListQuery(BaseModel):
@@ -21,16 +24,15 @@ class CompanyListQuery(BaseModel):
     sort: str = Field(
         default="name", description="name, domain, stage_entered_at or last_activity_at; `-` for descending."
     )
-    company_type: str = Field(default="", description="Company type filter; blank = any.", examples=["RETAILER"])
+    lead_type: str = Field(
+        default="",
+        max_length=32,
+        pattern=r"^[A-Z0-9_]*$",
+        description="Lead type code filter (an active lead type of the channel, or UNKNOWN); blank = any.",
+        examples=["RETAILER"],
+    )
     do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
-
-    @field_validator("company_type")
-    @classmethod
-    def company_type_in_choices(cls, value: str) -> str:
-        if value and value not in CompanyType.values:
-            raise ValueError(f"company_type must be one of {CompanyType.values}")
-        return value
 
     @field_validator("sort")
     @classmethod
@@ -46,7 +48,9 @@ class CompanyCreateRequest(BaseModel):
     domain: str = Field(min_length=1, max_length=253, description="Domain or URL; stored registrable.")
     name: str = Field(default="", max_length=255, description="Company name; the domain when empty.")
     website: HttpUrl | None = Field(default=None, description="Website URL.")
-    company_type: CompanyType = Field(default=CompanyType.UNKNOWN, description="Company type.")
+    lead_type: str = Field(
+        default=UNKNOWN_LEAD_TYPE, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code."
+    )
     industry: str = Field(default="", max_length=128, description="Industry.")
 
     @field_validator("domain")
@@ -60,7 +64,7 @@ class CompanyUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255, description="Company name.")
     website: HttpUrl | None = Field(default=None, description="Website URL.")
-    company_type: CompanyType | None = Field(default=None, description="Company type.")
+    lead_type: str | None = Field(default=None, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code.")
     industry: str | None = Field(default=None, max_length=128, description="Industry.")
     description: str | None = Field(default=None, description="Free-text description.")
     do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
@@ -109,6 +113,7 @@ class ContactCreateRequest(BaseModel):
 class ContactUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    email: EmailStr | None = Field(default=None, description="Email; only while the contact has none.")
     first_name: str | None = Field(default=None, max_length=128, description="First name.")
     last_name: str | None = Field(default=None, max_length=128, description="Last name.")
     job_title: str | None = Field(default=None, max_length=128, description="Job title.")
@@ -141,6 +146,27 @@ class StageUpdateRequest(BaseModel):
     kind: StageKind | None = Field(default=None, description="open, won, lost or unresponsive.")
     is_terminal: bool | None = Field(default=None, description="No further stages after this one.")
     on_reply: bool | None = Field(default=None, description="Companies move here when a contact replies.")
+
+
+class LeadTypeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(
+        min_length=1, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Upper-case code.", examples=["RETAILER"]
+    )
+    label: str = Field(min_length=1, max_length=128, description="Label.", examples=["Retailer"])
+    order: int = Field(default=0, ge=0, le=32767, description="Display order.")
+    is_active: bool = Field(default=True, description="Offered, filtered on and guessed.")
+
+
+class LeadTypeUpdateRequest(BaseModel):
+    """The code is fixed after create — companies and communicator templates hold it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str | None = Field(default=None, min_length=1, max_length=128, description="Label.")
+    order: int | None = Field(default=None, ge=0, le=32767, description="Display order.")
+    is_active: bool | None = Field(default=None, description="Offered, filtered on and guessed.")
 
 
 class ActivityListQuery(BaseModel):

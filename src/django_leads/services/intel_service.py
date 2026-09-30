@@ -22,9 +22,9 @@ from django_utils.toolbox import (
 from django_utils.toolbox.schemas import CompletionRequest
 
 from django_leads import settings as leads_settings
-from django_leads.enums import ActivityKind, ClaimState, CompanyType, RuleTrigger
+from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind, ClaimState, RuleTrigger
 from django_leads.models import AnalysisProfile, Claim, Company
-from django_leads.services import activity_service, alert_service, claim_service, rule_service
+from django_leads.services import activity_service, alert_service, claim_service, lead_type_service, rule_service
 from django_leads.settings import LEADS_ANALYSIS_MAX_HOOKS
 from django_leads.utils.domains import registrable_domain
 from django_leads.utils.prompts import json_summary, prompt_messages
@@ -169,7 +169,11 @@ def _analyse(company: Company, audit: Audit) -> None:
 def _prompt_values(company: Company, audit: Audit) -> dict[str, str]:
     processed = dict(audit.reports.filter(source__in=SOURCES).values_list("source", "processed"))
     summaries = {f"{source}_summary": json_summary(processed.get(source, {})) for source in SOURCES}
-    return {"company_name": company.name, "website": company.website or company.domain, **summaries}
+    lead_types = ", ".join(
+        f"{t.code} ({t.label})" for t in lead_type_service.list_lead_types(company.channel) if t.is_active
+    )
+    values = {"company_name": company.name, "website": company.website or company.domain, "lead_types": lead_types}
+    return {**values, **summaries}
 
 
 def _apply(company: Company, parsed: dict | None, *, usage: dict) -> None:
@@ -178,12 +182,21 @@ def _apply(company: Company, parsed: dict | None, *, usage: dict) -> None:
         raise AnalysisFailed("schema")
     company.hooks = [hook for hook in hooks if isinstance(hook, dict)][:LEADS_ANALYSIS_MAX_HOOKS]
     company.platform = parsed["platform"][:64]
-    guess = parsed.get("company_type_guess")
-    if company.company_type == CompanyType.UNKNOWN and guess in CompanyType.values:
-        company.company_type = guess
-    company.save(update_fields=["hooks", "platform", "company_type", "modified_at"])
+    if company.lead_type == UNKNOWN_LEAD_TYPE:
+        company.lead_type = _lead_type_guess(company, parsed)
+    company.save(update_fields=["hooks", "platform", "lead_type", "modified_at"])
     data = {"hooks": len(company.hooks), "platform": company.platform, "usage": usage}
     activity_service.record(company, ActivityKind.INTEL, "intel analysed", data=data)
+
+
+def _lead_type_guess(company: Company, parsed: dict) -> str:
+    """The model's guess, kept only when it is an active lead type of the channel. `company_type_guess` is the key
+    of profiles written before lead types (accepted for one release)."""
+    guess = parsed.get("lead_type_guess") or parsed.get("company_type_guess")
+    if not isinstance(guess, str):  # a profile without json_schema may answer a list or an object here
+        return UNKNOWN_LEAD_TYPE
+    guess = guess.strip().upper()
+    return guess if guess in lead_type_service.active_codes(company.channel) else UNKNOWN_LEAD_TYPE
 
 
 def is_transient(error: ToolboxError) -> bool:

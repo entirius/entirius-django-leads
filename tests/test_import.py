@@ -12,7 +12,7 @@ from django.test.utils import CaptureQueriesContext
 
 from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, ImportStatus
-from django_leads.models import Activity, Company, Contact, ImportBatch
+from django_leads.models import Activity, Company, Contact, ImportBatch, LeadType
 from django_leads.services import company_service, import_service
 
 HEADER = (
@@ -93,7 +93,7 @@ def test_item4_whitespace_header_reads_its_own_column():
             "company_name": "Lesna",
             "domain": "lesna-shop.pl",
             "website": "",
-            "company_type": "",
+            "lead_type": "",
             "industry": "",
             "first_name": "",
             "last_name": "",
@@ -286,3 +286,21 @@ def test_command_imports_in_chunks(channel, monkeypatch, tmp_path):
     batch = ImportBatch.objects.get()
     assert batch.status == ImportStatus.DONE and batch.skipped_count == 3
     assert progress == [3, 5, 7, 9] and path.exists()
+
+
+# UX-003: lead types are configuration of the channel; a code outside it reads as UNKNOWN (it used to be blank).
+def test_import_keeps_an_active_lead_type_and_maps_anything_else_to_unknown(channel):
+    LeadType.objects.filter(channel=channel, code="WHOLESALE").update(is_active=False)
+    run(channel, csv_of("A,a-shop.pl,,retailer,,,,,,,,", "B,b-shop.pl,,BANK,,,,,,,,", "C,c-shop.pl,,WHOLESALE,,,,,,,,"))
+    types = dict(Company.objects.values_list("domain", "lead_type"))
+    assert types == {"a-shop.pl": "RETAILER", "b-shop.pl": "UNKNOWN", "c-shop.pl": "UNKNOWN"}
+
+
+def test_import_reads_the_lead_type_column_and_still_the_old_company_type_one(channel):
+    new_header = HEADER.replace("company_type", "lead_type")
+    run(channel, f"{new_header}\nA,a-shop.pl,,MANUFACTURER,,,,,,,,\n")
+    run(channel, csv_of("B,b-shop.pl,,RETAILER,,,,,,,,"))
+    assert dict(Company.objects.values_list("domain", "lead_type")) == {
+        "a-shop.pl": "MANUFACTURER",
+        "b-shop.pl": "RETAILER",
+    }

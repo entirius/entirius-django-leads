@@ -237,11 +237,6 @@ paths:
           type: string
         required: true
       - in: query
-        name: company_type
-        schema:
-          type: string
-        description: MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN.
-      - in: query
         name: do_not_contact
         schema:
           type: boolean
@@ -251,6 +246,11 @@ paths:
         schema:
           type: boolean
         description: At least one reply activity (true) or none (false).
+      - in: query
+        name: lead_type
+        schema:
+          type: string
+        description: Lead type code of the channel, or UNKNOWN.
       - in: query
         name: page
         schema:
@@ -702,6 +702,7 @@ paths:
           description: No response body
     patch:
       operationId: api_leads_v2_admin_contacts_partial_update
+      description: '`email` only while the contact has none (400 once set, 409 when the company already has it).'
       summary: Update editable contact fields
       parameters:
       - in: path
@@ -736,6 +737,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/ContactResponse'
           description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_contacts_destroy
+      description: 204 when the contact was never used and is gone; 200 with the anonymised row when outreach or GDPR history
+        hangs on it (thread, outreach activity, consent, opt-out).
+      summary: 'Remove a contact: deleted when never used, anonymised when used'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads contacts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+          description: ''
+        '204':
+          description: No response body
         '400':
           description: No response body
         '401':
@@ -851,6 +891,189 @@ paths:
         '403':
           description: No response body
         '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/lead-types/:
+    get:
+      operationId: leads_lead_types_list
+      description: Inactive types are listed too; UNKNOWN is built in and never listed.
+      summary: Lead types of the channel in display order
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads lead types
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadTypeListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_lead_types_create
+      summary: Add a lead type
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads lead types
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadTypeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LeadTypeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LeadTypeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadTypeResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/lead-types/{id}/:
+    get:
+      operationId: api_leads_v2_admin_lead_types_retrieve
+      summary: One lead type
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads lead types
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadTypeResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_lead_types_partial_update
+      description: Label, order and is_active; the code is fixed after create.
+      summary: Update a lead type
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads lead types
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLeadTypeUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLeadTypeUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLeadTypeUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadTypeResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_lead_types_destroy
+      description: 409 while companies carry the code — retype them, or deactivate the type instead.
+      summary: Delete a lead type
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads lead types
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
           description: No response body
   /api/leads/v2/admin/{channel_idx}/recipient-profiles/:
     get:
@@ -1555,6 +1778,36 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/test/retry-analyses/:
+    post:
+      operationId: api_leads_v2_admin_test_retry_analyses_create
+      description: Every channel, in this process; nothing is retried while the toolbox status is not `configured`.
+      summary: Run the intel analysis retry now (development only)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads (development)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevRetryAnalysesResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/test/rotate-now/:
     post:
       operationId: api_leads_v2_admin_test_rotate_now_create
@@ -1956,10 +2209,13 @@ components:
           default: null
           description: Website URL.
           title: Website
-        company_type:
-          $ref: '#/components/schemas/CompanyType'
+        lead_type:
           default: UNKNOWN
-          description: Company type.
+          description: Lead type code.
+          maxLength: 32
+          pattern: ^[A-Z0-9_]+$
+          title: Lead Type
+          type: string
         industry:
           default: ''
           description: Industry.
@@ -1996,11 +2252,11 @@ components:
           - ''
           title: Website
           type: string
-        company_type:
-          description: MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN.
+        lead_type:
+          description: Lead type code of the channel, or UNKNOWN.
           examples:
           - RETAILER
-          title: Company Type
+          title: Lead Type
           type: string
         industry:
           description: Industry.
@@ -2095,7 +2351,7 @@ components:
       - name
       - domain
       - website
-      - company_type
+      - lead_type
       - industry
       - description
       - platform
@@ -2175,11 +2431,11 @@ components:
           - ''
           title: Website
           type: string
-        company_type:
-          description: MANUFACTURER, WHOLESALE, RETAILER or UNKNOWN.
+        lead_type:
+          description: Lead type code of the channel, or UNKNOWN.
           examples:
           - RETAILER
-          title: Company Type
+          title: Lead Type
           type: string
         industry:
           description: Industry.
@@ -2262,7 +2518,7 @@ components:
       - name
       - domain
       - website
-      - company_type
+      - lead_type
       - industry
       - description
       - platform
@@ -2277,14 +2533,6 @@ components:
       - last_activity_at
       title: CompanyResponse
       type: object
-    CompanyType:
-      enum:
-      - MANUFACTURER
-      - WHOLESALE
-      - RETAILER
-      - UNKNOWN
-      title: CompanyType
-      type: string
     ContactCreateRequest:
       additionalProperties: false
       properties:
@@ -2584,6 +2832,25 @@ components:
       required:
       - runs
       title: DevEvaluateResponse
+      type: object
+    DevRetryAnalysesResponse:
+      properties:
+        recovered:
+          description: Analyses that succeeded on retry.
+          examples:
+          - 1
+          title: Recovered
+          type: integer
+        failed:
+          description: Analyses whose retry failed again.
+          examples:
+          - 0
+          title: Failed
+          type: integer
+      required:
+      - recovered
+      - failed
+      title: DevRetryAnalysesResponse
       type: object
     DevRotateResponse:
       properties:
@@ -2910,6 +3177,95 @@ components:
       - reason
       title: ImportReportEntry
       type: object
+    LeadTypeListResponse:
+      properties:
+        results:
+          description: Lead types in display order (UNKNOWN is built in, never listed).
+          items:
+            $ref: '#/components/schemas/LeadTypeResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: LeadTypeListResponse
+      type: object
+    LeadTypeRequest:
+      additionalProperties: false
+      properties:
+        code:
+          description: Upper-case code.
+          examples:
+          - RETAILER
+          maxLength: 32
+          minLength: 1
+          pattern: ^[A-Z0-9_]+$
+          title: Code
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Retailer
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+        order:
+          default: 0
+          description: Display order.
+          maximum: 32767
+          minimum: 0
+          title: Order
+          type: integer
+        is_active:
+          default: true
+          description: Offered, filtered on and guessed.
+          title: Is Active
+          type: boolean
+      required:
+      - code
+      - label
+      title: LeadTypeRequest
+      type: object
+    LeadTypeResponse:
+      properties:
+        id:
+          description: Lead type id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        code:
+          description: Upper-case code; what companies and template audiences hold.
+          examples:
+          - RETAILER
+          title: Code
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Retailer
+          title: Label
+          type: string
+        order:
+          description: Display order.
+          examples:
+          - 0
+          title: Order
+          type: integer
+        is_active:
+          description: Offered, filtered on and guessed.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - code
+      - label
+      - order
+      - is_active
+      title: LeadTypeResponse
+      type: object
     LegalBasis:
       description: GDPR legal basis for processing — the platform-wide definition.
       enum:
@@ -2986,12 +3342,15 @@ components:
           default: null
           description: Website URL.
           title: Website
-        company_type:
+        lead_type:
           anyOf:
-          - $ref: '#/components/schemas/CompanyType'
+          - maxLength: 32
+            pattern: ^[A-Z0-9_]+$
+            type: string
           - type: 'null'
           default: null
-          description: Company type.
+          description: Lead type code.
+          title: Lead Type
         industry:
           anyOf:
           - maxLength: 128
@@ -3027,6 +3386,14 @@ components:
     PatchedContactUpdateRequest:
       additionalProperties: false
       properties:
+        email:
+          anyOf:
+          - format: email
+            type: string
+          - type: 'null'
+          default: null
+          description: Email; only while the contact has none.
+          title: Email
         first_name:
           anyOf:
           - maxLength: 128
@@ -3090,6 +3457,37 @@ components:
           description: Where consent was given (document, call, form); required when legal_basis is consent.
           title: Consent Ref
       title: ContactUpdateRequest
+      type: object
+    PatchedLeadTypeUpdateRequest:
+      additionalProperties: false
+      description: The code is fixed after create — companies and communicator templates hold it.
+      properties:
+        label:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Label.
+          title: Label
+        order:
+          anyOf:
+          - maximum: 32767
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: Display order.
+          title: Order
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Offered, filtered on and guessed.
+          title: Is Active
+      title: LeadTypeUpdateRequest
       type: object
     PatchedProfileUpdateRequest:
       additionalProperties: false

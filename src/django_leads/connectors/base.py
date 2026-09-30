@@ -22,7 +22,7 @@ class CandidateRow:
     company_name: str
     domain: str
     website: str
-    company_type: str
+    lead_type: str
     industry: str
     first_name: str
     last_name: str
