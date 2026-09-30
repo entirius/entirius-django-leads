@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Admin API v2 — contacts: list, create, detail, patch. Email is immutable."""
+"""Admin API v2 — contacts: list, create, detail, patch, remove. Email is set once, then immutable."""
 
 from django_regional.models import Language
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -75,18 +75,37 @@ class ContactDetailView(AdminView):
     @extend_schema(
         tags=_TAGS,
         summary="Update editable contact fields",
+        description="`email` only while the contact has none (400 once set, 409 when the company already has it).",
         request=ContactUpdateRequest,
-        responses={200: ContactResponse, **ERROR_RESPONSES},
+        responses={200: ContactResponse, **ERROR_RESPONSES, 409: None},
     )
     def patch(self, request: Request, channel_idx: str, pk: int) -> Response:
         updates = parse(ContactUpdateRequest, request.data).model_dump(mode="json", exclude_unset=True)
-        if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "is_primary")):
+        if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "email", "is_primary")):
             raise ValidationError({"detail": ["null is only allowed for language and legal_basis"]})
         consent_ref = updates.pop("consent_ref", None)
-        contact = contact_service.update_contact(
-            self.contact(channel_idx, pk),
-            resolve_language(updates),
-            actor=request.user.username,
-            consent_ref=consent_ref,
-        )
+        try:
+            contact = contact_service.update_contact(
+                self.contact(channel_idx, pk),
+                resolve_language(updates),
+                actor=request.user.username,
+                consent_ref=consent_ref,
+            )
+        except contact_service.EmailImmutable as error:
+            raise ValidationError({"email": [str(error)]}) from None
+        except contact_service.ContactExists as error:
+            raise Conflict(str(error), code="contact_exists") from None
         return Response(ContactResponse.of(contact).model_dump(mode="json"))
+
+    @extend_schema(
+        tags=_TAGS,
+        summary="Remove a contact: deleted when never used, anonymised when used",
+        description="204 when the contact was never used and is gone; 200 with the anonymised row when outreach or "
+        "GDPR history hangs on it (thread, outreach activity, consent, opt-out).",
+        responses={200: ContactResponse, 204: None, **ERROR_RESPONSES},
+    )
+    def delete(self, request: Request, channel_idx: str, pk: int) -> Response:
+        anonymised = contact_service.remove_contact(self.contact(channel_idx, pk), actor=request.user.username)
+        if anonymised is None:
+            return Response(status=204)
+        return Response(ContactResponse.of(anonymised).model_dump(mode="json"))

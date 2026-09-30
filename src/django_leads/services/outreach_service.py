@@ -17,7 +17,7 @@ from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
 from django_leads.services import activity_service, recipient_service
 
-CONTEXT_FIELDS = ("domain", "company_type", "industry", "description", "platform", "hooks")
+CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", "hooks")
 
 
 def subject_ref(company: Company) -> str:
@@ -81,6 +81,7 @@ def _communicate(company: Company, contact: Contact, template_key: str, thread: 
         subject_ref=subject_ref(company),
         requires_review=True,
         thread=thread,
+        audience=company.lead_type,  # the template's lead-type variant, else its any-audience default
     )
 
 

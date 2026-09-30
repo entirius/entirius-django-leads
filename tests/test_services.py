@@ -9,7 +9,7 @@ import pytest
 from django.db import connection, transaction
 from django_agreements.enums import LegalBasis
 
-from django_leads.enums import ActivityKind, CompanyType, LeadSource
+from django_leads.enums import ActivityKind, LeadSource
 from django_leads.models import Activity, Company, Contact, Stage
 from django_leads.services import company_service, contact_service, form_service, stage_service
 from django_leads.signals import stage_entered
@@ -56,9 +56,9 @@ def test_update_company_rejects_non_whitelisted_fields(company):
     for field in ("stage", "domain", "hooks", "customer_uid"):
         with pytest.raises(ValueError, match="not editable"):
             company_service.update_company(company, {field: "x"})
-    company_service.update_company(company, {"company_type": CompanyType.RETAILER})
+    company_service.update_company(company, {"lead_type": "RETAILER"})
     company.refresh_from_db()
-    assert company.company_type == CompanyType.RETAILER
+    assert company.lead_type == "RETAILER"
 
 
 def test_transition_stage_writes_timeline_and_emits_stage_entered(company, django_capture_on_commit_callbacks):

@@ -20,14 +20,14 @@ stages.
 UTF-8 (a BOM is accepted), header row required — the batch fails `missing_header` when no header matches a known
 column after stripping surrounding whitespace (`" domain "` matches `domain`); values are then read through that
 same stripped mapping, so a padded header never imports empty values. Columns (all optional, unknown ones ignored):
-`company_name`, `domain`, `website`, `company_type`,
+`company_name`, `domain`, `website`, `lead_type` (older files: `company_type`, read when `lead_type` is absent),
 `industry`, `first_name`, `last_name`, `email`, `job_title`, `language` (ISO 639-1), `legal_basis` (`consent`,
 `legitimate_interest`, `contract`), `phone`.
 
 - The company domain is `domain`, else `website`, else the email host; a free-mail host without `domain`/`website`
   is skipped.
 - A row without email and without a name creates or matches only the company.
-- `company_type` outside `MANUFACTURER`/`WHOLESALE`/`RETAILER`/`UNKNOWN` is ignored, not a skip.
+- A `lead_type` that is not an active lead type of the channel (case-insensitive) imports as `UNKNOWN`, not a skip.
 - An email whose token is in `ErasedAddress` skips the whole row — no company, no contact.
 
 ### How a run works

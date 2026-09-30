@@ -25,7 +25,7 @@ dependencies = [
     "entirius-django-utils>=2.1.0",
     "entirius-django-regional>=2.0.1",
     "entirius-django-agreements>=2.1.0",
-    "entirius-django-communicator>=0.2.0",
+    "entirius-django-communicator>=0.3.0",
     "entirius-django-siteintel>=0.1.0",
 ]
 

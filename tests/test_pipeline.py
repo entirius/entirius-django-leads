@@ -55,7 +55,7 @@ pytestmark = pytest.mark.django_db
 ANALYSIS = {
     "hooks": [{"challenge": f"c{n}", "business_cost": f"b{n}"} for n in range(3)],
     "platform": "Magento 2",
-    "company_type_guess": "RETAILER",
+    "lead_type_guess": "RETAILER",
 }
 
 
@@ -143,7 +143,7 @@ def test_analysis_sets_hooks_platform_type_then_intel_ready_rules(shop, audit, t
     sent = toolbox.complete.call_args.args[0]
     shop.refresh_from_db()
     assert sent.tags[0] == "leads.analysis" and '{"performance":41}' in sent.messages[-1].content
-    assert len(shop.hooks) == 3 and shop.platform == "Magento 2" and shop.company_type == "RETAILER"
+    assert len(shop.hooks) == 3 and shop.platform == "Magento 2" and shop.lead_type == "RETAILER"
     assert Activity.objects.get(company=shop, kind=ActivityKind.INTEL).data["hooks"] == 3
     evaluate.assert_called_once_with(shop, RuleTrigger.INTEL_READY, event=f"audit:{audit.pk}")
 
@@ -531,6 +531,18 @@ def test_L15_links_customer_through_verified_email_address(shop):
     assert customer_link_service.link_customer(shop, actor="operator") == str(customer.uid)
 
 
+def test_FIX17_company_detail_names_the_linked_customer(shop, admin_api):
+    customer = accounts_customer("PIOTR@example-shop-4.test", verified=True)
+    customer.user.first_name, customer.user.last_name = "Jan", "Kowalski"
+    customer.user.save(update_fields=["first_name", "last_name"])
+    url = f"/api/leads/v2/admin/default-europe/companies/{shop.pk}/"
+    assert admin_api.get(url).json()["customer_name"] == ""
+    shop.customer_uid = customer.uid
+    shop.save(update_fields=["customer_uid"])
+    body = admin_api.get(url).json()
+    assert body["customer_name"] == "Jan Kowalski" and body["customer_uid"] == str(customer.uid)
+
+
 def test_L15_unverified_email_address_is_never_linked(shop):
     accounts_customer("piotr@example-shop-4.test", verified=False)
     with pytest.raises(customer_link_service.NoCustomer):
@@ -778,3 +790,24 @@ def test_item2_refused_draft_retry_records_one_blocked_activity(shop):
     assert messages(shop, ActivityKind.BLOCKED) == ["blocked: do_not_contact"]
     activity = Activity.objects.get(company=shop, kind=ActivityKind.BLOCKED)
     assert (activity.contact.email, activity.data) == ("piotr@example-shop-4.test", {"message_id": message.pk})
+
+
+# UX-003: the model's guess counts only when it is an active lead type of the channel; the prompt lists them.
+@pytest.mark.parametrize(
+    "parsed_guess, expected",
+    [
+        ({"lead_type_guess": "BANK"}, "UNKNOWN"),
+        ({"company_type_guess": "WHOLESALE"}, "WHOLESALE"),
+        ({"lead_type_guess": " retailer "}, "RETAILER"),
+        ({"lead_type_guess": ["RETAILER"]}, "UNKNOWN"),
+    ],
+)
+def test_lead_type_guess_outside_the_channel_list_is_ignored(shop, audit, toolbox, parsed_guess, expected):
+    AnalysisProfile.objects.filter(channel=shop.channel).update(prompt_text="{company_name} types: {lead_types}")
+    toolbox.complete.return_value = completion({**ANALYSIS, "lead_type_guess": None, **parsed_guess})
+    with mock.patch("django_leads.services.rule_service.evaluate_rules"):
+        intel_service.analyse_audit(str(audit.pk), ["lighthouse"])
+    shop.refresh_from_db()
+    assert shop.lead_type == expected
+    prompt = toolbox.complete.call_args.args[0].messages[-1].content
+    assert "MANUFACTURER (Manufacturer), WHOLESALE (Wholesale), RETAILER (Retailer)" in prompt
