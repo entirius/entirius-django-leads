@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-09-30
 
 - **Release order:** outreach now calls `communicate(audience=…)`, which needs the next entirius-django-communicator
   release (template `audience`, migration `0010`). Raise the `entirius-django-communicator` pin to that version when
