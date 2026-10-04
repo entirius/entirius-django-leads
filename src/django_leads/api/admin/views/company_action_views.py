@@ -19,6 +19,8 @@ _TAGS = ["Leads companies"]
 
 
 class CompanyActionView(AdminView):
+    access_area = "leads.companies"
+
     def company(self, channel_idx: str, pk: int) -> Company:
         companies = Company.objects.filter(channel=self.channel(channel_idx)).select_related("channel")
         return self.get_in(companies, pk, "Company")

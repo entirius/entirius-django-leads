@@ -22,6 +22,8 @@ def dump(lead_type: LeadType) -> dict:
 
 
 class LeadTypeListView(AdminView):
+    access_area = "leads.settings"
+
     @extend_schema(
         tags=_TAGS,
         operation_id="leads_lead_types_list",
@@ -49,6 +51,8 @@ class LeadTypeListView(AdminView):
 
 
 class LeadTypeDetailView(AdminView):
+    access_area = "leads.settings"
+
     def lead_type(self, channel_idx: str, pk: int) -> LeadType:
         return self.get_in(lead_type_service.list_lead_types(self.channel(channel_idx)), pk, "Lead type")
 

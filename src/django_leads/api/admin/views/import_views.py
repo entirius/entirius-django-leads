@@ -36,6 +36,7 @@ def read_upload(request: Request) -> tuple[str, str, int]:
 
 
 class ImportListView(AdminView):
+    access_area = "leads.companies"
     parser_classes = [MultiPartParser]
 
     @extend_schema(
@@ -64,6 +65,8 @@ class ImportListView(AdminView):
 
 
 class ImportDetailView(AdminView):
+    access_area = "leads.companies"
+
     @extend_schema(
         tags=_TAGS,
         summary="One import batch with its report",

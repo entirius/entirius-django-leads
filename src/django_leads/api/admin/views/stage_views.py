@@ -22,6 +22,8 @@ def dump(stage: Stage) -> dict:
 
 
 class StageListView(AdminView):
+    access_area = "leads.settings"
+
     @extend_schema(
         tags=_TAGS,
         operation_id="leads_stages_list",
@@ -48,6 +50,8 @@ class StageListView(AdminView):
 
 
 class StageDetailView(AdminView):
+    access_area = "leads.settings"
+
     def stage(self, channel_idx: str, pk: int) -> Stage:
         return self.get_in(stage_service.list_stages(self.channel(channel_idx)), pk, "Stage")
 

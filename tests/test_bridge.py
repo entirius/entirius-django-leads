@@ -5,6 +5,7 @@ from datetime import timedelta
 from unittest import mock
 
 import pytest
+from django.apps import apps
 from django.core.cache import cache
 from django.db import OperationalError
 from django.utils import timezone
@@ -95,6 +96,10 @@ def test_unknown_leads_channel_writes_nothing(db, polish, django_capture_on_comm
 def test_L19_channel_without_rule_bridge_never_called(channel, forms_channel, django_capture_on_commit_callbacks):
     cache.clear()
     key = APIKey.objects.create(channel=forms_channel)
+    if apps.is_installed("django_access"):  # keys are access tokens there: import the legacy row as migrate does
+        from django_access.services.legacy import import_legacy_keys
+
+        import_legacy_keys()
     client = APIClient()
     client.credentials(HTTP_X_API_KEY=key.key)
     url = f"/api/contact-forms/v2/{forms_channel.idx}/submit/"

@@ -14,6 +14,8 @@ from django_leads.services import activity_service
 
 
 class ActivityListView(AdminView):
+    access_area = "leads.companies"
+
     @extend_schema(
         tags=["Leads activities"],
         operation_id="leads_activities_list",
