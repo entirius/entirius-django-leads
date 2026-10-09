@@ -17,6 +17,7 @@ from django_leads.services import config_service
 
 
 class _ProfileView(AdminView):
+    access_area = "leads.settings"
     model: type[Model]
     create_schema: type[BaseModel]
     update_schema: type[BaseModel]

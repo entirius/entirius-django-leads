@@ -17,6 +17,9 @@ _ERRORS = {key: value for key, value in ERROR_RESPONSES.items() if key != 404}
 
 
 class GdprExportView(AdminView):
+    access_area = "leads.gdpr"
+    access_levels = {"POST": "write"}
+
     @extend_schema(
         tags=_TAGS,
         summary="Export everything held about an email (GDPR art. 15)",
@@ -30,6 +33,8 @@ class GdprExportView(AdminView):
 
 
 class GdprEraseView(AdminView):
+    access_area = "leads.gdpr"
+
     @extend_schema(
         tags=_TAGS,
         summary="Erase everything held about an email (GDPR art. 17)",

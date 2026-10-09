@@ -25,6 +25,8 @@ selection, retention and GDPR. App label `django_leads`, table prefix `django_le
 - Layered: `models/` · `services/` (all logic, field whitelists) · `schemas/` · `api/admin/` (thin views) ·
   `signals/` · `tasks/`. No logic in models or views.
 - Never rename the package, the app label or the table prefix; never edit a released migration.
+- Access: areas live on the AppConfig (`access_areas`, `access_route_rules`), every admin view carries
+  `access_area`; a new admin route without one fails `tests/test_access_ownership.py`.
 - Git flow: `develop` + `master`, PRs, semver tag on `master`. Do not commit by default — the operator decides.
 
 ## Map

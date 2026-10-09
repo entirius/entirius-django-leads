@@ -32,6 +32,8 @@ def save(rule: StageRule, fields: dict) -> StageRule:
 
 
 class RuleListView(AdminView):
+    access_area = "leads.settings"
+
     @extend_schema(
         tags=_TAGS,
         operation_id="leads_rules_list",
@@ -52,6 +54,8 @@ class RuleListView(AdminView):
 
 
 class RuleDetailView(AdminView):
+    access_area = "leads.settings"
+
     def rule(self, channel_idx: str, pk: int) -> StageRule:
         return self.get_in(config_service.list_rules(self.channel(channel_idx)), pk, "Rule")
 
@@ -75,6 +79,8 @@ class RuleDetailView(AdminView):
 
 
 class RuleRunListView(AdminView):
+    access_area = "leads.settings"
+
     @extend_schema(
         tags=_TAGS,
         operation_id="leads_rule_runs_list",

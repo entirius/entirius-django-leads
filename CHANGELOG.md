@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- Access: the module declares its own access areas on its AppConfig and its admin views (copied from the
+  entirius-django-access defaults; behaviour unchanged).
+
 ## 0.3.0 — 2026-09-30
 
 - **Release order:** outreach now calls `communicate(audience=…)`, which needs the next entirius-django-communicator
