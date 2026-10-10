@@ -15,6 +15,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads.enums import ActivityKind, ClaimState, RuleAction, RuleOutcome, RuleTrigger
 from django_leads.models import Company, RuleRun, Stage, StageRule
@@ -103,7 +104,10 @@ def _outreach(rule: StageRule, company: Company) -> tuple[str, str]:
     contact, _ = recipient_service.pick_recipient(company, rule)
     if contact is None:
         return _stop(company, rule, RuleOutcome.BLOCKED, ActivityKind.BLOCKED, "blocked: no_eligible_contact")
-    result = outreach_service.request_draft(company, contact, rule.template_key, actor=f"rule:{rule.pk}")
+    try:
+        result = outreach_service.request_draft(company, contact, rule.template_key, actor=f"rule:{rule.pk}")
+    except ToolboxDisabledError:  # the activity is recorded; a skipped run starts no cooldown
+        return RuleOutcome.SKIPPED, outreach_service.SKIPPED_TOOLBOX_DISABLED
     if isinstance(result, outreach_service.Blocked):
         return RuleOutcome.BLOCKED, f"blocked: {result.reason}"
     if result is None:

@@ -195,3 +195,84 @@ def test_missing_clause_set_skips_without_communicate(shop, make_rule):
     assert [run.outcome for run in runs] == [RuleOutcome.SKIPPED]
     assert activity_messages(shop, ActivityKind.SKIPPED) == ["skipped: no clause set"]
     communicate.assert_not_called()
+
+
+@pytest.fixture
+def ai_template(shop):
+    """A communicator channel with an AI template: `communicate()` itself runs, only the legal footer is patched."""
+    from django_communicator.enums import TemplateKind
+    from django_communicator.models import Channel as CommunicatorChannel
+    from django_communicator.models import MessageTemplate
+    from django_communicator.services import template_service
+
+    language = shop.channel.default_language
+    channel = CommunicatorChannel.objects.create(idx="default-europe", label="Europe", default_language=language)
+    fields = {"key": "lead.cold.b2b", "kind": TemplateKind.AI_PROMPT, "subject": "Cold", "model": "fake-chat"}
+    fields |= {"language": language, "body": "System.\n=== USER ===\nWrite to {company_name}."}
+    template = MessageTemplate(channel=channel, **fields)
+    with (
+        mock.patch("django_leads.services.outreach_service.render_legal_footer", return_value="footer"),
+        mock.patch("django_leads.services.outreach_service.resolve_clause_set"),
+    ):
+        yield template_service.save_template(template)
+
+
+def test_toolbox_disabled_manual_communicate_answers_503_with_skipped_activity(shop, ai_template, admin_api, settings):
+    from django_communicator.models import Message, Thread
+
+    settings.AI_TOOLBOX_ENABLED = False
+    body = {"template_key": "lead.cold.b2b", "contact_id": shop.contacts.get(is_primary=True).pk}
+
+    response = admin_api.post(f"/api/leads/v2/admin/default-europe/companies/{shop.pk}/communicate/", body)
+
+    assert (response.status_code, response.json()["error"]) == (503, "AI_TOOLBOX_DISABLED")
+    assert activity_messages(shop, ActivityKind.SKIPPED) == ["skipped: AI toolbox disabled"]
+    assert not activity_messages(shop, ActivityKind.DRAFT)
+    assert not Thread.objects.exists() and not Message.objects.exists()
+
+
+def test_toolbox_unconfigured_manual_communicate_still_returns_a_failed_draft(shop, ai_template, admin_api, settings):
+    settings.AI_TOOLBOX_API_KEY = ""
+    body = {"template_key": "lead.cold.b2b", "contact_id": shop.contacts.get(is_primary=True).pk}
+
+    response = admin_api.post(f"/api/leads/v2/admin/default-europe/companies/{shop.pk}/communicate/", body)
+
+    assert (response.status_code, response.json()["status"]) == (201, "failed")
+    assert activity_messages(shop, ActivityKind.DRAFT) == ["draft failed"]
+
+
+def test_toolbox_disabled_rule_is_skipped_and_starts_no_cooldown(shop, ai_template, make_rule, settings):
+    settings.AI_TOOLBOX_ENABLED = False
+    rule = make_rule()
+
+    skipped = rule_service.evaluate_rules(shop, RuleTrigger.STAGE_ENTERED, stage=rule.stage, event="e1")
+
+    assert [(run.outcome, run.detail, run.state) for run in skipped] == [
+        (RuleOutcome.SKIPPED, "skipped: AI toolbox disabled", "done")
+    ]
+    assert activity_messages(shop, ActivityKind.SKIPPED) == ["skipped: AI toolbox disabled"]
+    assert not activity_messages(shop, ActivityKind.RULE)
+    settings.AI_TOOLBOX_ENABLED = True
+    message = SimpleNamespace(pk=7, status="review_required")
+    with mock.patch("django_leads.services.outreach_service.communicate", return_value=message):
+        fired = rule_service.evaluate_rules(shop, RuleTrigger.STAGE_ENTERED, stage=rule.stage, event="e2")
+    assert [run.outcome for run in fired] == [RuleOutcome.FIRED]
+
+
+def test_toolbox_disabled_rotation_records_the_skip_and_waits_in_retry(shop, ai_template, settings):
+    from django_communicator.models import Thread
+
+    from django_leads.models import Claim
+    from django_leads.services import activity_service, rotation_service
+
+    settings.AI_TOOLBOX_ENABLED = False
+    activity_service.record(shop, ActivityKind.DRAFT, "draft sent", data={"template_key": "lead.cold.b2b"})
+    ref, first = f"leads.Company:{shop.pk}", "piotr@example-shop-4.test"
+    thread = Thread.objects.create(channel=ai_template.channel, subject_ref=ref, recipient_email=first)
+
+    assert rotation_service.rotate_thread(thread) is None
+
+    claim = Claim.objects.get(key=f"rotation:{thread.pk}")
+    assert (claim.state, claim.failures, claim.detail) == ("retry", 0, "toolbox_disabled")
+    assert activity_messages(shop, ActivityKind.SKIPPED) == ["skipped: AI toolbox disabled"]
+    assert not activity_messages(shop, ActivityKind.ROTATION_FAILED) and Thread.objects.count() == 1

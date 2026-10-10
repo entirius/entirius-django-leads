@@ -156,6 +156,7 @@ Validation and DRF errors go through the host's v2 exception handler:
 | 401 / 403 | no or invalid JWT / not staff |
 | 404 | unknown channel, row of another channel, unknown `stage_key`, development endpoint outside development |
 | 409 | one of the codes below |
+| 503 | `communicate/` with an AI template while the toolbox is switched off (`AI_TOOLBOX_ENABLED = False`): body `{error: "AI_TOOLBOX_DISABLED", message}`, no draft, Activity `skipped: AI toolbox disabled` |
 
 Every 409 uses the same v2 shape, `{error, message, debug_id, details}` — `error` is the code below,
 upper-cased; `message` is human-readable; `details` is empty for these (no field-level errors).

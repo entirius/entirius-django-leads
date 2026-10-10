@@ -4,6 +4,7 @@
 """Admin API v2 — manual company actions: draft through communicator, request a siteintel audit."""
 
 from django_communicator.models import Channel as CommunicatorChannel
+from django_utils.toolbox import ToolboxDisabledError, handle_toolbox_error
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
@@ -32,9 +33,9 @@ class CompanyCommunicateView(CompanyActionView):
         summary="Request a reviewable draft for a contact",
         description="No rule conditions or cooldown. 409 when the outreach gate refuses the contact (do_not_contact, "
         "opted_out, anonymised, no_legal_basis) or no draft can be built (no clause set); 400 for a foreign or "
-        "email-less contact.",
+        "email-less contact; 503 `AI_TOOLBOX_DISABLED` for an AI template while the toolbox is off.",
         request=CommunicateRequest,
-        responses={201: DraftResponse, **ERROR_RESPONSES, 409: None},
+        responses={201: DraftResponse, **ERROR_RESPONSES, 409: None, 503: None},
     )
     def post(self, request: Request, channel_idx: str, pk: int) -> Response:
         body = parse(CommunicateRequest, request.data)
@@ -46,6 +47,8 @@ class CompanyCommunicateView(CompanyActionView):
             message = outreach_service.request_draft(company, contact, body.template_key, actor=request.user.username)
         except CommunicatorChannel.DoesNotExist:
             raise Conflict("communicator channel not configured", code="communicator_channel_missing") from None
+        except ToolboxDisabledError as error:
+            return handle_toolbox_error(error)
         if isinstance(message, outreach_service.Blocked):
             raise Conflict(f"contact not eligible: {message.reason}", code="not_eligible")
         if message is None:

@@ -12,11 +12,13 @@ from django_agreements.services.clause_set_service import ClauseSetMissing, rend
 from django_communicator.enums import MessageStatus
 from django_communicator.models import Message, Thread
 from django_communicator.services.communicate_service import LegalFooterRequiredError, RecipientData, communicate
+from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
 from django_leads.services import activity_service, recipient_service
 
+SKIPPED_TOOLBOX_DISABLED = "skipped: AI toolbox disabled"
 CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", "hooks")
 
 
@@ -36,7 +38,9 @@ def request_draft(
 ) -> Message | Blocked | None:
     """A reviewable draft for the contact; `Blocked` when the outreach gate refuses, None (Activity `skipped`) when
     no legal footer can be built. The gate and `communicate()` share one short transaction on the locked company and
-    contact rows — an opt-out or `do_not_contact` either commits first (blocked) or waits for the draft commit."""
+    contact rows — an opt-out or `do_not_contact` either commits first (blocked) or waits for the draft commit.
+    Raises `ToolboxDisabledError` (Activity `skipped: AI toolbox disabled`) for an AI template while the toolbox is
+    switched off."""
     try:
         with transaction.atomic():
             company, contact = _lock(company, contact)
@@ -49,6 +53,9 @@ def request_draft(
         return _skipped(company, contact, "skipped: no clause set", actor)
     except LegalFooterRequiredError:
         return _skipped(company, contact, "skipped: no legal basis", actor)
+    except ToolboxDisabledError:
+        _skipped(company, contact, SKIPPED_TOOLBOX_DISABLED, actor)
+        raise
     return message
 
 

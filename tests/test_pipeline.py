@@ -21,6 +21,7 @@ from django_siteintel.models import Audit, Report
 from django_utils.toolbox import (
     ToolboxBudgetExceededError,
     ToolboxConnectionError,
+    ToolboxDisabledError,
     ToolboxModelNotAllowedError,
     ToolboxServerError,
     ToolboxStatus,
@@ -811,3 +812,74 @@ def test_lead_type_guess_outside_the_channel_list_is_ignored(shop, audit, toolbo
     assert shop.lead_type == expected
     prompt = toolbox.complete.call_args.args[0].messages[-1].content
     assert "MANUFACTURER (Manufacturer), WHOLESALE (Wholesale), RETAILER (Retailer)" in prompt
+
+
+def test_toolbox_disabled_analysis_is_skipped_then_runs_after_enabling(shop, valid_audit, toolbox, pick_rule, settings):
+    settings.AI_TOOLBOX_ENABLED = False
+    toolbox.complete.return_value = completion(ANALYSIS)
+
+    with mock.patch("django_leads.services.alert_service.alert") as alert:
+        intel_service.analyse_audit(str(valid_audit.pk), ["lighthouse"], run_id="task-1")
+        waiting = intel_service.retry_failed_analyses()
+
+    claim = Claim.objects.get(key=f"intel:{valid_audit.pk}:task-1")
+    assert (claim.state, claim.failures, claim.detail) == ("retry", 0, "toolbox_disabled")
+    assert messages(shop, ActivityKind.INTEL) == ["analysis skipped: AI toolbox disabled"]
+    assert waiting == {"recovered": 0, "failed": 0}
+    assert not alert.called and not toolbox.complete.called and not RuleRun.objects.exists()
+
+    settings.AI_TOOLBOX_ENABLED = True
+    with (
+        mock.patch("django_leads.services.intel_service.status", return_value=ToolboxStatus.CONFIGURED),
+        mock.patch.object(rule_service, "evaluate_rules") as rules,
+    ):
+        assert intel_service.retry_failed_analyses() == {"recovered": 1, "failed": 0}
+    claim.refresh_from_db()
+    shop.refresh_from_db()
+    assert (claim.state, shop.platform, rules.call_count) == ("done", "Magento 2", 1)
+    assert "intel analysed" in messages(shop, ActivityKind.INTEL)
+
+
+def test_toolbox_disabled_audit_without_sources_still_clears_hooks(shop, audit, toolbox, settings):
+    settings.AI_TOOLBOX_ENABLED = False
+
+    intel_service.analyse_audit(str(audit.pk), [], run_id="task-1")
+
+    shop.refresh_from_db()
+    assert shop.hooks == [] and Claim.objects.get().state == "done"
+
+
+def test_toolbox_unconfigured_analysis_still_fails_with_an_alert(shop, audit, settings):
+    settings.AI_TOOLBOX_API_KEY = ""
+
+    with mock.patch("django_leads.services.alert_service.alert") as alert:
+        intel_service.analyse_audit(str(audit.pk), ["lighthouse"], run_id="task-1")
+
+    assert Claim.objects.get().state == "failed" and alert.call_count == 1
+    assert messages(shop, ActivityKind.INTEL) == ["analysis failed: AI_TOOLBOX_NOT_CONFIGURED"]
+
+
+def test_toolbox_disabled_recipient_pick_falls_back_to_the_first_eligible_contact(shop, pick_rule, settings):
+    settings.AI_TOOLBOX_ENABLED = False
+
+    contact, data = recipient_service.pick_recipient(shop, pick_rule)
+
+    assert contact.is_primary and data == {"reason": "fallback"}
+    assert messages(shop, ActivityKind.RULE) == ["recipient pick rejected: AI_TOOLBOX_DISABLED"]
+
+
+def test_toolbox_disabled_rotation_waits_in_retry_without_a_failure(shop, threads):
+    draft = threads.side_effect
+    threads.side_effect = ToolboxDisabledError()
+    thread = first_thread(threads, shop)
+
+    assert rotation_service.rotate_thread(thread) is None
+
+    claim = Claim.objects.get(key=f"rotation:{thread.pk}")
+    shop.refresh_from_db()
+    assert (claim.state, claim.failures, claim.detail, shop.rotation_count) == ("retry", 0, "toolbox_disabled", 0)
+    assert not messages(shop, ActivityKind.ROTATION_FAILED)
+    threads.side_effect = draft
+    assert rotation_service.rotate_thread(thread) is None
+    Claim.objects.update(attempted_at=timezone.now() - timedelta(hours=25))
+    assert rotation_service.rotate_thread(thread).email == "ola@example-shop-4.test"
