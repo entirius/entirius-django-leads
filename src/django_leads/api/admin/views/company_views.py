@@ -29,7 +29,7 @@ from django_leads.schemas.responses import (
 )
 from django_leads.services import company_service, customer_link_service, lead_type_service, stage_service
 
-_TAGS = ["Leads companies"]
+_TAGS = ["Leads Companies"]
 RECENT_ACTIVITIES = 20
 
 

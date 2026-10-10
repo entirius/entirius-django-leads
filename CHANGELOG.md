@@ -11,6 +11,9 @@
   entirius-django-utils releases that carry the switch.
 - Access: the module declares its own access areas on its AppConfig and its admin views (copied from the
   entirius-django-access defaults; behaviour unchanged).
+- OpenAPI: tags in Title Case (`Leads Activities`, `Companies`, `Contacts`, `Imports`, `Lead Types`, `Analysis
+  Profiles`, `Recipient Profiles`, `Rules`, `Stages`), also in `docs/openapi.yaml`. Metadata only; a client that
+  groups by tag name sees the new names.
 
 ## 0.3.0 — 2026-09-30
 

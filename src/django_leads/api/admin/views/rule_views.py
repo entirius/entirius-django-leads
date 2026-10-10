@@ -15,7 +15,7 @@ from django_leads.schemas.requests import RuleRequest, RuleRunListQuery, RuleUpd
 from django_leads.schemas.responses import RuleListResponse, RuleResponse, RuleRunListResponse, RuleRunResponse
 from django_leads.services import config_service
 
-_TAGS = ["Leads rules"]
+_TAGS = ["Leads Rules"]
 
 
 def dump(rule: StageRule) -> dict:

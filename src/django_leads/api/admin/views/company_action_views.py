@@ -16,7 +16,7 @@ from django_leads.schemas.requests import CommunicateRequest
 from django_leads.schemas.responses import AuditRequestedResponse, DraftResponse
 from django_leads.services import intel_service, outreach_service
 
-_TAGS = ["Leads companies"]
+_TAGS = ["Leads Companies"]
 
 
 class CompanyActionView(AdminView):

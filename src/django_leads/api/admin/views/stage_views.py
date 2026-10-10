@@ -14,7 +14,7 @@ from django_leads.schemas.requests import StageRequest, StageUpdateRequest
 from django_leads.schemas.responses import StageListResponse, StageResponse
 from django_leads.services import stage_service
 
-_TAGS = ["Leads stages"]
+_TAGS = ["Leads Stages"]
 
 
 def dump(stage: Stage) -> dict:
