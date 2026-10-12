@@ -17,6 +17,7 @@ from django_utils.toolbox import (
     ToolboxError,
     ToolboxStatus,
     ToolboxTimeoutError,
+    is_enabled,
     status,
 )
 from django_utils.toolbox.schemas import CompletionRequest
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 ANALYSIS_KEY = "leads.analysis"
 SOURCES = ("lighthouse", "urlscan", "heuristic")
+ANALYSIS_SKIPPED = "analysis skipped: AI toolbox disabled"
 
 
 class AnalysisFailed(Exception):
@@ -42,6 +44,10 @@ class AnalysisFailed(Exception):
         super().__init__(code)
         self.code = code
         self.transient = transient
+
+
+class AnalysisSkipped(Exception):
+    """The toolbox is switched off on purpose: nothing failed, the claim waits in `retry` for the switch."""
 
 
 def request_audit_for(company: Company, *, actor: str) -> Audit:
@@ -124,9 +130,19 @@ def _run_claimed(claim: Claim, company: Company, audit: Audit, succeeded_sources
         state = _finish_failed(claim, error)
         _analysis_failed(company, error.code, alert=claim.failures == 1 or state == ClaimState.FAILED)
         return False
+    except AnalysisSkipped:
+        _analysis_skipped(claim, company)
+        return False
     claim_service.finish(claim, ClaimState.DONE)
     rule_service.evaluate_rules(company, RuleTrigger.INTEL_READY, event=f"audit:{audit.pk}")
     return True
+
+
+def _analysis_skipped(claim: Claim, company: Company) -> None:
+    """No failure counted, no alert, no rules: `retry_failed_analyses` runs the analysis once the toolbox is on."""
+    claim_service.finish(claim, ClaimState.RETRY, "toolbox_disabled")
+    activity_service.record(company, ActivityKind.INTEL, ANALYSIS_SKIPPED)
+    logger.info("leads: intel analysis of company %s skipped: AI toolbox disabled", company.pk)
 
 
 def _finish_failed(claim: Claim, error: AnalysisFailed) -> str:
@@ -149,6 +165,8 @@ def _analyse_sources(company: Company, audit: Audit, succeeded_sources: list[str
 
 
 def _analyse(company: Company, audit: Audit) -> None:
+    if not is_enabled():
+        raise AnalysisSkipped()
     profile = AnalysisProfile.objects.filter(channel=company.channel, key=ANALYSIS_KEY, is_active=True).first()
     if profile is None:
         raise AnalysisFailed("no_profile")

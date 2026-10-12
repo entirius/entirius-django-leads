@@ -2,7 +2,21 @@
 [project]
 name = "entirius-django-leads"
 version = "0.3.0"
-description = "Leads and B2B pipeline for the Volkanos platform: companies, contacts, stages, rules and recipient selection"
+description = "Leads and B2B pipeline module for Entirius: companies, contacts, stages, rules and recipient selection"
+keywords = ["django", "leads", "crm", "b2b", "sales-pipeline", "gdpr", "ecommerce", "entirius"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+]
 authors = [{ name = "Entirius" }]
 maintainers = [
     { name = "Piotr Brzozowski", email = "piotrb@entirius.com" },
@@ -50,7 +64,11 @@ csv = "django_leads.connectors.csv:CsvConnector"
 twenty = "django_leads.connectors.twenty:TwentyConnector"
 
 [project.urls]
+Homepage = "https://docs.entirius.com/"
+Documentation = "https://github.com/entirius/entirius-django-leads/tree/develop/docs"
 Repository = "https://github.com/entirius/entirius-django-leads"
+Changelog = "https://github.com/entirius/entirius-django-leads/blob/develop/CHANGELOG.md"
+Issues = "https://github.com/entirius/entirius-django-leads/issues"
 
 # agreements 2.1.0, utils 2.1.0 and the leads-platform modules are not on PyPI until their releases — resolve the sibling clones.
 

@@ -93,7 +93,7 @@ class _Recipient:
     detail_item = responses.ProfileDetailResponse
 
 
-_ANALYSIS_TAG, _RECIPIENT_TAG = "Leads analysis profiles", "Leads recipient profiles"
+_ANALYSIS_TAG, _RECIPIENT_TAG = "Leads Analysis Profiles", "Leads Recipient Profiles"
 
 
 @_list_schema(

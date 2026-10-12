@@ -113,6 +113,12 @@ times. A success writes `intel analysed` and evaluates the `intel_ready` rules a
 alert fires on the first failure and on the one that ends the retries. Budget, model, schema and auth failures
 fail the claim at once. Drafts that failed during the outage are communicator's (`retry_failed_drafts`).
 
+**With the toolbox switched off** (`AI_TOOLBOX_ENABLED = False`) nothing fails and nothing alerts. An analysis is
+skipped (`analysis skipped: AI toolbox disabled`, claim `retry`, no failure counted) and `retry_failed_analyses`
+runs it once `status()` is `configured`. A rule or a manual `communicate/` with an AI template records
+`skipped: AI toolbox disabled` (the rule run is `skipped`, the API answers 503); a rotation waits in `retry` for
+`LEADS_ROTATION_RETRY_HOURS`. `ai_pick` falls back to the first eligible contact. Static templates draft as usual.
+
 Rules and rotation request real drafts; with `ai_pick` or an analysis they call the toolbox and spend its budget.
 
 ## Monitoring
@@ -124,6 +130,7 @@ Rules and rotation request real drafts; with `ai_pick` or an analysis they call 
 | Activity `rule error: <class>`, run `skipped` | timeline, `rule-runs/` | unexpected exception in a rule; details in the log (`leads: rule … failed`) |
 | run `detail = outcome_unknown` | `rule-runs/` | a worker died mid-call; never retried — decide by hand |
 | Activity `skipped: no clause set` / `skipped: no legal basis` | timeline | agreements has no clause set for the basis and language |
+| Activity `analysis skipped: AI toolbox disabled` / `skipped: AI toolbox disabled` | timeline | `AI_TOOLBOX_ENABLED` is `False` — deliberate, no action; analyses and rotations resume once it is on |
 | Activity `no unresponsive stage` + log `channel … has no unresponsive stage` | timeline, log | add a stage with `kind=unresponsive`; the thread rotates on the next scan |
 | Activity `rotation_gave_up` | timeline | `LEADS_ROTATION_MAX_FAILURES` attempts without a draft |
 | Activity `legal_basis_conflict` | timeline | an import or form proposed a different basis than the recorded one; resolve with PATCH |

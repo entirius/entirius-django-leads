@@ -16,7 +16,7 @@ from django_leads.schemas.requests import ContactCreateRequest, ContactListQuery
 from django_leads.schemas.responses import ContactListResponse, ContactResponse
 from django_leads.services import contact_service
 
-_TAGS = ["Leads contacts"]
+_TAGS = ["Leads Contacts"]
 TEXT_FIELDS = ("first_name", "last_name", "job_title", "phone")
 
 

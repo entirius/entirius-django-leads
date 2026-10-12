@@ -14,7 +14,7 @@ from django_leads.schemas.requests import LeadTypeRequest, LeadTypeUpdateRequest
 from django_leads.schemas.responses import LeadTypeListResponse, LeadTypeResponse
 from django_leads.services import lead_type_service
 
-_TAGS = ["Leads lead types"]
+_TAGS = ["Leads Lead Types"]
 
 
 def dump(lead_type: LeadType) -> dict:

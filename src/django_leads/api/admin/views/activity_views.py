@@ -17,7 +17,7 @@ class ActivityListView(AdminView):
     access_area = "leads.companies"
 
     @extend_schema(
-        tags=["Leads activities"],
+        tags=["Leads Activities"],
         operation_id="leads_activities_list",
         summary="Timeline of the channel, newest first",
         parameters=[OpenApiParameter("company", int, description="Company id."), *PAGE_PARAMETERS],

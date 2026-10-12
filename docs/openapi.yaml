@@ -28,7 +28,7 @@ paths:
         schema:
           type: integer
       tags:
-      - Leads activities
+      - Leads Activities
       security:
       - jwtAuth: []
       responses:
@@ -57,7 +57,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads analysis profiles
+      - Leads Analysis Profiles
       security:
       - jwtAuth: []
       responses:
@@ -85,7 +85,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads analysis profiles
+      - Leads Analysis Profiles
       requestBody:
         content:
           application/json:
@@ -133,7 +133,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads analysis profiles
+      - Leads Analysis Profiles
       security:
       - jwtAuth: []
       responses:
@@ -166,7 +166,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads analysis profiles
+      - Leads Analysis Profiles
       requestBody:
         content:
           application/json:
@@ -212,7 +212,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads analysis profiles
+      - Leads Analysis Profiles
       security:
       - jwtAuth: []
       responses:
@@ -275,7 +275,7 @@ paths:
           type: string
         description: Stage key.
       tags:
-      - Leads companies
+      - Leads Companies
       security:
       - jwtAuth: []
       responses:
@@ -304,7 +304,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads companies
+      - Leads Companies
       requestBody:
         content:
           application/json:
@@ -352,7 +352,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads companies
+      - Leads Companies
       security:
       - jwtAuth: []
       responses:
@@ -386,7 +386,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads companies
+      - Leads Companies
       requestBody:
         content:
           application/json:
@@ -433,7 +433,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads companies
+      - Leads Companies
       requestBody:
         content:
           application/json:
@@ -482,7 +482,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads companies
+      - Leads Companies
       security:
       - jwtAuth: []
       responses:
@@ -518,7 +518,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads companies
+      - Leads Companies
       security:
       - jwtAuth: []
       responses:
@@ -552,7 +552,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads companies
+      - Leads Companies
       requestBody:
         content:
           application/json:
@@ -606,7 +606,7 @@ paths:
         schema:
           type: integer
       tags:
-      - Leads contacts
+      - Leads Contacts
       security:
       - jwtAuth: []
       responses:
@@ -634,7 +634,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads contacts
+      - Leads Contacts
       requestBody:
         content:
           application/json:
@@ -682,7 +682,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads contacts
+      - Leads Contacts
       security:
       - jwtAuth: []
       responses:
@@ -716,7 +716,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads contacts
+      - Leads Contacts
       requestBody:
         content:
           application/json:
@@ -764,7 +764,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads contacts
+      - Leads Contacts
       security:
       - jwtAuth: []
       responses:
@@ -803,7 +803,7 @@ paths:
         schema:
           type: integer
       tags:
-      - Leads imports
+      - Leads Imports
       security:
       - jwtAuth: []
       responses:
@@ -831,7 +831,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads imports
+      - Leads Imports
       requestBody:
         content:
           multipart/form-data:
@@ -874,7 +874,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads imports
+      - Leads Imports
       security:
       - jwtAuth: []
       responses:
@@ -904,7 +904,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads lead types
+      - Leads Lead Types
       security:
       - jwtAuth: []
       responses:
@@ -932,7 +932,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads lead types
+      - Leads Lead Types
       requestBody:
         content:
           application/json:
@@ -980,7 +980,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads lead types
+      - Leads Lead Types
       security:
       - jwtAuth: []
       responses:
@@ -1014,7 +1014,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads lead types
+      - Leads Lead Types
       requestBody:
         content:
           application/json:
@@ -1059,7 +1059,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads lead types
+      - Leads Lead Types
       security:
       - jwtAuth: []
       responses:
@@ -1086,7 +1086,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads recipient profiles
+      - Leads Recipient Profiles
       security:
       - jwtAuth: []
       responses:
@@ -1114,7 +1114,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads recipient profiles
+      - Leads Recipient Profiles
       requestBody:
         content:
           application/json:
@@ -1162,7 +1162,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads recipient profiles
+      - Leads Recipient Profiles
       security:
       - jwtAuth: []
       responses:
@@ -1195,7 +1195,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads recipient profiles
+      - Leads Recipient Profiles
       requestBody:
         content:
           application/json:
@@ -1241,7 +1241,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads recipient profiles
+      - Leads Recipient Profiles
       security:
       - jwtAuth: []
       responses:
@@ -1279,7 +1279,7 @@ paths:
         schema:
           type: integer
       tags:
-      - Leads rules
+      - Leads Rules
       security:
       - jwtAuth: []
       responses:
@@ -1308,7 +1308,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads rules
+      - Leads Rules
       security:
       - jwtAuth: []
       responses:
@@ -1336,7 +1336,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads rules
+      - Leads Rules
       requestBody:
         content:
           application/json:
@@ -1382,7 +1382,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads rules
+      - Leads Rules
       security:
       - jwtAuth: []
       responses:
@@ -1415,7 +1415,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads rules
+      - Leads Rules
       requestBody:
         content:
           application/json:
@@ -1459,7 +1459,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads rules
+      - Leads Rules
       security:
       - jwtAuth: []
       responses:
@@ -1484,7 +1484,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads stages
+      - Leads Stages
       security:
       - jwtAuth: []
       responses:
@@ -1512,7 +1512,7 @@ paths:
           type: string
         required: true
       tags:
-      - Leads stages
+      - Leads Stages
       requestBody:
         content:
           application/json:
@@ -1560,7 +1560,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads stages
+      - Leads Stages
       security:
       - jwtAuth: []
       responses:
@@ -1593,7 +1593,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads stages
+      - Leads Stages
       requestBody:
         content:
           application/json:
@@ -1640,7 +1640,7 @@ paths:
           type: integer
         required: true
       tags:
-      - Leads stages
+      - Leads Stages
       security:
       - jwtAuth: []
       responses:
