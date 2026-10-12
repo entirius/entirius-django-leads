@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is
   skipped: Activity `analysis skipped: AI toolbox disabled`, claim `retry` with no failure counted, no rules;
@@ -14,6 +14,7 @@
 - OpenAPI: tags in Title Case (`Leads Activities`, `Companies`, `Contacts`, `Imports`, `Lead Types`, `Analysis
   Profiles`, `Recipient Profiles`, `Rules`, `Stages`), also in `docs/openapi.yaml`. Metadata only; a client that
   groups by tag name sees the new names.
+- Requires `entirius-django-utils` 2.3.0 and `entirius-django-communicator` 0.4.0 or later (the AI toolbox switch).
 
 ## 0.3.0 — 2026-09-30
 

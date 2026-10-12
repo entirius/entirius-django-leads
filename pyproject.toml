@@ -1,7 +1,7 @@
 
 [project]
 name = "entirius-django-leads"
-version = "0.3.0"
+version = "0.4.0"
 description = "Leads and B2B pipeline module for Entirius: companies, contacts, stages, rules and recipient selection"
 keywords = ["django", "leads", "crm", "b2b", "sales-pipeline", "gdpr", "ecommerce", "entirius"]
 classifiers = [
@@ -36,10 +36,10 @@ dependencies = [
     "celery>=5.3",
     "celery-once>=3.0.1",
     "tldextract>=5.3",
-    "entirius-django-utils>=2.1.0",
+    "entirius-django-utils>=2.3.0",
     "entirius-django-regional>=2.0.1",
     "entirius-django-agreements>=2.1.0",
-    "entirius-django-communicator>=0.3.0",
+    "entirius-django-communicator>=0.4.0",
     "entirius-django-siteintel>=0.1.0",
 ]
 
