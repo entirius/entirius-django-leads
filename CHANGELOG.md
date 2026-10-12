@@ -14,7 +14,7 @@
 - OpenAPI: tags in Title Case (`Leads Activities`, `Companies`, `Contacts`, `Imports`, `Lead Types`, `Analysis
   Profiles`, `Recipient Profiles`, `Rules`, `Stages`), also in `docs/openapi.yaml`. Metadata only; a client that
   groups by tag name sees the new names.
-- Requires `entirius-django-utils` 2.3.0 or later (the AI toolbox switch and `ToolboxDisabledError`).
+- Requires `entirius-django-utils` 2.3.0 and `entirius-django-communicator` 0.4.0 or later (the AI toolbox switch).
 
 ## 0.3.0 — 2026-09-30
 
