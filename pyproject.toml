@@ -1,7 +1,7 @@
 
 [project]
 name = "entirius-django-leads"
-version = "0.3.0"
+version = "0.4.0"
 description = "Leads and B2B pipeline module for Entirius: companies, contacts, stages, rules and recipient selection"
 keywords = ["django", "leads", "crm", "b2b", "sales-pipeline", "gdpr", "ecommerce", "entirius"]
 classifiers = [
