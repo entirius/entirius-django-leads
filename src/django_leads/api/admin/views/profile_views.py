@@ -17,6 +17,7 @@ from django_leads.services import config_service
 
 
 class _ProfileView(AdminView):
+    access_area = "leads.settings"
     model: type[Model]
     create_schema: type[BaseModel]
     update_schema: type[BaseModel]
@@ -92,7 +93,7 @@ class _Recipient:
     detail_item = responses.ProfileDetailResponse
 
 
-_ANALYSIS_TAG, _RECIPIENT_TAG = "Leads analysis profiles", "Leads recipient profiles"
+_ANALYSIS_TAG, _RECIPIENT_TAG = "Leads Analysis Profiles", "Leads Recipient Profiles"
 
 
 @_list_schema(

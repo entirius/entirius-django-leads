@@ -16,7 +16,7 @@ from django_leads.schemas.responses import ImportBatchDetailResponse, ImportBatc
 from django_leads.services import import_service
 from django_leads.tasks import enqueue_import
 
-_TAGS = ["Leads imports"]
+_TAGS = ["Leads Imports"]
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 UPLOAD_SCHEMA = {
     "multipart/form-data": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}}
@@ -36,6 +36,7 @@ def read_upload(request: Request) -> tuple[str, str, int]:
 
 
 class ImportListView(AdminView):
+    access_area = "leads.companies"
     parser_classes = [MultiPartParser]
 
     @extend_schema(
@@ -64,6 +65,8 @@ class ImportListView(AdminView):
 
 
 class ImportDetailView(AdminView):
+    access_area = "leads.companies"
+
     @extend_schema(
         tags=_TAGS,
         summary="One import batch with its report",

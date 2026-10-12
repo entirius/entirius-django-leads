@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 — 2026-10-12
+
+- **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is
+  skipped: Activity `analysis skipped: AI toolbox disabled`, claim `retry` with no failure counted, no rules;
+  `retry_failed_analyses` runs it once the toolbox is on. `request_draft` records `skipped: AI toolbox disabled`
+  and re-raises `ToolboxDisabledError` for an AI template: `POST companies/<id>/communicate/` answers 503
+  `AI_TOOLBOX_DISABLED`, a rule run is `skipped` (no cooldown), a rotation waits in `retry` without a counted
+  failure. `ai_pick` keeps its fallback to the first eligible contact. Needs the entirius-django-communicator and
+  entirius-django-utils releases that carry the switch.
+- Access: the module declares its own access areas on its AppConfig and its admin views (copied from the
+  entirius-django-access defaults; behaviour unchanged).
+- OpenAPI: tags in Title Case (`Leads Activities`, `Companies`, `Contacts`, `Imports`, `Lead Types`, `Analysis
+  Profiles`, `Recipient Profiles`, `Rules`, `Stages`), also in `docs/openapi.yaml`. Metadata only; a client that
+  groups by tag name sees the new names.
+- Requires `entirius-django-utils` 2.3.0 and `entirius-django-communicator` 0.4.0 or later (the AI toolbox switch).
+
 ## 0.3.0 — 2026-09-30
 
 - **Release order:** outreach now calls `communicate(audience=…)`, which needs the next entirius-django-communicator

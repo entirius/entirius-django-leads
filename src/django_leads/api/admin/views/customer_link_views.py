@@ -17,7 +17,7 @@ NOT_IMPLEMENTED_MESSAGE = "Customer creation is not implemented in v1 — create
 
 class CompanyCreateCustomerView(CompanyActionView):
     @extend_schema(
-        tags=["Leads companies"],
+        tags=["Leads Companies"],
         summary="Link the Customer owning the primary contact's email",
         description="409 (code not_implemented) when no Customer matches — v1 never creates accounts.",
         request=None,

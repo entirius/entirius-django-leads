@@ -16,7 +16,7 @@ from django_leads.schemas.requests import ContactCreateRequest, ContactListQuery
 from django_leads.schemas.responses import ContactListResponse, ContactResponse
 from django_leads.services import contact_service
 
-_TAGS = ["Leads contacts"]
+_TAGS = ["Leads Contacts"]
 TEXT_FIELDS = ("first_name", "last_name", "job_title", "phone")
 
 
@@ -31,6 +31,8 @@ def resolve_language(values: dict) -> dict:
 
 
 class ContactListView(AdminView):
+    access_area = "leads.companies"
+
     @extend_schema(
         tags=_TAGS,
         operation_id="leads_contacts_list",
@@ -64,6 +66,8 @@ class ContactListView(AdminView):
 
 
 class ContactDetailView(AdminView):
+    access_area = "leads.companies"
+
     def contact(self, channel_idx: str, pk: int) -> Contact:
         contacts = contact_service.list_contacts(self.channel(channel_idx))
         return self.get_in(contacts, pk, "Contact")

@@ -29,7 +29,7 @@ from django_leads.schemas.responses import (
 )
 from django_leads.services import company_service, customer_link_service, lead_type_service, stage_service
 
-_TAGS = ["Leads companies"]
+_TAGS = ["Leads Companies"]
 RECENT_ACTIVITIES = 20
 
 
@@ -54,6 +54,8 @@ def detail(company: Company) -> dict:
 
 
 class CompanyListView(AdminView):
+    access_area = "leads.companies"
+
     @extend_schema(
         tags=_TAGS,
         operation_id="leads_companies_list",
@@ -96,6 +98,8 @@ class CompanyListView(AdminView):
 
 
 class CompanyDetailView(AdminView):
+    access_area = "leads.companies"
+
     def company(self, channel_idx: str, pk: int) -> Company:
         companies = Company.objects.filter(channel=self.channel(channel_idx)).select_related("stage")
         return self.get_in(companies, pk, "Company")
@@ -126,6 +130,8 @@ class CompanyDetailView(AdminView):
 
 
 class CompanyTransitionView(AdminView):
+    access_area = "leads.companies"
+
     @extend_schema(
         tags=_TAGS,
         summary="Move a company to another stage",

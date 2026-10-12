@@ -1,9 +1,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """Standalone test settings: DATABASE_URL when set (CI / zeno), else sqlite in memory."""
 
 import tempfile
+from importlib.util import find_spec
 
 import dj_database_url
 
@@ -27,6 +29,9 @@ INSTALLED_APPS = [
     "django_communicator",
     "django_leads",
 ]
+# django_access when importable (zeno): tests/test_access_ownership.py proves the access declarations.
+if find_spec("django_access"):
+    INSTALLED_APPS.append("django_access")
 MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

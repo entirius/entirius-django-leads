@@ -17,6 +17,7 @@ from django.db.models import F, QuerySet
 from django.utils import timezone
 from django_communicator.enums import SequenceStopReason, ThreadStatus
 from django_communicator.models import Thread
+from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, ClaimState, StageKind
@@ -108,7 +109,11 @@ def _close(claim: Claim, detail: str) -> Claim:
 def _draft(claim: Claim, contact: Contact, thread_id: int) -> Contact | None:
     """Outside the claim lock; `request_draft` takes the gate on locked rows. The count and marker only after a draft."""
     company = claim.company
-    message = outreach_service.request_draft(company, contact, _template_key(company), actor="system")
+    try:
+        message = outreach_service.request_draft(company, contact, _template_key(company), actor="system")
+    except ToolboxDisabledError:  # no failure counted: tried again after `LEADS_ROTATION_RETRY_HOURS`
+        claim_service.finish(claim, ClaimState.RETRY, "toolbox_disabled")
+        return None
     if message is None or isinstance(message, outreach_service.Blocked):
         _no_draft(claim, contact, thread_id)
         return None

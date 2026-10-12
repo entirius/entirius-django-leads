@@ -83,7 +83,8 @@ stage) by `order`, each in three phases:
    `skipped`; `require_email` without a candidate contact → `skipped`; otherwise the run is written `claimed`.
 2. **Outreach, outside the lock.** Recipient pick among gate-eligible contacts (none → `blocked:
    no_eligible_contact`, no toolbox call), then `outreach_service.request_draft`.
-3. **Complete** the run (`fired` with `message <id> <status>`, `blocked`, or `skipped` "no draft").
+3. **Complete** the run (`fired` with `message <id> <status>`, `blocked`, or `skipped` "no draft"). An AI template
+   while the toolbox is switched off → `skipped` with `skipped: AI toolbox disabled`, which starts no cooldown.
 
 Skipped, blocked and cooldown runs never start a cooldown. A `claimed` run older than `LEADS_CLAIM_STALE_MINUTES`
 found by a redelivery is failed `outcome_unknown` and never retried. Any error becomes Activity
@@ -133,7 +134,9 @@ finds the claim) → one toolbox completion, never retried → `hooks` (≤ `LEA
 `lead_type` when it was `UNKNOWN` — only a `lead_type_guess` (or the pre-0.3 `company_type_guess`) that is an
 active lead type of the channel; the prompt gets the channel's list as `{lead_types}` → Activity `intel` → `intel_ready` rules. No succeeded source → no toolbox
 call, hooks cleared, Activity `intel_empty`, then the rules (never on stale hooks). A failure → Activity
-`analysis failed: <code>` + medium notification, no rules.
+`analysis failed: <code>` + medium notification, no rules. A toolbox switched off on purpose
+(`AI_TOOLBOX_ENABLED = False`) is not a failure: Activity `analysis skipped: AI toolbox disabled`, claim `retry`
+with no failure counted, no notification, no rules; the analysis runs once the switch is on.
 
 Prompts (`utils/prompts`): the system message is the static `DATA_INSTRUCTIONS`; the profile template is rendered
 into the user message in one pass (a value is never expanded again) with every company and site value wrapped in
@@ -147,7 +150,8 @@ Claim `rotation:<thread>` under the company row lock: another rotation of the co
 not yet written to → Activity "rotation exhausted", transition to the `unresponsive` stage, claim `done`. Otherwise
 the draft (template of the last draft) is requested outside the lock; only a draft raises `rotation_count` and
 writes Activity `rotation`. No draft → `rotation_failed`, claim `retry` after `LEADS_ROTATION_RETRY_HOURS`; after
-`LEADS_ROTATION_MAX_FAILURES` → `rotation_gave_up`, claim `failed`.
+`LEADS_ROTATION_MAX_FAILURES` → `rotation_gave_up`, claim `failed`. A draft refused because the toolbox is switched
+off → Activity `skipped: AI toolbox disabled`, claim `retry` with no failure counted.
 
 ## GDPR and retention
 

@@ -3,4 +3,4 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Leads and B2B pipeline for the Volkanos platform: companies, contacts, stages, rules and recipient selection"""
 
-__version__ = "0.1.0"
+__version__ = "0.4.0"
