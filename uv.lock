@@ -655,7 +655,7 @@ wheels = [
 
 [[package]]
 name = "entirius-django-communicator"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "celery" },
@@ -676,9 +676,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "redis" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/74/56408162954f3a55730a802a0d298c03c172a8fe863f1948614fa5cde6d2/entirius_django_communicator-0.3.0.tar.gz", hash = "sha256:69e374a048240587e856e42e8caa0f635dc9ef88178c4b824e018541f86e6661", size = 227430, upload-time = "2026-09-30T07:42:32.375Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/37/0a/365d10edf9991d7b829466f66db1577d00b8cd6ba6aaa6800687c526ec6b/entirius_django_communicator-0.4.0.tar.gz", hash = "sha256:56800cc1ba04fc49a63bf2c36ae55c949433e31357a99353b7645095ff496f48", size = 233049, upload-time = "2026-10-12T08:55:12.861Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/b8/f23469239550a548c984aa41407f7256642b77c207acffba6d8bc1e8f997/entirius_django_communicator-0.3.0-py3-none-any.whl", hash = "sha256:e891ec9461b19db021da25dd48e894f93515fad0a6b0cbc686611f947e10d58b", size = 143104, upload-time = "2026-09-30T07:42:31.303Z" },
+    { url = "https://files.pythonhosted.org/packages/57/45/845001fade1d24ec371decc847a3d9a4c4b84b7f4e0b7b826fa3aca3d473/entirius_django_communicator-0.4.0-py3-none-any.whl", hash = "sha256:857582a41069f9d4297244a1e2d27193286d095df0649a9455c606f06b3c9985", size = 145651, upload-time = "2026-10-12T08:55:11.766Z" },
 ]
 
 [[package]]
@@ -779,7 +779,7 @@ requires-dist = [
     { name = "djangorestframework-simplejwt", specifier = ">=5.3" },
     { name = "drf-spectacular", specifier = ">=0.27" },
     { name = "entirius-django-agreements", specifier = ">=2.1.0" },
-    { name = "entirius-django-communicator", specifier = ">=0.3.0" },
+    { name = "entirius-django-communicator", specifier = ">=0.4.0" },
     { name = "entirius-django-contact-forms", marker = "extra == 'contact-forms'" },
     { name = "entirius-django-contact-forms", marker = "extra == 'test'" },
     { name = "entirius-django-notifications", marker = "extra == 'notifications'", specifier = ">=0.1.0" },
