@@ -1528,6 +1528,116 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/reply-routes/:
+    get:
+      operationId: leads_reply_routes_list
+      summary: Stage handling per reply intent class (stored route or the safe default)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Reply Routes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyRouteListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/reply-routes/{intent}/:
+    put:
+      operationId: api_leads_v2_admin_reply_routes_update
+      description: Replaces the whole route of the class. Applies to replies that
+        arrive afterwards. The sequence and alerts of the same class are set in communicator
+        (`reply-actions/`).
+      summary: Set the stage handling of one intent class
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: intent
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Reply Routes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplyRouteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReplyRouteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReplyRouteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyRouteResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_reply_routes_destroy
+      summary: Back to the default for one intent class
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: intent
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Reply Routes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyRouteResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/reports/funnel/:
     get:
       operationId: api_leads_v2_admin_reports_funnel_retrieve
@@ -3256,6 +3366,16 @@ components:
           examples:
           - null
           title: Anonymised At
+        wrong_person_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: A reply said this is the wrong person; no more outreach to
+            the contact.
+          examples:
+          - null
+          title: Wrong Person At
       required:
       - id
       - company_id
@@ -3270,6 +3390,7 @@ components:
       - legal_basis
       - opt_out_at
       - anonymised_at
+      - wrong_person_at
       title: ContactResponse
       type: object
     ContactStrategy:
@@ -4813,6 +4934,103 @@ components:
       - key
       - model
       title: ProfileResponse
+      type: object
+    ReplyRouteListResponse:
+      properties:
+        results:
+          description: One entry per intent class.
+          examples:
+          - []
+          items:
+            $ref: '#/components/schemas/ReplyRouteResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ReplyRouteListResponse
+      type: object
+    ReplyRouteRequest:
+      additionalProperties: false
+      description: The whole route of one reply intent class; omitted fields take
+        the defaults.
+      properties:
+        action:
+          $ref: '#/components/schemas/ReplyStageAction'
+          default: reply_stage
+          description: reply_stage (the on-reply stage, as before T4), stage (the
+            stage below, never out of a terminal stage) or none (keep the stage).
+          examples:
+          - stage
+        stage_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: Required for action stage, forbidden otherwise; a stage of
+            this channel.
+          examples:
+          - 4
+          title: Stage Id
+        flag_contact:
+          default: false
+          description: 'Mark the replying contact as the wrong person: no more outreach
+            to them.'
+          examples:
+          - false
+          title: Flag Contact
+          type: boolean
+      title: ReplyRouteRequest
+      type: object
+    ReplyRouteResponse:
+      properties:
+        intent:
+          description: The reply intent class.
+          examples:
+          - not_interested
+          title: Intent
+          type: string
+        action:
+          description: reply_stage, stage or none.
+          examples:
+          - stage
+          title: Action
+          type: string
+        stage_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Target stage of action stage.
+          examples:
+          - 4
+          title: Stage Id
+        stage_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Its key.
+          examples:
+          - lost
+          title: Stage Key
+        flag_contact:
+          description: Flag the replying contact as the wrong person.
+          examples:
+          - false
+          title: Flag Contact
+          type: boolean
+        is_default:
+          description: 'No row: the code default applies.'
+          examples:
+          - true
+          title: Is Default
+          type: boolean
+      required:
+      - intent
+      - action
+      - stage_id
+      - stage_key
+      - flag_contact
+      - is_default
+      title: ReplyRouteResponse
       type: object
     RuleAction:
       enum:

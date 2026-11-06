@@ -100,7 +100,7 @@ outside the candidates, a toolbox error or a missing profile falls back to the f
 ## Outreach gate
 
 `recipient_service.block_reason(contact)` in this order: `do_not_contact`, `no_email`, `opted_out`, `anonymised`,
-`no_legal_basis`. It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
+`wrong_person`, `no_legal_basis`. It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
 the company, then the contact, and calls communicator `communicate()` on those rows — an opt-out or `do_not_contact`
 either commits first (blocked) or waits for the draft to commit. Every path (rules, rotation, manual communicate)
 goes through it exactly once; a refusal is one Activity `blocked: <reason>`, never a draft. The gate is the only
@@ -111,6 +111,17 @@ picks the template variant — communicator's cascade (language, lead type) → 
 language, lead type) → (default language, any). A type without its own variant gets the blank-audience template; no
 template at all is communicator's `no_template` failure, as before. Follow-ups of a sequence resolve without an
 audience (communicator does not keep one per thread).
+
+## Reply next steps (T4)
+
+communicator classifies a human reply (`Reply.intent`, needs the AI toolbox) and applies the sequence and alert part of
+the next step (its `reply-actions/`). leads applies the part only it can: `ReplyIntentRoute` per channel and class
+(`reply-routes/`), else the code default. `action` is `reply_stage` (move to the `on_reply` stage, what every reply did
+before), `stage` (move to a chosen stage, never out of a terminal one) or `none` (keep the stage); `flag_contact` sets
+`Contact.wrong_person_at`, which the outreach gate and the recipient candidates honour (`wrong_person`). Defaults:
+everything keeps the old move, `out_of_office` keeps the stage (it is not an answer), `wrong_person` flags the contact.
+A reply with no class takes the pre-T4 path. The alert follows communicator's plan (`notify`, `none` = silent). A due
+reminder (`reply_followup_due`) writes Activity `note` "follow-up reminder: <intent>".
 
 ## Integration
 

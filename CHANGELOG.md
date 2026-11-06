@@ -24,6 +24,13 @@
   `GET reports/funnel/` counts stage transitions and mean time in a stage from the timeline, filtered by origin and
   date window. The CSV header test now expects the extra `origin` column.
 
+- **Reply next steps per class (outbound roadmap T4, slice S11).** `ReplyIntentRoute` (migration 0012): per channel and
+  reply intent class, `action` `reply_stage` (default, as before) / `stage` (a chosen stage, never out of a terminal one)
+  / `none`, plus `flag_contact`. `Contact.wrong_person_at` (same migration) is set by a `wrong_person` reply by default;
+  the outreach gate then answers `wrong_person` and the contact is no longer a recipient candidate. Defaults: only
+  `out_of_office` keeps the stage. The reply alert follows communicator's plan (`notify`, `none` = silent) and names the
+  class. A due reminder from communicator becomes Activity `note`. `reply-routes/` and `reply-routes/<intent>/`; the
+  contact response carries `wrong_person_at`. Receivers tolerate a communicator without T4.
 - **Reply intent in the timeline (outbound roadmap T4, slice S10).** When communicator classified a reply (its
   `Reply.intent`, needs a communicator with migration 0013), Activity `reply` reads `reply received: <intent>` and
   carries `intent`, `intent_confidence` and `intent_return_date` in `data`. Unclassified replies read as before.

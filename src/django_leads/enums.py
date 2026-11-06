@@ -48,6 +48,24 @@ class ActivityKind(models.TextChoices):
     SCORE = "score", "Score"
 
 
+class ReplyIntent(models.TextChoices):
+    """The intent classes of a reply (communicator T4); the same values, leads does not import them."""
+
+    INTERESTED = "interested", "Interested"
+    NOT_NOW = "not_now", "Not now"
+    NOT_INTERESTED = "not_interested", "Not interested"
+    OUT_OF_OFFICE = "out_of_office", "Out of office"
+    WRONG_PERSON = "wrong_person", "Wrong person"
+    UNSUBSCRIBE = "unsubscribe", "Unsubscribe"
+    UNCLEAR = "unclear", "Unclear"
+
+
+class ReplyStageAction(models.TextChoices):
+    REPLY_STAGE = "reply_stage", "Move to the on-reply stage"
+    STAGE = "stage", "Move to a stage"
+    NONE = "none", "Keep the stage"
+
+
 class PilotResult(models.TextChoices):
     PENDING = "pending", "Pending"
     SUCCESS = "success", "Success"

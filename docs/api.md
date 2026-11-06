@@ -155,6 +155,8 @@ Report: `running` = pending, started, not past `end_date`; `overdue` = pending p
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
+| GET | `<channel_idx>/reply-routes/` | — | 200 `{results: [ReplyRouteResponse]}`: one entry per reply intent class (`interested`, `not_now`, `not_interested`, `out_of_office`, `wrong_person`, `unsubscribe`, `unclear`) with `action` (`reply_stage` · `stage` · `none`), `stage_id`, `stage_key`, `flag_contact`, `is_default` |
+| PUT / DELETE | `<channel_idx>/reply-routes/<intent>/` | PUT: `action` (default `reply_stage`), `stage_id` (needed for `stage`, forbidden otherwise, a stage of the channel), `flag_contact`; replaces the whole route | 200 / 200 (back to the default); 400 on a bad combination, 404 on an unknown intent |
 | GET | `<channel_idx>/scoring-profiles/` | — | 200 `{results: [ScoringProfileResponse]}` |
 | POST | `<channel_idx>/scoring-profiles/` | `key` (default `leads.scoring`), `thresholds` `{S, M, L}` (points, `S <= M <= L`), `rules` `[{field, op, value, points, label}]`, `disqualifiers` `[{field, op, value, label}]`, `is_active` | 201 `ScoringProfileResponse`; 409 `PROFILE_EXISTS` |
 | GET / PATCH / DELETE | `<channel_idx>/scoring-profiles/<id>/` | PATCH: any field, no nulls | 200 / 200 / 204 |
@@ -216,6 +218,6 @@ upper-cased; `message` is human-readable; `details` is empty for these (no field
 | `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient,scoring}-profiles/`: another profile of the channel already has this key |
 | `NO_SCORING_PROFILE` | `companies/<id>/score/`: the channel has no active scoring profile |
 | `COMMUNICATOR_CHANNEL_MISSING` | `communicate/`: no communicator channel is configured |
-| `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `no_legal_basis`) |
+| `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `wrong_person`, `no_legal_basis`) |
 | `NO_DRAFT` | `communicate/`: no draft could be built (no clause set) — see the company timeline |
 | `NOT_IMPLEMENTED` | `create-customer/`: no Customer owns the primary contact's email — v1 never creates accounts |

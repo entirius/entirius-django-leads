@@ -11,7 +11,15 @@ from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 
-from django_leads.enums import UNKNOWN_LEAD_TYPE, ContactStrategy, PilotResult, RuleAction, RuleTrigger, StageKind
+from django_leads.enums import (
+    UNKNOWN_LEAD_TYPE,
+    ContactStrategy,
+    PilotResult,
+    ReplyStageAction,
+    RuleAction,
+    RuleTrigger,
+    StageKind,
+)
 from django_leads.services.company_service import SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
@@ -407,3 +415,26 @@ class GdprRequest(BaseModel):
         except DjangoValidationError:
             raise ValueError("not a valid email address") from None
         return value.strip()
+
+
+class ReplyRouteRequest(BaseModel):
+    """The whole route of one reply intent class; omitted fields take the defaults."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: ReplyStageAction = Field(
+        default=ReplyStageAction.REPLY_STAGE,
+        description="reply_stage (the on-reply stage, as before T4), stage (the stage below, never out of a terminal "
+        "stage) or none (keep the stage).",
+        examples=["stage"],
+    )
+    stage_id: int | None = Field(
+        default=None,
+        description="Required for action stage, forbidden otherwise; a stage of this channel.",
+        examples=[4],
+    )
+    flag_contact: bool = Field(
+        default=False,
+        description="Mark the replying contact as the wrong person: no more outreach to them.",
+        examples=[False],
+    )

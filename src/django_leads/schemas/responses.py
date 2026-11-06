@@ -48,6 +48,9 @@ class ContactResponse(BaseModel):
     legal_basis: str | None = Field(description="GDPR legal basis; null when none.", examples=["consent"])
     opt_out_at: datetime | None = Field(description="Opted out.", examples=[None])
     anonymised_at: datetime | None = Field(description="Anonymised.", examples=[None])
+    wrong_person_at: datetime | None = Field(
+        description="A reply said this is the wrong person; no more outreach to the contact.", examples=[None]
+    )
 
     @classmethod
     def of(cls, contact) -> "ContactResponse":
@@ -370,3 +373,16 @@ class GdprEraseResponse(BaseModel):
     modules: dict[str, dict[str, int]] = Field(
         description="App name → rows touched per kind.", examples=[{"django_leads": {"contacts": 1, "activities": 4}}]
     )
+
+
+class ReplyRouteResponse(BaseModel):
+    intent: str = Field(description="The reply intent class.", examples=["not_interested"])
+    action: str = Field(description="reply_stage, stage or none.", examples=["stage"])
+    stage_id: int | None = Field(description="Target stage of action stage.", examples=[4])
+    stage_key: str | None = Field(description="Its key.", examples=["lost"])
+    flag_contact: bool = Field(description="Flag the replying contact as the wrong person.", examples=[False])
+    is_default: bool = Field(description="No row: the code default applies.", examples=[True])
+
+
+class ReplyRouteListResponse(BaseModel):
+    results: list[ReplyRouteResponse] = Field(description="One entry per intent class.", examples=[[]])

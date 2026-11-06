@@ -5,6 +5,8 @@
 """communicator → leads timeline: replies, reviewer skips, sends and finished sequences; the outreach gate on draft
 retries."""
 
+from django.utils import timezone
+from django_communicator import signals as communicator_signals
 from django_communicator.signals import (
     company_skipped,
     draft_retry_requested,
@@ -13,9 +15,15 @@ from django_communicator.signals import (
     sequence_finished,
 )
 
-from django_leads.enums import ActivityKind
-from django_leads.models import Activity, Company, Stage
-from django_leads.services import activity_service, alert_service, recipient_service, stage_service
+from django_leads.enums import ActivityKind, ReplyStageAction
+from django_leads.models import Activity, Company, Contact, Stage
+from django_leads.services import (
+    activity_service,
+    alert_service,
+    recipient_service,
+    reply_route_service,
+    stage_service,
+)
 from django_leads.signals._deferred import after_commit
 from django_leads.utils.refs import company_from_ref
 
@@ -28,10 +36,17 @@ def connect() -> None:
     message_sent.connect(on_message_sent, dispatch_uid="django_leads.on_message_sent")
     sequence_finished.connect(on_sequence_finished, dispatch_uid="django_leads.on_sequence_finished")
     draft_retry_requested.connect(on_draft_retry_requested, dispatch_uid="django_leads.on_draft_retry_requested")
+    followup_due = getattr(communicator_signals, "reply_followup_due", None)  # communicator with T4
+    if followup_due is not None:
+        followup_due.connect(on_reply_followup_due, dispatch_uid="django_leads.on_reply_followup_due")
 
 
 def on_reply_received(sender, thread, reply, **kwargs) -> None:
     after_commit(lambda: record_reply(thread, reply), "on_reply_received")
+
+
+def on_reply_followup_due(sender, thread, reply, **kwargs) -> None:
+    after_commit(lambda: record_followup_due(thread, reply), "on_reply_followup_due")
 
 
 def on_company_skipped(sender, subject_ref, **kwargs) -> None:
@@ -88,11 +103,41 @@ def record_reply(thread, reply) -> None:
         }
     message = f"reply received: {intent}" if intent else "reply received"
     activity_service.record(company, ActivityKind.REPLY, message, contact=contact, data=data)
-    stage = Stage.objects.filter(channel_id=company.channel_id, on_reply=True).order_by("order").first()
+    route = reply_route_service.route_for(company.channel, intent)
+    apply_route(company, contact, route)
+    plan = getattr(reply, "action_applied", None) or {}  # communicator's plan for the class (T4); none = pre-T4
+    severity = plan.get("notify", "high")
+    if severity != "none":
+        title = f"Reply from {company.name}" + (f" ({intent})" if intent else "")
+        alert_service.alert(company, severity=severity, title=title, body=(reply.body_text or "")[:REPLY_EXCERPT])
+
+
+def apply_route(company, contact, route) -> None:
+    """The stage and contact part of a reply's next step: `reply_stage` is the pre-T4 move; `stage` goes to the
+    configured stage but never out of a terminal one; `none` leaves the company where it is."""
+    if route.action == ReplyStageAction.REPLY_STAGE:
+        stage = Stage.objects.filter(channel_id=company.channel_id, on_reply=True).order_by("order").first()
+    elif route.action == ReplyStageAction.STAGE and not company.stage.is_terminal:
+        stage = Stage.objects.filter(pk=route.stage_id, channel_id=company.channel_id).first()
+    else:
+        stage = None
     if stage is not None:
         stage_service.transition_stage(company, stage, actor="system")
-    body = (reply.body_text or "")[:REPLY_EXCERPT]
-    alert_service.alert(company, severity="high", title=f"Reply from {company.name}", body=body)
+    if route.flag_contact and contact is not None and contact.wrong_person_at is None:
+        Contact.objects.filter(pk=contact.pk).update(wrong_person_at=timezone.now())
+        activity_service.record(company, ActivityKind.NOTE, "contact flagged: wrong person", contact=contact)
+
+
+def record_followup_due(thread, reply) -> None:
+    company = company_from_ref(thread.subject_ref)
+    if company is None:
+        return
+    contact = company.contacts.filter(email__iexact=thread.recipient_email).first()
+    intent = getattr(reply, "intent", "") or ""
+    data = {"thread_id": thread.pk, "reply_id": reply.pk, "intent": intent}
+    activity_service.record(
+        company, ActivityKind.NOTE, f"follow-up reminder: {intent or 'reply'}", contact=contact, data=data
+    )
 
 
 def block_company(subject_ref: str) -> None:
