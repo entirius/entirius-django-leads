@@ -19,6 +19,11 @@
   date. CRUD under `pilots/`, `pilots/report/` for running, overdue and licence-switch-due counts. A pilot does not
   move the company between stages.
 
+- **Lead origin and funnel report (outbound roadmap B5).** `Company.origin` (migration 0011), free text such as
+  `ecom.house` or a partner name; set on create, patch and the new CSV column `origin`, filter on `GET companies/`.
+  `GET reports/funnel/` counts stage transitions and mean time in a stage from the timeline, filtered by origin and
+  date window. The CSV header test now expects the extra `origin` column.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is

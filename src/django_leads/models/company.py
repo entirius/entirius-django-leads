@@ -24,6 +24,9 @@ class Company(BaseModel):
     stage = models.ForeignKey("django_leads.Stage", on_delete=models.PROTECT, related_name="companies")
     stage_entered_at = models.DateTimeField()
     source = models.CharField(max_length=16, choices=LeadSource.choices)
+    # Where the lead came from in business terms ("ecom.house", an implementation partner); `source` is only how it
+    # entered the module (csv, form, ...). Free text, set on create, patch and CSV import; blank = unknown.
+    origin = models.CharField(max_length=64, blank=True, default="")
     external_ref = models.CharField(max_length=128, blank=True, default="")
     do_not_contact = models.BooleanField(default=False)
     customer_uid = models.UUIDField(null=True, blank=True)

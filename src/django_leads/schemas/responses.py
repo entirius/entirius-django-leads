@@ -83,6 +83,9 @@ class CompanyResponse(BaseModel):
     stage: StageResponse = Field(description="Current stage.")
     stage_entered_at: datetime = Field(description="Entered the current stage.", examples=["2026-09-13T12:00:00Z"])
     source: str = Field(description="csv, form, manual or connector.", examples=["csv"])
+    origin: str = Field(
+        description="Business origin (ecom.house, a partner); empty when unknown.", examples=["ecom.house"]
+    )
     external_ref: str = Field(description="External reference.", examples=[""])
     do_not_contact: bool = Field(description="Never contact.", examples=[False])
     customer_uid: str | None = Field(description="Linked customer uid (read-only).", examples=[None])
@@ -288,6 +291,37 @@ class PilotReportResponse(BaseModel):
         description="Mean length of finished pilots with an end date.", examples=[28.5]
     )
     license_switch_due: list[LicenseSwitchDue] = Field(description="Successful pilots switching within 30 days.")
+
+
+class FunnelTransition(BaseModel):
+    from_stage: str = Field(description="Stage key left.", examples=["new"])
+    to_stage: str = Field(description="Stage key entered.", examples=["contacted"])
+    count: int = Field(description="Transitions in the window.", examples=[12])
+    avg_seconds_in_from_stage: float | None = Field(
+        description="Mean time spent in `from_stage` first.", examples=[86400.0]
+    )
+
+
+class FunnelStage(BaseModel):
+    stage: str = Field(description="Stage key.", examples=["contacted"])
+    current: int = Field(description="Companies in the stage now (origin filter, no date window).", examples=[5])
+    entered: int = Field(description="Transitions into the stage in the window.", examples=[12])
+    left: int = Field(description="Transitions out of the stage in the window.", examples=[7])
+    avg_seconds_in_stage: float | None = Field(
+        description="Mean time in the stage before leaving.", examples=[172800.0]
+    )
+
+
+class FunnelOrigin(BaseModel):
+    origin: str = Field(description="Origin; empty = unknown.", examples=["ecom.house"])
+    companies: int = Field(description="Companies of the channel.", examples=[40])
+
+
+class FunnelResponse(BaseModel):
+    companies: int = Field(description="Companies matching the origin filter.", examples=[40])
+    transitions: list[FunnelTransition] = Field(description="Per (from, to) pair, most frequent first.")
+    stages: list[FunnelStage] = Field(description="Per stage seen.")
+    origins: list[FunnelOrigin] = Field(description="Companies per origin, whole channel (never filtered).")
 
 
 class DraftResponse(BaseModel):

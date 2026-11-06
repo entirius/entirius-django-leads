@@ -22,10 +22,10 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), paging | 200 `CompanyListResponse` |
-| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry` | 201 `CompanyDetailResponse`; Activity `note` "company created" |
+| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `origin` (exact), `has_reply` (bool: at least one `reply` Activity), paging | 200 `CompanyListResponse` |
+| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry`, `origin` (max 64) | 201 `CompanyDetailResponse`; Activity `note` "company created" |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
-| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact`, `external_ref` | 200 `CompanyDetailResponse` |
+| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `origin`, `description`, `do_not_contact`, `external_ref` | 200 `CompanyDetailResponse` |
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
 | POST | `<channel_idx>/companies/<id>/communicate/` | `template_key`, `contact_id` | 201 `{message_id, status}` — a reviewable communicator draft |
 | POST | `<channel_idx>/companies/<id>/request-audit/` | — | 202 `{audit_id, status}`; Activity `intel` "audit requested" |
@@ -106,6 +106,20 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
 skipped_count, row_count, size_bytes, created_by, created_at`. The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
+
+## Funnel report
+
+| Method | Path | Body / params | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/reports/funnel/` | `origin` (exact; empty value = companies without one; omitted = any), `date_from`, `date_to` (ISO 8601 with offset; 400 when reversed or malformed) | 200 `FunnelResponse` |
+
+`FunnelResponse`: `companies`; `transitions: [{from_stage, to_stage, count, avg_seconds_in_from_stage}]` most frequent
+first; `stages: [{stage, current, entered, left, avg_seconds_in_stage}]`; `origins: [{origin, companies}]` (whole
+channel, never filtered). Built from Activity `stage` rows: time in a stage runs from the previous entry (or the
+company's creation for the first stage) to the transition that leaves it; the date window bounds the transition time
+only; companies still in a stage count in `current` but not in the averages. `Company.origin` (free text, <= 64) is the
+business origin (`ecom.house`, a partner); it is distinct from `source` (csv, form, manual, connector). It is set on
+`POST`/`PATCH companies/` and by the CSV column `origin` (fills an empty value only), and filters `GET companies/`.
 
 ## Pilots
 

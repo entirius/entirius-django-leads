@@ -14,6 +14,7 @@ from django_leads.api.admin.views import import_views as imports
 from django_leads.api.admin.views import lead_type_views as lead_type
 from django_leads.api.admin.views import pilot_views as pilot
 from django_leads.api.admin.views import profile_views as profile
+from django_leads.api.admin.views import report_views as report
 from django_leads.api.admin.views import rule_views as rule
 from django_leads.api.admin.views import scoring_views as scoring
 from django_leads.api.admin.views import stage_views as stage
@@ -32,6 +33,7 @@ urlpatterns = [
     path("contacts/<int:pk>/", contact.ContactDetailView.as_view(), name="admin-leads-contact"),
     path("stages/", stage.StageListView.as_view(), name="admin-leads-stages"),
     path("stages/<int:pk>/", stage.StageDetailView.as_view(), name="admin-leads-stage"),
+    path("reports/funnel/", report.FunnelReportView.as_view(), name="admin-leads-funnel"),
     path("pilots/", pilot.PilotListView.as_view(), name="admin-leads-pilots"),
     path("pilots/report/", pilot.PilotReportView.as_view(), name="admin-leads-pilot-report"),
     path("pilots/<int:pk>/", pilot.PilotDetailView.as_view(), name="admin-leads-pilot"),

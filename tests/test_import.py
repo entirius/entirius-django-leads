@@ -103,6 +103,7 @@ def test_item4_whitespace_header_reads_its_own_column():
             "language": "",
             "legal_basis": "",
             "phone": "",
+            "origin": "",
         }
     ]
 

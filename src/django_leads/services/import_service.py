@@ -214,6 +214,7 @@ def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any]
         "website": raw["website"],
         "lead_type": _row_lead_type(raw, lookups.lead_types),
         "industry": raw["industry"],
+        "origin": raw["origin"],
         "source": LeadSource.CSV,
     }
     _check_lengths(Company, company)

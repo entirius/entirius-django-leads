@@ -35,6 +35,7 @@ class CompanyListQuery(BaseModel):
         examples=["RETAILER"],
     )
     do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
+    origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.")
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
 
     @field_validator("sort")
@@ -55,6 +56,9 @@ class CompanyCreateRequest(BaseModel):
         default=UNKNOWN_LEAD_TYPE, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code."
     )
     industry: str = Field(default="", max_length=128, description="Industry.")
+    origin: str = Field(
+        default="", max_length=64, description="Business origin, e.g. ecom.house.", examples=["ecom.house"]
+    )
 
     @field_validator("domain")
     @classmethod
@@ -69,6 +73,7 @@ class CompanyUpdateRequest(BaseModel):
     website: HttpUrl | None = Field(default=None, description="Website URL.")
     lead_type: str | None = Field(default=None, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code.")
     industry: str | None = Field(default=None, max_length=128, description="Industry.")
+    origin: str | None = Field(default=None, max_length=64, description="Business origin, e.g. ecom.house.")
     description: str | None = Field(default=None, description="Free-text description.")
     do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
     external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
@@ -345,6 +350,22 @@ class PilotUpdateRequest(BaseModel):
     result: PilotResult | None = Field(default=None, description="pending, success, failure or cancelled.")
     result_note: str | None = Field(default=None, description="Outcome in words.")
     license_switch_date: date | None = Field(default=None, description="Licence switch day; null clears it.")
+
+
+class FunnelQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    origin: str | None = Field(
+        default=None, max_length=64, description="Exact origin; empty string = companies without one; omit = any."
+    )
+    date_from: AwareDatetime | None = Field(default=None, description="Transitions at or after this time.")
+    date_to: AwareDatetime | None = Field(default=None, description="Transitions at or before this time.")
+
+    @model_validator(mode="after")
+    def window_is_ordered(self) -> "FunnelQuery":
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from is after date_to")
+        return self
 
 
 class CommunicateRequest(BaseModel):

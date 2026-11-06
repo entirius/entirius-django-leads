@@ -32,7 +32,7 @@ src/django_leads/
 ├── api/admin/    urls.py  views/ _base (auth, paging, Conflict)  company  company_action  contact  stage
 │                 activity  import  rule  profile  gdpr  customer_link (accounts only)  test_views (development)
 ├── services/     activity (only Activity writer)  company  contact  stage (transition_stage)  import  sweep
-│                 form  rule  recipient (outreach gate)  outreach (request_draft)  intel  rotation  claim  scoring  pilot
+│                 form  rule  recipient (outreach gate)  outreach (request_draft)  intel  rotation  claim  scoring  pilot  funnel
 │                 retention  gdpr  erased_address  config  customer_link  alert
 ├── signals/      __init__ (stage_entered, contact_anonymised)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge

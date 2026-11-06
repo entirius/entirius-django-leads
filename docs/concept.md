@@ -13,7 +13,7 @@ from agreements, website facts from siteintel, human attention from notification
 |---|---|---|
 | `Channel` | `idx`, languages, `retention_days` | own scoping model (created in Django admin, never from signals); its `idx` is the same channel in communicator, agreements and siteintel |
 | `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply`, `on_sent` | new companies enter the lowest `order`; unique `(channel, key)` |
-| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at` | unique `(channel, domain)`; `domain` is always the registrable domain |
+| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source` (entry path), `origin` (business origin, e.g. `ecom.house`), `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at` | unique `(channel, domain)`; `domain` is always the registrable domain |
 | `LeadType` | `code`, `label`, `order`, `is_active` | configuration per channel, unique `(channel, code)`; `Company.lead_type` holds the code (no FK); `UNKNOWN` is built in, never a row |
 | `Contact` | email, names, job title, phone, language, `is_primary`, `legal_basis`, `opt_out_at`, `anonymised_at` | unique `(company, email)` for non-empty emails; `legal_basis` null = none recorded |
 | `Activity` | `kind`, `message`, `data`, `actor` per company (and contact) | written only by `activity_service`, which also moves `Company.last_activity_at` |

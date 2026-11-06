@@ -135,3 +135,9 @@ def test_score_endpoint_without_profile_is_409(admin_api, shop):
 def test_rule_api_accepts_score_action(admin_api, channel):
     body = {"trigger": "intel_ready", "action": "score"}
     assert admin_api.post(api_url("rules/"), body, format="json").status_code == 201
+
+
+def test_empty_profile_scores_by_thresholds_only(channel, company):
+    ScoringProfile.objects.create(channel=channel, thresholds={"S": 0, "M": 10, "L": 20})
+    result = scoring_service.score(company)  # no hooks, no contacts, no rules
+    assert (result.points, result.segment, result.reasons) == (0, "S3", [])

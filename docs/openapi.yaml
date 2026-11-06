@@ -252,6 +252,11 @@ paths:
           type: string
         description: Lead type code of the channel, or UNKNOWN.
       - in: query
+        name: origin
+        schema:
+          type: string
+        description: Exact origin.
+      - in: query
         name: page
         schema:
           type: integer
@@ -1523,6 +1528,54 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/reports/funnel/:
+    get:
+      operationId: api_leads_v2_admin_reports_funnel_retrieve
+      description: Built from the `stage` timeline entries. `origin` filters companies
+        (empty value = no origin, omitted = any); `date_from` / `date_to` bound the
+        transition time. Companies still in a stage are counted in `current` but not
+        in the time averages.
+      summary: 'Funnel: transitions between stages and time spent in a stage'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: ISO 8601 datetime with offset.
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: ISO 8601 datetime with offset.
+      - in: query
+        name: origin
+        schema:
+          type: string
+        description: Exact company origin; empty = without origin.
+      tags:
+      - Leads Reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/rule-runs/:
     get:
       operationId: leads_rule_runs_list
@@ -2670,6 +2723,14 @@ components:
           maxLength: 128
           title: Industry
           type: string
+        origin:
+          default: ''
+          description: Business origin, e.g. ecom.house.
+          examples:
+          - ecom.house
+          maxLength: 64
+          title: Origin
+          type: string
       required:
       - domain
       title: CompanyCreateRequest
@@ -2747,6 +2808,12 @@ components:
           - csv
           title: Source
           type: string
+        origin:
+          description: Business origin (ecom.house, a partner); empty when unknown.
+          examples:
+          - ecom.house
+          title: Origin
+          type: string
         external_ref:
           description: External reference.
           examples:
@@ -2807,6 +2874,7 @@ components:
       - stage
       - stage_entered_at
       - source
+      - origin
       - external_ref
       - do_not_contact
       - customer_uid
@@ -2926,6 +2994,12 @@ components:
           - csv
           title: Source
           type: string
+        origin:
+          description: Business origin (ecom.house, a partner); empty when unknown.
+          examples:
+          - ecom.house
+          title: Origin
+          type: string
         external_ref:
           description: External reference.
           examples:
@@ -2974,6 +3048,7 @@ components:
       - stage
       - stage_entered_at
       - source
+      - origin
       - external_ref
       - do_not_contact
       - customer_uid
@@ -3341,6 +3416,135 @@ components:
       - emails_count
       - rotation_count
       type: string
+    FunnelOrigin:
+      properties:
+        origin:
+          description: Origin; empty = unknown.
+          examples:
+          - ecom.house
+          title: Origin
+          type: string
+        companies:
+          description: Companies of the channel.
+          examples:
+          - 40
+          title: Companies
+          type: integer
+      required:
+      - origin
+      - companies
+      title: FunnelOrigin
+      type: object
+    FunnelResponse:
+      properties:
+        companies:
+          description: Companies matching the origin filter.
+          examples:
+          - 40
+          title: Companies
+          type: integer
+        transitions:
+          description: Per (from, to) pair, most frequent first.
+          items:
+            $ref: '#/components/schemas/FunnelTransition'
+          title: Transitions
+          type: array
+        stages:
+          description: Per stage seen.
+          items:
+            $ref: '#/components/schemas/FunnelStage'
+          title: Stages
+          type: array
+        origins:
+          description: Companies per origin, whole channel (never filtered).
+          items:
+            $ref: '#/components/schemas/FunnelOrigin'
+          title: Origins
+          type: array
+      required:
+      - companies
+      - transitions
+      - stages
+      - origins
+      title: FunnelResponse
+      type: object
+    FunnelStage:
+      properties:
+        stage:
+          description: Stage key.
+          examples:
+          - contacted
+          title: Stage
+          type: string
+        current:
+          description: Companies in the stage now (origin filter, no date window).
+          examples:
+          - 5
+          title: Current
+          type: integer
+        entered:
+          description: Transitions into the stage in the window.
+          examples:
+          - 12
+          title: Entered
+          type: integer
+        left:
+          description: Transitions out of the stage in the window.
+          examples:
+          - 7
+          title: Left
+          type: integer
+        avg_seconds_in_stage:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time in the stage before leaving.
+          examples:
+          - 172800.0
+          title: Avg Seconds In Stage
+      required:
+      - stage
+      - current
+      - entered
+      - left
+      - avg_seconds_in_stage
+      title: FunnelStage
+      type: object
+    FunnelTransition:
+      properties:
+        from_stage:
+          description: Stage key left.
+          examples:
+          - new
+          title: From Stage
+          type: string
+        to_stage:
+          description: Stage key entered.
+          examples:
+          - contacted
+          title: To Stage
+          type: string
+        count:
+          description: Transitions in the window.
+          examples:
+          - 12
+          title: Count
+          type: integer
+        avg_seconds_in_from_stage:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time spent in `from_stage` first.
+          examples:
+          - 86400.0
+          title: Avg Seconds In From Stage
+      required:
+      - from_stage
+      - to_stage
+      - count
+      - avg_seconds_in_from_stage
+      title: FunnelTransition
+      type: object
     GdprEraseResponse:
       properties:
         modules:
@@ -3859,6 +4063,14 @@ components:
           default: null
           description: Industry.
           title: Industry
+        origin:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          default: null
+          description: Business origin, e.g. ecom.house.
+          title: Origin
         description:
           anyOf:
           - type: string
