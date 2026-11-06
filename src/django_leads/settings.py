@@ -21,6 +21,10 @@ LEADS_IMPORT_STALE_MINUTES = getattr(settings, "LEADS_IMPORT_STALE_MINUTES", 30)
 # Skipped rows kept in a batch report (row number + reason code); the counters always cover every row.
 LEADS_IMPORT_REPORT_MAX = getattr(settings, "LEADS_IMPORT_REPORT_MAX", 1000)
 
+# A company created by a CSV import enters its first stage with the `stage_entered` signal, so the rules of that stage
+# run (a site audit, a draft for review). False = imported companies wait until someone moves them.
+LEADS_IMPORT_FIRES_RULES = getattr(settings, "LEADS_IMPORT_FIRES_RULES", True)
+
 # contact_forms bridge: body keys read from `Lead.raw_data`.
 LEADS_FORM_CONSENT_KEYS = getattr(settings, "LEADS_FORM_CONSENT_KEYS", ["marketing_consent"])
 LEADS_FORM_WEBSITE_KEYS = getattr(settings, "LEADS_FORM_WEBSITE_KEYS", ["website", "url"])

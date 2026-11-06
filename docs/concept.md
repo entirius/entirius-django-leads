@@ -68,7 +68,7 @@ import / form / manual ──▶ first stage
 ```
 
 `stage_service.transition_stage` is the only stage change: it writes Activity `stage` and sends `stage_entered`
-after commit. A company created by an import enters its first stage without the signal. A stage holding companies
+after commit. A company created by an import enters its first stage with the signal (`LEADS_IMPORT_FIRES_RULES`). A stage holding companies
 cannot be deleted.
 
 ## Rules

@@ -6,6 +6,9 @@
   to a company is sent, it moves to the first stage flagged `on_sent`, forward only and never out of a terminal
   stage (so a company that already replied stays where it is). `StageResponse`, `StageRequest` and
   `StageUpdateRequest` carry the flag.
+- **Import fires the first-stage rules (outbound roadmap F1).** A company created by a CSV import now sends
+  `stage_entered` for its first stage after the chunk commits; matched companies send nothing. Switch off with
+  `LEADS_IMPORT_FIRES_RULES = False`. The CMS import page already promised this.
 
 ## 0.4.0 — 2026-10-12
 

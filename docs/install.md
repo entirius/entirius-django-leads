@@ -55,6 +55,7 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | Setting | Default | Meaning |
 |---|---|---|
 | `LEADS_QUEUE_DEFAULT` | `"leads_default"` | Celery queue of every task |
+| `LEADS_IMPORT_FIRES_RULES` | `true` | a company created by a CSV import enters its first stage with `stage_entered`, so its rules run; false = imported companies wait |
 | `LEADS_IMPORT_CHUNK_SIZE` | `500` | CSV rows per chunk; counters, report and resume point commit with each chunk |
 | `LEADS_IMPORT_TMP_DIR` | `<system temp>/django_leads` | uploads wait here as `<batch_id>.csv` (file 0600, directory 0700) |
 | `LEADS_IMPORT_STALE_MINUTES` | `30` | a `pending`/`running` batch without progress this long is failed `stale`; also the form-submission retry cutoff |

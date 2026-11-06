@@ -62,8 +62,9 @@ item below: the rule, then where it is enforced.
   the rules twice (cooldown still applies to fired runs).
 - **`StageRule.require_legal_basis` has no effect** and is not exposed by the API — the gate is the only legal-basis
   decision.
-- **A company created by an import does not send `stage_entered`.** Its first-stage rules run only after a transition
-  or through `test/evaluate/`.
+- **A company created by an import sends `stage_entered` for the first stage** (`LEADS_IMPORT_FIRES_RULES`, default
+  true), after the chunk commits; companies the import only matched send nothing. Switch it off to import without
+  starting any rule.
 - **Profile prompts and rendered prompts never reach logs, Activity data or API lists.** Company and site values go
   into prompts only wrapped by `utils/prompts.as_data`.
 
