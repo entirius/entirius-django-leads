@@ -18,6 +18,9 @@ class Stage(BaseModel):
     kind = models.CharField(max_length=16, choices=StageKind.choices, default=StageKind.OPEN)
     is_terminal = models.BooleanField(default=False)
     on_reply = models.BooleanField(default=False)
+    on_sent = models.BooleanField(
+        default=False, help_text="Companies move here (forward only) when the first message to them is sent."
+    )
 
     class Meta:
         ordering = ["order"]

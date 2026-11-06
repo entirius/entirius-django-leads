@@ -32,7 +32,7 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 | POST | `<channel_idx>/companies/<id>/create-customer/` | — (routed only with `django_accounts`) | 200 `{customer_uid}` |
 
 `CompanyResponse`: `id, name, domain, website, lead_type, industry, description, platform, hooks, stage
-{id, key, label, order, kind, is_terminal, on_reply}, stage_entered_at, source, external_ref, do_not_contact,
+{id, key, label, order, kind, is_terminal, on_reply, on_sent}, stage_entered_at, source, external_ref, do_not_contact,
 customer_uid, rotation_count, last_activity_at`. `CompanyDetailResponse` adds `contacts` (all), `activities`
 (last 20, newest first) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
 the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks` and `customer_uid` are not
@@ -72,7 +72,7 @@ stays on the timeline. Removing an anonymised contact answers 200 and changes no
 | Method | Path | Body | Success |
 |---|---|---|---|
 | GET | `<channel_idx>/stages/` | — | 200 `{results: [StageResponse]}` in `order` |
-| POST | `<channel_idx>/stages/` | `key` (slug, required), `label` (required), `order` (0–32767), `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply` | 201 `StageResponse` |
+| POST | `<channel_idx>/stages/` | `key` (slug, required), `label` (required), `order` (0–32767), `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply`, `on_sent` | 201 `StageResponse` |
 | GET | `<channel_idx>/stages/<id>/` | — | 200 `StageResponse` |
 | PATCH | `<channel_idx>/stages/<id>/` | any field of POST, no nulls | 200 `StageResponse` |
 | DELETE | `<channel_idx>/stages/<id>/` | — | 204 |

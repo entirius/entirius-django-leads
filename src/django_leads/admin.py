@@ -29,7 +29,7 @@ class ReadOnlyAdmin(admin.ModelAdmin):
 class StageInline(admin.TabularInline):
     model = Stage
     extra = 0
-    fields = ("order", "key", "label", "kind", "is_terminal", "on_reply")
+    fields = ("order", "key", "label", "kind", "is_terminal", "on_reply", "on_sent")
 
 
 class LeadTypeInline(admin.TabularInline):

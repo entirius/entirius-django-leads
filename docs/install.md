@@ -112,10 +112,11 @@ only). Another package adds its own by declaring an entry point in that group.
 ## Bootstrap order
 
 ```
-manage.py migrate                        # 0001–0006
+manage.py migrate                        # 0001–0008
 # Django admin: create a Channel (idx = the channel of communicator, agreements and siteintel) with its stages
 #   — the lowest `order` is where new companies enter; one stage with kind=unresponsive for rotation;
-#   one stage with on_reply=True to move replying companies
+#   one stage with on_reply=True to move replying companies; one with on_sent=True (usually "contacted") for the
+#   first sent message
 # admin API: analysis-profiles/ (key leads.analysis), recipient-profiles/ (key leads.pick_recipient), rules/
 manage.py leads_import_csv --channel <idx> --file leads.csv --sync   # first import, no worker needed
 ```

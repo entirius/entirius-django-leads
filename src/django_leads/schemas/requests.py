@@ -135,6 +135,7 @@ class StageRequest(BaseModel):
     kind: StageKind = Field(default=StageKind.OPEN, description="open, won, lost or unresponsive.")
     is_terminal: bool = Field(default=False, description="No further stages after this one.")
     on_reply: bool = Field(default=False, description="Companies move here when a contact replies.")
+    on_sent: bool = Field(default=False, description="Companies move here (forward only) when a message is sent.")
 
 
 class StageUpdateRequest(BaseModel):
@@ -146,6 +147,7 @@ class StageUpdateRequest(BaseModel):
     kind: StageKind | None = Field(default=None, description="open, won, lost or unresponsive.")
     is_terminal: bool | None = Field(default=None, description="No further stages after this one.")
     on_reply: bool | None = Field(default=None, description="Companies move here when a contact replies.")
+    on_sent: bool | None = Field(default=None, description="Companies move here (forward only) when a message is sent.")
 
 
 class LeadTypeRequest(BaseModel):

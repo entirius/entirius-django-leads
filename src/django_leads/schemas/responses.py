@@ -19,6 +19,7 @@ class StageResponse(BaseModel):
     kind: str = Field(description="open, won, lost or unresponsive.", examples=["open"])
     is_terminal: bool = Field(description="No further stages.", examples=[False])
     on_reply: bool = Field(description="Target on a reply.", examples=[False])
+    on_sent: bool = Field(description="Target when a message is sent (forward only).", examples=[False])
 
 
 class LeadTypeResponse(BaseModel):

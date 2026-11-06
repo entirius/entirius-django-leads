@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **First send moves the company (outbound roadmap F3).** `Stage.on_sent` (migration 0008): when the first message
+  to a company is sent, it moves to the first stage flagged `on_sent`, forward only and never out of a terminal
+  stage (so a company that already replied stays where it is). `StageResponse`, `StageRequest` and
+  `StageUpdateRequest` carry the flag.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is

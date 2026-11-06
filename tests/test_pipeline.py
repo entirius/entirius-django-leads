@@ -473,6 +473,49 @@ def test_reply_received_moves_to_on_reply_stage_and_notifies(shop, django_captur
     assert alert.call_args.kwargs == {"severity": "high", "title": "Reply from Example Shop 4", "body": "x" * 200}
 
 
+def _send(shop, django_capture_on_commit_callbacks):
+    thread = SimpleNamespace(pk=5, subject_ref=f"leads.Company:{shop.pk}", recipient_email="ola@example-shop-4.test")
+    message = SimpleNamespace(pk=7, thread=thread)
+    with django_capture_on_commit_callbacks(execute=True):
+        communicator_signals.message_sent.send(sender=None, message=message)
+    shop.refresh_from_db()
+
+
+def test_F3_first_send_moves_company_to_on_sent_stage(shop, django_capture_on_commit_callbacks):
+    assert shop.stage.key == "new"
+
+    _send(shop, django_capture_on_commit_callbacks)
+
+    assert shop.stage.key == "contacted"
+    assert messages(shop, ActivityKind.STAGE) == ["stage new -> contacted"]
+    assert messages(shop, ActivityKind.SENT) == ["message sent"]
+
+
+def test_F3_send_never_moves_a_company_backwards_or_out_of_a_terminal_stage(shop, django_capture_on_commit_callbacks):
+    for key in ("replied", "won"):
+        Company.objects.filter(pk=shop.pk).update(stage=Stage.objects.get(channel=shop.channel, key=key))
+        shop.refresh_from_db()
+
+        _send(shop, django_capture_on_commit_callbacks)
+
+        assert shop.stage.key == key
+
+
+def test_F3_without_on_sent_stage_nothing_moves(shop, django_capture_on_commit_callbacks):
+    Stage.objects.filter(channel=shop.channel).update(on_sent=False)
+
+    _send(shop, django_capture_on_commit_callbacks)
+
+    assert shop.stage.key == "new"
+
+
+def test_F3_second_send_is_a_noop(shop, django_capture_on_commit_callbacks):
+    _send(shop, django_capture_on_commit_callbacks)
+    _send(shop, django_capture_on_commit_callbacks)
+
+    assert messages(shop, ActivityKind.STAGE) == ["stage new -> contacted"]
+
+
 def test_company_skipped_sets_do_not_contact(shop, django_capture_on_commit_callbacks):
     with django_capture_on_commit_callbacks(execute=True):
         communicator_signals.company_skipped.send(sender=None, subject_ref=f"leads.Company:{shop.pk}", message=None)

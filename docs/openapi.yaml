@@ -3658,6 +3658,13 @@ components:
           default: null
           description: Companies move here when a contact replies.
           title: On Reply
+        on_sent:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Companies move here (forward only) when a message is sent.
+          title: On Sent
       title: StageUpdateRequest
       type: object
     ProfileDetailResponse:
@@ -4092,6 +4099,11 @@ components:
           description: Companies move here when a contact replies.
           title: On Reply
           type: boolean
+        on_sent:
+          default: false
+          description: Companies move here (forward only) when a message is sent.
+          title: On Sent
+          type: boolean
       required:
       - key
       - label
@@ -4141,6 +4153,12 @@ components:
           - false
           title: On Reply
           type: boolean
+        on_sent:
+          description: Target when a message is sent (forward only).
+          examples:
+          - false
+          title: On Sent
+          type: boolean
       required:
       - id
       - key
@@ -4149,6 +4167,7 @@ components:
       - kind
       - is_terminal
       - on_reply
+      - on_sent
       title: StageResponse
       type: object
     TransitionRequest:

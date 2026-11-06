@@ -102,3 +102,14 @@ def record_sent(message) -> None:
     activity_service.record(
         company, ActivityKind.SENT, "message sent", contact=contact, data={"message_id": message.pk}
     )
+    move_to_sent_stage(company)
+
+
+def move_to_sent_stage(company: Company) -> None:
+    """F3: the `on_sent` stage takes a company whose stage lies before it — never backwards, never out of a terminal
+    stage, so a reply that already moved the company is kept."""
+    company.refresh_from_db()
+    target = Stage.objects.filter(channel_id=company.channel_id, on_sent=True).order_by("order", "id").first()
+    if target is None or company.stage.is_terminal or company.stage.order >= target.order:
+        return
+    stage_service.transition_stage(company, target, actor="system")
