@@ -24,6 +24,7 @@ RULES = [
         [
             "unsubscribe",
             "wypisz",
+            "wypisa",
             "wypis ",
             "usun mnie",
             "usunac mnie",

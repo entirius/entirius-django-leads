@@ -24,6 +24,9 @@
   `GET reports/funnel/` counts stage transitions and mean time in a stage from the timeline, filtered by origin and
   date window. The CSV header test now expects the extra `origin` column.
 
+- **Golden set of replies (outbound roadmap T4, slice S12).** Tests only: `tests/test_reply_golden.py` runs the sample
+  replies through a real communicator ingest over a fake toolbox client (`tests/fake_toolbox.py`,
+  `tests/reply_flow.py`).
 - **Reply next steps per class (outbound roadmap T4, slice S11).** `ReplyIntentRoute` (migration 0012): per channel and
   reply intent class, `action` `reply_stage` (default, as before) / `stage` (a chosen stage, never out of a terminal one)
   / `none`, plus `flag_contact`. `Contact.wrong_person_at` (same migration) is set by a `wrong_person` reply by default;

@@ -42,8 +42,9 @@ def raw_reply(body: str, *, sender: str, subject: str = "Re: Your shop audit", m
 
 @pytest.fixture
 def inbox(shop, django_capture_on_commit_callbacks):
-    """`inbox(body)` ingests one reply from the shop's primary contact into a thread with a running sequence.
-    Returns SimpleNamespace(reply, thread, state, notify, company)."""
+    """`inbox(body, subject=...)` ingests one reply from the shop's primary contact into a thread with a running
+    sequence; `inbox.channel` is the communicator channel. Returns SimpleNamespace(reply, thread, state, notify,
+    company)."""
     from django_communicator.enums import MessageStatus
     from django_communicator.models import Channel, Message, Sequence, Thread, ThreadSequenceState
     from django_communicator.services.inbound_service import ingest
@@ -76,4 +77,5 @@ def inbox(shop, django_capture_on_commit_callbacks):
             company=shop,
         )
 
+    receive.channel = channel
     return receive
