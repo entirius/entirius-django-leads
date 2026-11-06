@@ -24,6 +24,10 @@
   `GET reports/funnel/` counts stage transitions and mean time in a stage from the timeline, filtered by origin and
   date window. The CSV header test now expects the extra `origin` column.
 
+- **Reply intent in the timeline (outbound roadmap T4, slice S10).** When communicator classified a reply (its
+  `Reply.intent`, needs a communicator with migration 0013), Activity `reply` reads `reply received: <intent>` and
+  carries `intent`, `intent_confidence` and `intent_return_date` in `data`. Unclassified replies read as before.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is

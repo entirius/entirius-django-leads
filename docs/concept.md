@@ -116,7 +116,7 @@ audience (communicator does not keep one per thread).
 
 | Module | leads calls | leads receives |
 |---|---|---|
-| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply`, `on_reply` stage, high notification; `company_skipped` (reviewer) → `do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent` and, once, the `on_sent` stage (forward only, never out of a terminal stage); `sequence_finished` → rotation task |
+| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` (with the communicator intent class when it classified the reply), `on_reply` stage, high notification; `company_skipped` (reviewer) → `do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent` and, once, the `on_sent` stage (forward only, never out of a terminal stage); `sequence_finished` → rotation task |
 | agreements | `resolve_clause_set(channel_idx, legal_basis, language)` + `render_legal_footer` (contact language, else channel default); `LegalBasis` enum | — (a missing clause set → Activity `skipped: no clause set`, no draft) |
 | siteintel | `request_audit(domain, channel_idx, requested_by)` | `report_ready(audit, succeeded_sources)` → analysis task |
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |

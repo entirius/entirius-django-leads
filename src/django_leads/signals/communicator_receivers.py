@@ -78,7 +78,16 @@ def record_reply(thread, reply) -> None:
         return
     contact = company.contacts.filter(email__iexact=thread.recipient_email).first()
     data = {"thread_id": thread.pk, "reply_id": reply.pk}
-    activity_service.record(company, ActivityKind.REPLY, "reply received", contact=contact, data=data)
+    intent = getattr(reply, "intent", "") or ""  # T4: set by communicator when the AI toolbox classified the reply
+    if intent:
+        confidence, return_date = getattr(reply, "intent_confidence", None), getattr(reply, "intent_return_date", None)
+        data |= {
+            "intent": intent,
+            "intent_confidence": confidence,
+            "intent_return_date": return_date and str(return_date),
+        }
+    message = f"reply received: {intent}" if intent else "reply received"
+    activity_service.record(company, ActivityKind.REPLY, message, contact=contact, data=data)
     stage = Stage.objects.filter(channel_id=company.channel_id, on_reply=True).order_by("order").first()
     if stage is not None:
         stage_service.transition_stage(company, stage, actor="system")

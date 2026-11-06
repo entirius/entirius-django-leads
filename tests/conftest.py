@@ -16,6 +16,8 @@ from django_leads.services import company_service
 
 CHANNEL_IDX = "default-europe"
 
+pytest_plugins = ["tests.reply_flow"]  # T4 fixtures: fake_intent, inbox
+
 
 @pytest.fixture(autouse=True)
 def eager_celery():
