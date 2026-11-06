@@ -536,6 +536,44 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/score/:
+    post:
+      operationId: api_leads_v2_admin_companies_score_create
+      description: Runs the channel's active scoring profile and writes Activity `score`.
+        409 `NO_SCORING_PROFILE` when the channel has none.
+      summary: Score the company now
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/transition/:
     post:
       operationId: api_leads_v2_admin_companies_transition_create
@@ -1460,6 +1498,186 @@ paths:
         required: true
       tags:
       - Leads Rules
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/:
+    get:
+      operationId: leads_scoring_profiles_list
+      summary: Scoring profiles of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_scoring_profiles_create
+      summary: Add a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/{id}/:
+    get:
+      operationId: api_leads_v2_admin_scoring_profiles_retrieve
+      summary: One scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_scoring_profiles_partial_update
+      summary: Update a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_scoring_profiles_destroy
+      summary: Delete a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
       security:
       - jwtAuth: []
       responses:
@@ -2883,6 +3101,16 @@ components:
       - status
       title: DraftResponse
       type: object
+    FieldEnum:
+      enum:
+      - lead_type
+      - industry
+      - platform
+      - domain
+      - hooks_count
+      - emails_count
+      - rotation_count
+      type: string
     GdprEraseResponse:
       properties:
         modules:
@@ -3274,6 +3502,14 @@ components:
       - contract
       title: LegalBasis
       type: string
+    OpEnum:
+      enum:
+      - eq
+      - in
+      - contains
+      - gte
+      - lte
+      type: string
     PatchedAnalysisProfileUpdateRequest:
       additionalProperties: false
       properties:
@@ -3551,7 +3787,7 @@ components:
           - $ref: '#/components/schemas/RuleAction'
           - type: 'null'
           default: null
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           anyOf:
           - maxLength: 128
@@ -3606,6 +3842,53 @@ components:
           description: Evaluation order.
           title: Order
       title: RuleUpdateRequest
+      type: object
+    PatchedScoringProfileUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_.]+$
+            type: string
+          - type: 'null'
+          default: null
+          title: Key
+        thresholds:
+          anyOf:
+          - $ref: '#/components/schemas/Thresholds'
+          - type: 'null'
+          default: null
+          description: Points needed for S3, S2 and S1.
+        rules:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ScoreRuleItem'
+            maxItems: 100
+            type: array
+          - type: 'null'
+          default: null
+          description: Point rules.
+          title: Rules
+        disqualifiers:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ScoreCondition'
+            maxItems: 50
+            type: array
+          - type: 'null'
+          default: null
+          description: Force S4.
+          title: Disqualifiers
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Used by scoring.
+          title: Is Active
+      title: ScoringProfileUpdateRequest
       type: object
     PatchedStageUpdateRequest:
       additionalProperties: false
@@ -3785,6 +4068,7 @@ components:
       enum:
       - request_audit
       - communicate
+      - score
       title: RuleAction
       type: string
     RuleListResponse:
@@ -3819,7 +4103,7 @@ components:
         action:
           $ref: '#/components/schemas/RuleAction'
           default: communicate
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           default: ''
           description: Communicator template; for communicate.
@@ -3886,7 +4170,7 @@ components:
           - 102
           title: Stage Id
         action:
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
           examples:
           - communicate
           title: Action
@@ -4038,6 +4322,251 @@ components:
       - intel_ready
       title: RuleTrigger
       type: string
+    ScoreCondition:
+      additionalProperties: false
+      description: A test on one company fact; shared by scoring rules (with points)
+        and disqualifiers.
+      properties:
+        field:
+          allOf:
+          - $ref: '#/components/schemas/FieldEnum'
+          description: Company fact tested.
+          examples:
+          - lead_type
+          title: Field
+        op:
+          allOf:
+          - $ref: '#/components/schemas/OpEnum'
+          description: eq, in (value is a list), contains (text), gte or lte (counts).
+          examples:
+          - in
+          title: Op
+        value:
+          anyOf:
+          - type: string
+          - type: integer
+          - items:
+              type: string
+            type: array
+          description: Compared value; a list for `in`.
+          examples:
+          - - RETAILER
+          title: Value
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - retailer
+          maxLength: 120
+          title: Label
+          type: string
+      required:
+      - field
+      - op
+      - value
+      title: ScoreCondition
+      type: object
+    ScoreResponse:
+      properties:
+        segment:
+          description: S1 (best) to S4.
+          examples:
+          - S2
+          title: Segment
+          type: string
+        points:
+          description: Sum of the matching rules.
+          examples:
+          - 45
+          title: Points
+          type: integer
+        disqualified:
+          description: A disqualifier forced S4.
+          examples:
+          - false
+          title: Disqualified
+          type: boolean
+        reasons:
+          description: Matching rules or disqualifiers.
+          examples:
+          - - 'retailer: +30'
+          items:
+            type: string
+          title: Reasons
+          type: array
+        profile_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Profile used.
+          examples:
+          - 100
+          title: Profile Id
+      required:
+      - segment
+      - points
+      - disqualified
+      - reasons
+      - profile_id
+      title: ScoreResponse
+      type: object
+    ScoreRuleItem:
+      additionalProperties: false
+      properties:
+        field:
+          allOf:
+          - $ref: '#/components/schemas/FieldEnum'
+          description: Company fact tested.
+          examples:
+          - lead_type
+          title: Field
+        op:
+          allOf:
+          - $ref: '#/components/schemas/OpEnum'
+          description: eq, in (value is a list), contains (text), gte or lte (counts).
+          examples:
+          - in
+          title: Op
+        value:
+          anyOf:
+          - type: string
+          - type: integer
+          - items:
+              type: string
+            type: array
+          description: Compared value; a list for `in`.
+          examples:
+          - - RETAILER
+          title: Value
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - retailer
+          maxLength: 120
+          title: Label
+          type: string
+        points:
+          description: Added when the condition holds.
+          examples:
+          - 30
+          maximum: 100
+          minimum: -100
+          title: Points
+          type: integer
+      required:
+      - field
+      - op
+      - value
+      - points
+      title: ScoreRuleItem
+      type: object
+    ScoringProfileListResponse:
+      properties:
+        results:
+          description: Profiles of the channel.
+          items:
+            $ref: '#/components/schemas/ScoringProfileResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ScoringProfileListResponse
+      type: object
+    ScoringProfileRequest:
+      additionalProperties: false
+      properties:
+        key:
+          default: leads.scoring
+          description: Profile key.
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_.]+$
+          title: Key
+          type: string
+        thresholds:
+          $ref: '#/components/schemas/Thresholds'
+          description: Points needed for S3, S2 and S1; below S is S4.
+        rules:
+          description: Point rules.
+          items:
+            $ref: '#/components/schemas/ScoreRuleItem'
+          maxItems: 100
+          title: Rules
+          type: array
+        disqualifiers:
+          description: Force S4.
+          items:
+            $ref: '#/components/schemas/ScoreCondition'
+          maxItems: 50
+          title: Disqualifiers
+          type: array
+        is_active:
+          default: true
+          description: Used by scoring.
+          title: Is Active
+          type: boolean
+      required:
+      - thresholds
+      title: ScoringProfileRequest
+      type: object
+    ScoringProfileResponse:
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.scoring
+          title: Key
+          type: string
+        thresholds:
+          additionalProperties:
+            type: integer
+          description: Points for S3 (S), S2 (M), S1 (L).
+          examples:
+          - L: 70
+            M: 40
+            S: 20
+          title: Thresholds
+          type: object
+        rules:
+          description: Point rules.
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Rules
+          type: array
+        disqualifiers:
+          description: Conditions forcing S4.
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Disqualifiers
+          type: array
+        is_active:
+          description: Used by scoring.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - key
+      - thresholds
+      - rules
+      - disqualifiers
+      - is_active
+      title: ScoringProfileResponse
+      type: object
     StageKind:
       enum:
       - open
@@ -4102,6 +4631,17 @@ components:
         on_sent:
           default: false
           description: Companies move here (forward only) when a message is sent.
+          title: On Sent
+          type: boolean
+        on_sent:
+          default: false
+          description: Companies move here (forward only) when a message is sent.
+          title: On Sent
+          type: boolean
+        on_sent:
+          description: Target when a message is sent (forward only).
+          examples:
+          - false
           title: On Sent
           type: boolean
       required:
@@ -4169,6 +4709,39 @@ components:
       - on_reply
       - on_sent
       title: StageResponse
+      type: object
+    Thresholds:
+      additionalProperties: false
+      properties:
+        S:
+          description: Points from which a company is S3.
+          examples:
+          - 20
+          maximum: 1000
+          minimum: 0
+          title: S
+          type: integer
+        M:
+          description: Points from which a company is S2.
+          examples:
+          - 40
+          maximum: 1000
+          minimum: 0
+          title: M
+          type: integer
+        L:
+          description: Points from which a company is S1.
+          examples:
+          - 70
+          maximum: 1000
+          minimum: 0
+          title: L
+          type: integer
+      required:
+      - S
+      - M
+      - L
+      title: Thresholds
       type: object
     TransitionRequest:
       additionalProperties: false

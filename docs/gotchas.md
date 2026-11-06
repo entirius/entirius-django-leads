@@ -67,6 +67,10 @@ item below: the rule, then where it is enforced.
   starting any rule.
 - **Profile prompts and rendered prompts never reach logs, Activity data or API lists.** Company and site values go
   into prompts only wrapped by `utils/prompts.as_data`.
+- **Scoring never calls the toolbox and writes only Activity `score`.** `Company` keeps no segment; the latest `score`
+  entry is the answer. Profile `rules` / `disqualifiers` / `thresholds` are validated by the request schemas only: a
+  profile saved through Django admin skips that check, and `scoring_service` assumes the shapes. One active profile per
+  channel is used (lowest `key`).
 
 ## Receivers
 

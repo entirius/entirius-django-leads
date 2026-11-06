@@ -27,6 +27,7 @@ groups:
       - Claim
       - AnalysisProfile
       - RecipientPickProfile
+      - ScoringProfile
   - name: gdpr
     title: "Erased Addresses"
     models:

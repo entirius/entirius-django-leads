@@ -14,6 +14,7 @@ from django_leads.api.admin.views import import_views as imports
 from django_leads.api.admin.views import lead_type_views as lead_type
 from django_leads.api.admin.views import profile_views as profile
 from django_leads.api.admin.views import rule_views as rule
+from django_leads.api.admin.views import scoring_views as scoring
 from django_leads.api.admin.views import stage_views as stage
 from django_leads.api.admin.views import test_views as dev
 
@@ -25,6 +26,7 @@ urlpatterns = [
     path(
         "companies/<int:pk>/request-audit/", action.CompanyRequestAuditView.as_view(), name="admin-leads-request-audit"
     ),
+    path("companies/<int:pk>/score/", scoring.CompanyScoreView.as_view(), name="admin-leads-score"),
     path("contacts/", contact.ContactListView.as_view(), name="admin-leads-contacts"),
     path("contacts/<int:pk>/", contact.ContactDetailView.as_view(), name="admin-leads-contact"),
     path("stages/", stage.StageListView.as_view(), name="admin-leads-stages"),
@@ -41,6 +43,8 @@ urlpatterns = [
     path(
         "analysis-profiles/<int:pk>/", profile.AnalysisProfileDetailView.as_view(), name="admin-leads-analysis-profile"
     ),
+    path("scoring-profiles/", scoring.ScoringProfileListView.as_view(), name="admin-leads-scoring-profiles"),
+    path("scoring-profiles/<int:pk>/", scoring.ScoringProfileDetailView.as_view(), name="admin-leads-scoring-profile"),
     path("recipient-profiles/", profile.RecipientProfileListView.as_view(), name="admin-leads-recipient-profiles"),
     path(
         "recipient-profiles/<int:pk>/",

@@ -10,6 +10,11 @@
   `stage_entered` for its first stage after the chunk commits; matched companies send nothing. Switch off with
   `LEADS_IMPORT_FIRES_RULES = False`. The CMS import page already promised this.
 
+- **Scoring (outbound roadmap B3).** `ScoringProfile` per channel (migration 0009): thresholds S/M/L, point rules and
+  disqualifiers. `scoring_service.score` returns a segment S1-S4 with reasons; the result is Activity `score`. Rule action
+  `score` runs it from `stage_entered` or `intel_ready`; `POST companies/<id>/score/` runs it by hand; CRUD under
+  `scoring-profiles/`.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is

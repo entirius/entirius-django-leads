@@ -9,7 +9,15 @@ from typing import Any
 from django.db import IntegrityError, transaction
 from django.db.models import Model, QuerySet
 
-from django_leads.models import AnalysisProfile, Channel, RecipientPickProfile, RuleRun, Stage, StageRule
+from django_leads.models import (
+    AnalysisProfile,
+    Channel,
+    RecipientPickProfile,
+    RuleRun,
+    ScoringProfile,
+    Stage,
+    StageRule,
+)
 
 RULE_FIELDS = frozenset(
     {
@@ -20,6 +28,7 @@ RULE_FIELDS = frozenset(
 PROFILE_FIELDS = {
     AnalysisProfile: frozenset({"key", "prompt_text", "json_schema", "model", "is_active"}),
     RecipientPickProfile: frozenset({"key", "prompt_text", "json_schema", "model"}),
+    ScoringProfile: frozenset({"key", "thresholds", "rules", "disqualifiers", "is_active"}),
 }
 
 

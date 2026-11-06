@@ -45,6 +45,7 @@ class ActivityKind(models.TextChoices):
     LEGAL_BASIS_CONFLICT = "legal_basis_conflict", "Legal basis conflict"
     INTEL = "intel", "Intel"
     INTEL_EMPTY = "intel_empty", "Intel empty"
+    SCORE = "score", "Score"
 
 
 class ImportStatus(models.TextChoices):
@@ -62,6 +63,7 @@ class RuleTrigger(models.TextChoices):
 class RuleAction(models.TextChoices):
     REQUEST_AUDIT = "request_audit", "Request audit"
     COMMUNICATE = "communicate", "Communicate"
+    SCORE = "score", "Score"
 
 
 class ContactStrategy(models.TextChoices):

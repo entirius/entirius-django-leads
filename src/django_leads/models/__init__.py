@@ -13,6 +13,7 @@ from django_leads.models.import_batch import ImportBatch
 from django_leads.models.lead_type import LeadType
 from django_leads.models.recipient_pick_profile import RecipientPickProfile
 from django_leads.models.rule_run import RuleRun
+from django_leads.models.scoring_profile import ScoringProfile
 from django_leads.models.stage import Stage
 from django_leads.models.stage_rule import StageRule
 
@@ -28,6 +29,7 @@ __all__ = [
     "LeadType",
     "RecipientPickProfile",
     "RuleRun",
+    "ScoringProfile",
     "Stage",
     "StageRule",
 ]

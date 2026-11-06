@@ -169,7 +169,7 @@ class RuleResponse(BaseModel):
     id: int = Field(description="Rule id.", examples=[100])
     trigger: str = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
     stage_id: int | None = Field(description="Stage id.", examples=[102])
-    action: str = Field(description="request_audit or communicate.", examples=["communicate"])
+    action: str = Field(description="request_audit, communicate or score.", examples=["communicate"])
     template_key: str = Field(description="Communicator template.", examples=["lead.cold.b2b"])
     contact_strategy: str = Field(description="primary or ai_pick.", examples=["primary"])
     require_hooks: bool = Field(description="Skip companies without hooks.", examples=[True])
@@ -227,6 +227,31 @@ class ProfileListResponse(BaseModel):
 
 class AnalysisProfileListResponse(BaseModel):
     results: list[AnalysisProfileResponse] = Field(description="Profiles of the channel.")
+
+
+class ScoringProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Profile id.", examples=[100])
+    key: str = Field(description="Profile key.", examples=["leads.scoring"])
+    thresholds: dict[str, int] = Field(
+        description="Points for S3 (S), S2 (M), S1 (L).", examples=[{"S": 20, "M": 40, "L": 70}]
+    )
+    rules: list[dict[str, Any]] = Field(description="Point rules.", examples=[[]])
+    disqualifiers: list[dict[str, Any]] = Field(description="Conditions forcing S4.", examples=[[]])
+    is_active: bool = Field(description="Used by scoring.", examples=[True])
+
+
+class ScoringProfileListResponse(BaseModel):
+    results: list[ScoringProfileResponse] = Field(description="Profiles of the channel.")
+
+
+class ScoreResponse(BaseModel):
+    segment: str = Field(description="S1 (best) to S4.", examples=["S2"])
+    points: int = Field(description="Sum of the matching rules.", examples=[45])
+    disqualified: bool = Field(description="A disqualifier forced S4.", examples=[False])
+    reasons: list[str] = Field(description="Matching rules or disqualifiers.", examples=[["retailer: +30"]])
+    profile_id: int | None = Field(description="Profile used.", examples=[100])
 
 
 class DraftResponse(BaseModel):

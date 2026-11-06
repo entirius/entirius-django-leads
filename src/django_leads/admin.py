@@ -13,6 +13,7 @@ from django_leads.models import (
     LeadType,
     RecipientPickProfile,
     RuleRun,
+    ScoringProfile,
     Stage,
     StageRule,
 )
@@ -104,3 +105,8 @@ class AnalysisProfileAdmin(admin.ModelAdmin):
 @admin.register(RecipientPickProfile)
 class RecipientPickProfileAdmin(admin.ModelAdmin):
     list_display = ("channel", "key", "model")
+
+
+@admin.register(ScoringProfile)
+class ScoringProfileAdmin(admin.ModelAdmin):
+    list_display = ("channel", "key", "is_active")

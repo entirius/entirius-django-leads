@@ -3,6 +3,8 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Request schemas of the leads admin API v2."""
 
+from typing import Literal
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
@@ -182,7 +184,7 @@ class RuleRequest(BaseModel):
 
     trigger: RuleTrigger = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
     stage_id: int | None = Field(default=None, description="Stage; required for stage_entered.", examples=[102])
-    action: RuleAction = Field(default=RuleAction.COMMUNICATE, description="request_audit or communicate.")
+    action: RuleAction = Field(default=RuleAction.COMMUNICATE, description="request_audit, communicate or score.")
     template_key: str = Field(default="", max_length=128, description="Communicator template; for communicate.")
     contact_strategy: ContactStrategy = Field(default=ContactStrategy.PRIMARY, description="primary or ai_pick.")
     require_hooks: bool = Field(default=True, description="Skip companies without hooks.")
@@ -197,7 +199,7 @@ class RuleUpdateRequest(BaseModel):
 
     trigger: RuleTrigger | None = Field(default=None, description="stage_entered or intel_ready.")
     stage_id: int | None = Field(default=None, description="Stage; null clears it.", examples=[102])
-    action: RuleAction | None = Field(default=None, description="request_audit or communicate.")
+    action: RuleAction | None = Field(default=None, description="request_audit, communicate or score.")
     template_key: str | None = Field(default=None, max_length=128, description="Communicator template.")
     contact_strategy: ContactStrategy | None = Field(default=None, description="primary or ai_pick.")
     require_hooks: bool | None = Field(default=None, description="Skip companies without hooks.")
@@ -237,6 +239,75 @@ class AnalysisProfileRequest(ProfileRequest):
 
 class AnalysisProfileUpdateRequest(ProfileUpdateRequest):
     is_active: bool | None = Field(default=None, description="Used by the analysis.")
+
+
+ScoreField = Literal["lead_type", "industry", "platform", "domain", "hooks_count", "emails_count", "rotation_count"]
+ScoreOp = Literal["eq", "in", "contains", "gte", "lte"]
+
+
+class ScoreCondition(BaseModel):
+    """A test on one company fact; shared by scoring rules (with points) and disqualifiers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: ScoreField = Field(description="Company fact tested.", examples=["lead_type"])
+    op: ScoreOp = Field(description="eq, in (value is a list), contains (text), gte or lte (counts).", examples=["in"])
+    value: str | int | list[str] = Field(description="Compared value; a list for `in`.", examples=[["RETAILER"]])
+    label: str = Field(default="", max_length=120, description="Reason shown in the timeline.", examples=["retailer"])
+
+    @model_validator(mode="after")
+    def op_fits_value(self) -> "ScoreCondition":
+        counts = self.field in {"hooks_count", "emails_count", "rotation_count"}
+        if self.op == "in":
+            if counts or not isinstance(self.value, list):
+                raise ValueError("op `in` needs a list value and a text field")
+        elif isinstance(self.value, list):
+            raise ValueError("only op `in` takes a list value")
+        elif counts and (self.op == "contains" or not isinstance(self.value, int)):
+            raise ValueError("count fields take eq, gte or lte with an integer")
+        elif not counts and (self.op in {"gte", "lte"} or not isinstance(self.value, str)):
+            raise ValueError("text fields take eq, in or contains with a string")
+        return self
+
+
+class ScoreRuleItem(ScoreCondition):
+    points: int = Field(ge=-100, le=100, description="Added when the condition holds.", examples=[30])
+
+
+class Thresholds(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    S: int = Field(ge=0, le=1000, description="Points from which a company is S3.", examples=[20])
+    M: int = Field(ge=0, le=1000, description="Points from which a company is S2.", examples=[40])
+    L: int = Field(ge=0, le=1000, description="Points from which a company is S1.", examples=[70])
+
+    @model_validator(mode="after")
+    def ordered(self) -> "Thresholds":
+        if not self.S <= self.M <= self.L:
+            raise ValueError("thresholds must satisfy S <= M <= L")
+        return self
+
+
+class ScoringProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(
+        default="leads.scoring", min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$", description="Profile key."
+    )
+    thresholds: Thresholds = Field(description="Points needed for S3, S2 and S1; below S is S4.")
+    rules: list[ScoreRuleItem] = Field(default_factory=list, max_length=100, description="Point rules.")
+    disqualifiers: list[ScoreCondition] = Field(default_factory=list, max_length=50, description="Force S4.")
+    is_active: bool = Field(default=True, description="Used by scoring.")
+
+
+class ScoringProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$")
+    thresholds: Thresholds | None = Field(default=None, description="Points needed for S3, S2 and S1.")
+    rules: list[ScoreRuleItem] | None = Field(default=None, max_length=100, description="Point rules.")
+    disqualifiers: list[ScoreCondition] | None = Field(default=None, max_length=50, description="Force S4.")
+    is_active: bool | None = Field(default=None, description="Used by scoring.")
 
 
 class CommunicateRequest(BaseModel):

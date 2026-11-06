@@ -112,7 +112,7 @@ skipped_count, row_count, size_bytes, created_by, created_at`. The detail adds `
 | Method | Path | Body / params | Success |
 |---|---|---|---|
 | GET | `<channel_idx>/rules/` | — | 200 `{results: [RuleResponse]}` in evaluation order |
-| POST | `<channel_idx>/rules/` | `trigger` (`stage_entered`, `intel_ready`; required), `stage_id` (required for `stage_entered`), `action` (`communicate` default, `request_audit`), `template_key` (required for `communicate`), `contact_strategy` (`primary`, `ai_pick`), `require_hooks` (true), `require_email` (true), `cooldown_hours` (24, 0–8760), `is_active`, `order` | 201 `RuleResponse` |
+| POST | `<channel_idx>/rules/` | `trigger` (`stage_entered`, `intel_ready`; required), `stage_id` (required for `stage_entered`), `action` (`communicate` default, `request_audit`, `score`), `template_key` (required for `communicate`), `contact_strategy` (`primary`, `ai_pick`), `require_hooks` (true), `require_email` (true), `cooldown_hours` (24, 0–8760), `is_active`, `order` | 201 `RuleResponse` |
 | GET / PATCH / DELETE | `<channel_idx>/rules/<id>/` | PATCH: any field of POST, null only for `stage_id` | 200 / 200 / 204 (runs deleted with the rule) |
 | GET | `<channel_idx>/rule-runs/` | `company` (id), paging | 200 `RuleRunListResponse` — `id, rule_id, company_id, fired_at, outcome (fired|skipped|blocked|cooldown, empty while claimed), detail` |
 | GET | `<channel_idx>/analysis-profiles/` | — | 200 `{results: [{id, key, model, is_active}]}` |
@@ -121,6 +121,20 @@ skipped_count, row_count, size_bytes, created_by, created_at`. The detail adds `
 | GET | `<channel_idx>/recipient-profiles/` | — | 200 `{results: [{id, key, model}]}` |
 | POST | `<channel_idx>/recipient-profiles/` | `key` (default use: `leads.pick_recipient`), `prompt_text`, `json_schema`, `model` | 201 profile with `prompt_text`, `json_schema` |
 | GET / PATCH / DELETE | `<channel_idx>/recipient-profiles/<id>/` | PATCH: any field, no nulls | 200 / 200 / 204 |
+
+### Scoring
+
+| Method | Path | Body / params | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/scoring-profiles/` | — | 200 `{results: [ScoringProfileResponse]}` |
+| POST | `<channel_idx>/scoring-profiles/` | `key` (default `leads.scoring`), `thresholds` `{S, M, L}` (points, `S <= M <= L`), `rules` `[{field, op, value, points, label}]`, `disqualifiers` `[{field, op, value, label}]`, `is_active` | 201 `ScoringProfileResponse`; 409 `PROFILE_EXISTS` |
+| GET / PATCH / DELETE | `<channel_idx>/scoring-profiles/<id>/` | PATCH: any field, no nulls | 200 / 200 / 204 |
+| POST | `<channel_idx>/companies/<id>/score/` | — | 200 `{segment, points, disqualified, reasons, profile_id}`; Activity `score`; 409 `NO_SCORING_PROFILE` |
+
+`field` is one of `lead_type, industry, platform, domain, hooks_count, emails_count, rotation_count`; `op` is `eq`,
+`in` (list of strings), `contains` (text) or `gte`/`lte` (counts). Points: >= `L` is S1, >= `M` S2, >= `S` S3, else S4;
+a matching disqualifier forces S4. A rule with `action: score` (`stage_entered` or `intel_ready`) scores the company and
+writes the same Activity; without an active profile the run is `skipped`.
 
 Lists never carry `prompt_text`. `require_legal_basis` exists on the model but is not exposed and has no effect.
 
@@ -170,7 +184,8 @@ upper-cased; `message` is human-readable; `details` is empty for these (no field
 | `DOMAIN_EXISTS` | `POST companies/`: another company of the channel already has this registrable domain |
 | `NO_STAGES` | `POST companies/`: the channel has no pipeline yet |
 | `CONTACT_EXISTS` | `POST contacts/`, `PATCH contacts/<id>/` (`email`): the company already has a contact with this email |
-| `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient}-profiles/`: another profile of the channel already has this key |
+| `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient,scoring}-profiles/`: another profile of the channel already has this key |
+| `NO_SCORING_PROFILE` | `companies/<id>/score/`: the channel has no active scoring profile |
 | `COMMUNICATOR_CHANNEL_MISSING` | `communicate/`: no communicator channel is configured |
 | `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `no_legal_basis`) |
 | `NO_DRAFT` | `communicate/`: no draft could be built (no clause set) — see the company timeline |
