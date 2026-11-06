@@ -21,6 +21,7 @@ from agreements, website facts from siteintel, human attention from notification
 | `StageRule` | trigger, stage, action, template, contact strategy, conditions, cooldown, order | evaluated by `rule_service` |
 | `RuleRun` | one evaluation: `outcome`, `state`, `event_key`, `detail` | unique `(rule, company, event_key)` for non-empty keys |
 | `Claim` | `key`, `state` (`claimed`, `done`, `retry`, `failed`), `failures` | idempotency of paid calls outside rules |
+| `Pilot` | trial run of a company: `start_date`, `end_date`, `success_criterion`, `result` (pending, success, failure, cancelled), `license_switch_date`; no stage coupling — move the company with a normal transition | changes of `result` are Activity `note` |
 | `ScoringProfile` | thresholds S/M/L, point rules, disqualifiers per channel and key; `scoring_service.score` gives segment S1-S4 and reasons, stored as Activity `score` (rule action `score`, or `POST companies/<id>/score/`) | no toolbox, pure arithmetic on company facts |
 | `AnalysisProfile` / `RecipientPickProfile` | prompt, JSON schema, toolbox model per channel and key | never logged, never in API lists |
 | `ErasedAddress` | token of an erased or anonymised address | never the address |

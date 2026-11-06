@@ -11,6 +11,7 @@ from django_leads.models.contact import Contact
 from django_leads.models.erased_address import ErasedAddress
 from django_leads.models.import_batch import ImportBatch
 from django_leads.models.lead_type import LeadType
+from django_leads.models.pilot import Pilot
 from django_leads.models.recipient_pick_profile import RecipientPickProfile
 from django_leads.models.rule_run import RuleRun
 from django_leads.models.scoring_profile import ScoringProfile
@@ -27,6 +28,7 @@ __all__ = [
     "ErasedAddress",
     "ImportBatch",
     "LeadType",
+    "Pilot",
     "RecipientPickProfile",
     "RuleRun",
     "ScoringProfile",

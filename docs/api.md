@@ -16,7 +16,7 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 | Permission | `IsAdminUser` — a customer JWT is a 403 |
 | Channel | `<channel_idx>` is `Channel.idx`; an unknown idx is a 404. A row id of another channel is a 404, never a leak |
 | Paged lists | `?page=&page_size=` (default 20, max 100) → `{count, next, previous, results}` |
-| Unpaged lists | stages, rules, analysis and recipient profiles → `{results}` |
+| Unpaged lists | stages, rules, analysis, recipient and scoring profiles → `{results}` |
 
 ## Companies
 
@@ -106,6 +106,21 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
 skipped_count, row_count, size_bytes, created_by, created_at`. The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
+
+## Pilots
+
+A pilot is a trial run with a company: dates, success criterion, outcome and the day it moves to a licence (S5).
+
+| Method | Path | Body / params | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/pilots/` | `company` (id), `result` (`pending|success|failure|cancelled`), paging | 200 `PilotListResponse`, newest start first |
+| POST | `<channel_idx>/pilots/` | `company_id` (company of the channel, else 404), `start_date` (required), `end_date`, `success_criterion`, `result` (default `pending`), `result_note`, `license_switch_date` | 201 `PilotResponse`; Activity `note` "pilot started <date>"; 400 when `end_date` or `license_switch_date` precede `start_date` |
+| GET / PATCH / DELETE | `<channel_idx>/pilots/<id>/` | PATCH: any field except `company_id`; null only for `end_date`, `license_switch_date` | 200 / 200 / 204; a changed `result` writes Activity `note` "pilot <old> -> <new>" |
+| GET | `<channel_idx>/pilots/report/` | `as_of` (date, default today) | 200 `{as_of, total, by_result, running, overdue, avg_length_days, license_switch_due: [{pilot_id, company_id, domain, switch_date}]}` |
+
+Report: `running` = pending, started, not past `end_date`; `overdue` = pending past `end_date`;
+`avg_length_days` = mean `end_date - start_date` of non-pending pilots with an end date (null when none);
+`license_switch_due` = successful pilots whose `license_switch_date` falls within 30 days of `as_of`.
 
 ## Rules and prompt profiles
 

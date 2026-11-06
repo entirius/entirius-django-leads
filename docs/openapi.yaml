@@ -1113,6 +1113,236 @@ paths:
           description: No response body
         '409':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/pilots/:
+    get:
+      operationId: leads_pilots_list
+      summary: Pilots of the channel, newest start first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: company
+        schema:
+          type: integer
+        description: Company id.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: result
+        schema:
+          type: string
+        description: pending, success, failure or cancelled.
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_pilots_create
+      summary: Start a pilot for a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Pilots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PilotRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PilotRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PilotRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/pilots/{id}/:
+    get:
+      operationId: api_leads_v2_admin_pilots_retrieve
+      summary: One pilot
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_pilots_partial_update
+      description: A change of `result` writes a timeline note. Null only clears `end_date`
+        and `license_switch_date`.
+      summary: Update a pilot
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Pilots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPilotUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPilotUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPilotUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_pilots_destroy
+      summary: Delete a pilot
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/pilots/report/:
+    get:
+      operationId: api_leads_v2_admin_pilots_report_retrieve
+      summary: Pilot report
+      parameters:
+      - in: query
+        name: as_of
+        schema:
+          type: string
+        description: Day (YYYY-MM-DD); today when omitted.
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotReportResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/recipient-profiles/:
     get:
       operationId: leads_recipient_profiles_list
@@ -3502,6 +3732,40 @@ components:
       - contract
       title: LegalBasis
       type: string
+    LicenseSwitchDue:
+      properties:
+        pilot_id:
+          description: Pilot id.
+          examples:
+          - 100
+          title: Pilot Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 101
+          title: Company Id
+          type: integer
+        domain:
+          description: Company domain.
+          examples:
+          - example-shop-2.test
+          title: Domain
+          type: string
+        switch_date:
+          description: Licence switch day.
+          examples:
+          - '2026-12-15'
+          format: date
+          title: Switch Date
+          type: string
+      required:
+      - pilot_id
+      - company_id
+      - domain
+      - switch_date
+      title: LicenseSwitchDue
+      type: object
     OpEnum:
       enum:
       - eq
@@ -3724,6 +3988,55 @@ components:
           description: Offered, filtered on and guessed.
           title: Is Active
       title: LeadTypeUpdateRequest
+      type: object
+    PatchedPilotUpdateRequest:
+      additionalProperties: false
+      properties:
+        start_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: First day of the pilot.
+          title: Start Date
+        end_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Last day; null clears it.
+          title: End Date
+        success_criterion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: What counts as success.
+          title: Success Criterion
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/PilotResult'
+          - type: 'null'
+          default: null
+          description: pending, success, failure or cancelled.
+        result_note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Outcome in words.
+          title: Result Note
+        license_switch_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Licence switch day; null clears it.
+          title: License Switch Date
+      title: PilotUpdateRequest
       type: object
     PatchedProfileUpdateRequest:
       additionalProperties: false
@@ -3950,6 +4263,231 @@ components:
           title: On Sent
       title: StageUpdateRequest
       type: object
+    PilotListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Pilots, newest start first.
+          items:
+            $ref: '#/components/schemas/PilotResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: PilotListResponse
+      type: object
+    PilotReportResponse:
+      properties:
+        as_of:
+          description: Day the report is computed for.
+          examples:
+          - '2026-11-10'
+          format: date
+          title: As Of
+          type: string
+        total:
+          description: All pilots of the channel.
+          examples:
+          - 4
+          title: Total
+          type: integer
+        by_result:
+          additionalProperties:
+            type: integer
+          description: Pilots per result, every result present.
+          examples:
+          - pending: 2
+          title: By Result
+          type: object
+        running:
+          description: Pending pilots started and not past their end date.
+          examples:
+          - 2
+          title: Running
+          type: integer
+        overdue:
+          description: Pending pilots past their end date.
+          examples:
+          - 1
+          title: Overdue
+          type: integer
+        avg_length_days:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean length of finished pilots with an end date.
+          examples:
+          - 28.5
+          title: Avg Length Days
+        license_switch_due:
+          description: Successful pilots switching within 30 days.
+          items:
+            $ref: '#/components/schemas/LicenseSwitchDue'
+          title: License Switch Due
+          type: array
+      required:
+      - as_of
+      - total
+      - by_result
+      - running
+      - overdue
+      - avg_length_days
+      - license_switch_due
+      title: PilotReportResponse
+      type: object
+    PilotRequest:
+      additionalProperties: false
+      properties:
+        company_id:
+          description: Company of the channel.
+          examples:
+          - 101
+          title: Company Id
+          type: integer
+        start_date:
+          description: First day of the pilot.
+          examples:
+          - '2026-11-10'
+          format: date
+          title: Start Date
+          type: string
+        end_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Planned or actual last day.
+          title: End Date
+        success_criterion:
+          default: ''
+          description: What counts as success.
+          examples:
+          - 10 orders in 30 days
+          title: Success Criterion
+          type: string
+        result:
+          $ref: '#/components/schemas/PilotResult'
+          default: pending
+          description: pending, success, failure or cancelled.
+        result_note:
+          default: ''
+          description: Outcome in words.
+          title: Result Note
+          type: string
+        license_switch_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Day the company moves to a licence (S5).
+          title: License Switch Date
+      required:
+      - company_id
+      - start_date
+      title: PilotRequest
+      type: object
+    PilotResponse:
+      properties:
+        id:
+          description: Pilot id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 101
+          title: Company Id
+          type: integer
+        start_date:
+          description: First day.
+          examples:
+          - '2026-11-10'
+          format: date
+          title: Start Date
+          type: string
+        end_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Last day.
+          examples:
+          - '2026-12-10'
+          title: End Date
+        success_criterion:
+          description: What counts as success.
+          examples:
+          - 10 orders in 30 days
+          title: Success Criterion
+          type: string
+        result:
+          description: pending, success, failure or cancelled.
+          examples:
+          - pending
+          title: Result
+          type: string
+        result_note:
+          description: Outcome in words.
+          examples:
+          - ''
+          title: Result Note
+          type: string
+        license_switch_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Day of the switch to a licence.
+          examples:
+          - '2026-12-15'
+          title: License Switch Date
+      required:
+      - id
+      - company_id
+      - start_date
+      - end_date
+      - success_criterion
+      - result
+      - result_note
+      - license_switch_date
+      title: PilotResponse
+      type: object
+    PilotResult:
+      enum:
+      - pending
+      - success
+      - failure
+      - cancelled
+      title: PilotResult
+      type: string
     ProfileDetailResponse:
       properties:
         id:

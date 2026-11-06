@@ -15,6 +15,10 @@
   `score` runs it from `stage_entered` or `intel_ready`; `POST companies/<id>/score/` runs it by hand; CRUD under
   `scoring-profiles/`.
 
+- **Pilots (outbound roadmap B9).** `Pilot` model (migration 0010): dates, success criterion, result, licence switch
+  date. CRUD under `pilots/`, `pilots/report/` for running, overdue and licence-switch-due counts. A pilot does not
+  move the company between stages.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is

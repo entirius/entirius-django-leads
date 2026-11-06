@@ -11,6 +11,7 @@ from django_leads.models import (
     Contact,
     ImportBatch,
     LeadType,
+    Pilot,
     RecipientPickProfile,
     RuleRun,
     ScoringProfile,
@@ -110,3 +111,10 @@ class RecipientPickProfileAdmin(admin.ModelAdmin):
 @admin.register(ScoringProfile)
 class ScoringProfileAdmin(admin.ModelAdmin):
     list_display = ("channel", "key", "is_active")
+
+
+@admin.register(Pilot)
+class PilotAdmin(admin.ModelAdmin):
+    list_display = ("company", "start_date", "end_date", "result", "license_switch_date")
+    list_filter = ("result",)
+    raw_id_fields = ("company",)

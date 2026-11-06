@@ -16,6 +16,11 @@ groups:
       - Contact
       - Activity
       - ImportBatch
+  - name: pilots
+    title: "Pilots"
+    models:
+      - Company
+      - Pilot
   - name: rules
     title: "Rules, Claims & Prompt Profiles"
     models:

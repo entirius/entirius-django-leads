@@ -3,7 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Response schemas of the leads admin API v2."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -252,6 +252,42 @@ class ScoreResponse(BaseModel):
     disqualified: bool = Field(description="A disqualifier forced S4.", examples=[False])
     reasons: list[str] = Field(description="Matching rules or disqualifiers.", examples=[["retailer: +30"]])
     profile_id: int | None = Field(description="Profile used.", examples=[100])
+
+
+class PilotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Pilot id.", examples=[100])
+    company_id: int = Field(description="Company id.", examples=[101])
+    start_date: date = Field(description="First day.", examples=["2026-11-10"])
+    end_date: date | None = Field(description="Last day.", examples=["2026-12-10"])
+    success_criterion: str = Field(description="What counts as success.", examples=["10 orders in 30 days"])
+    result: str = Field(description="pending, success, failure or cancelled.", examples=["pending"])
+    result_note: str = Field(description="Outcome in words.", examples=[""])
+    license_switch_date: date | None = Field(description="Day of the switch to a licence.", examples=["2026-12-15"])
+
+
+class PilotListResponse(_Page):
+    results: list[PilotResponse] = Field(description="Pilots, newest start first.")
+
+
+class LicenseSwitchDue(BaseModel):
+    pilot_id: int = Field(description="Pilot id.", examples=[100])
+    company_id: int = Field(description="Company id.", examples=[101])
+    domain: str = Field(description="Company domain.", examples=["example-shop-2.test"])
+    switch_date: date = Field(description="Licence switch day.", examples=["2026-12-15"])
+
+
+class PilotReportResponse(BaseModel):
+    as_of: date = Field(description="Day the report is computed for.", examples=["2026-11-10"])
+    total: int = Field(description="All pilots of the channel.", examples=[4])
+    by_result: dict[str, int] = Field(description="Pilots per result, every result present.", examples=[{"pending": 2}])
+    running: int = Field(description="Pending pilots started and not past their end date.", examples=[2])
+    overdue: int = Field(description="Pending pilots past their end date.", examples=[1])
+    avg_length_days: float | None = Field(
+        description="Mean length of finished pilots with an end date.", examples=[28.5]
+    )
+    license_switch_due: list[LicenseSwitchDue] = Field(description="Successful pilots switching within 30 days.")
 
 
 class DraftResponse(BaseModel):

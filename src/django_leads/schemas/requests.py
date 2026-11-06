@@ -3,6 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Request schemas of the leads admin API v2."""
 
+from datetime import date
 from typing import Literal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -10,7 +11,7 @@ from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 
-from django_leads.enums import UNKNOWN_LEAD_TYPE, ContactStrategy, RuleAction, RuleTrigger, StageKind
+from django_leads.enums import UNKNOWN_LEAD_TYPE, ContactStrategy, PilotResult, RuleAction, RuleTrigger, StageKind
 from django_leads.services.company_service import SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
@@ -308,6 +309,42 @@ class ScoringProfileUpdateRequest(BaseModel):
     rules: list[ScoreRuleItem] | None = Field(default=None, max_length=100, description="Point rules.")
     disqualifiers: list[ScoreCondition] | None = Field(default=None, max_length=50, description="Force S4.")
     is_active: bool | None = Field(default=None, description="Used by scoring.")
+
+
+class PilotListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+    result: PilotResult | None = Field(default=None, description="pending, success, failure or cancelled.")
+
+
+class PilotReportQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    as_of: date | None = Field(default=None, description="Day the report is computed for; today when omitted.")
+
+
+class PilotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_id: int = Field(description="Company of the channel.", examples=[101])
+    start_date: date = Field(description="First day of the pilot.", examples=["2026-11-10"])
+    end_date: date | None = Field(default=None, description="Planned or actual last day.")
+    success_criterion: str = Field(default="", description="What counts as success.", examples=["10 orders in 30 days"])
+    result: PilotResult = Field(default=PilotResult.PENDING, description="pending, success, failure or cancelled.")
+    result_note: str = Field(default="", description="Outcome in words.")
+    license_switch_date: date | None = Field(default=None, description="Day the company moves to a licence (S5).")
+
+
+class PilotUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_date: date | None = Field(default=None, description="First day of the pilot.")
+    end_date: date | None = Field(default=None, description="Last day; null clears it.")
+    success_criterion: str | None = Field(default=None, description="What counts as success.")
+    result: PilotResult | None = Field(default=None, description="pending, success, failure or cancelled.")
+    result_note: str | None = Field(default=None, description="Outcome in words.")
+    license_switch_date: date | None = Field(default=None, description="Licence switch day; null clears it.")
 
 
 class CommunicateRequest(BaseModel):

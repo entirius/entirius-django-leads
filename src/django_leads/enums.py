@@ -48,6 +48,13 @@ class ActivityKind(models.TextChoices):
     SCORE = "score", "Score"
 
 
+class PilotResult(models.TextChoices):
+    PENDING = "pending", "Pending"
+    SUCCESS = "success", "Success"
+    FAILURE = "failure", "Failure"
+    CANCELLED = "cancelled", "Cancelled"
+
+
 class ImportStatus(models.TextChoices):
     PENDING = "pending", "Pending"
     RUNNING = "running", "Running"
