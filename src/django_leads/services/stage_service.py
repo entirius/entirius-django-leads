@@ -15,7 +15,7 @@ from django_leads.models import Channel, Company, Stage
 from django_leads.services import activity_service
 from django_leads.signals import stage_entered
 
-STAGE_FIELDS = frozenset({"key", "label", "order", "kind", "is_terminal", "on_reply"})
+STAGE_FIELDS = frozenset({"key", "label", "order", "kind", "is_terminal", "on_reply", "on_sent"})
 
 
 class StageInUse(Exception):

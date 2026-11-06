@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+- **First send moves the company (outbound roadmap F3).** `Stage.on_sent` (migration 0008): when the first message
+  to a company is sent, it moves to the first stage flagged `on_sent`, forward only and never out of a terminal
+  stage (so a company that already replied stays where it is). `StageResponse`, `StageRequest` and
+  `StageUpdateRequest` carry the flag.
+- **Import fires the first-stage rules (outbound roadmap F1).** A company created by a CSV import now sends
+  `stage_entered` for its first stage after the chunk commits; matched companies send nothing. Switch off with
+  `LEADS_IMPORT_FIRES_RULES = False`. The CMS import page already promised this.
+
+- **Scoring (outbound roadmap B3).** `ScoringProfile` per channel (migration 0009): thresholds S/M/L, point rules and
+  disqualifiers. `scoring_service.score` returns a segment S1-S4 with reasons; the result is Activity `score`. Rule action
+  `score` runs it from `stage_entered` or `intel_ready`; `POST companies/<id>/score/` runs it by hand; CRUD under
+  `scoring-profiles/`.
+
+- **Pilots (outbound roadmap B9).** `Pilot` model (migration 0010): dates, success criterion, result, licence switch
+  date. CRUD under `pilots/`, `pilots/report/` for running, overdue and licence-switch-due counts. A pilot does not
+  move the company between stages.
+
+- **Lead origin and funnel report (outbound roadmap B5).** `Company.origin` (migration 0011), free text such as
+  `ecom.house` or a partner name; set on create, patch and the new CSV column `origin`, filter on `GET companies/`.
+  `GET reports/funnel/` counts stage transitions and mean time in a stage from the timeline, filtered by origin and
+  date window. The CSV header test now expects the extra `origin` column.
+
+- **Golden set of replies (outbound roadmap T4, slice S12).** Tests only: `tests/test_reply_golden.py` runs the sample
+  replies through a real communicator ingest over a fake toolbox client (`tests/fake_toolbox.py`,
+  `tests/reply_flow.py`).
+- **Reply next steps per class (outbound roadmap T4, slice S11).** `ReplyIntentRoute` (migration 0012): per channel and
+  reply intent class, `action` `reply_stage` (default, as before) / `stage` (a chosen stage, never out of a terminal one)
+  / `none`, plus `flag_contact`. `Contact.wrong_person_at` (same migration) is set by a `wrong_person` reply by default;
+  the outreach gate then answers `wrong_person` and the contact is no longer a recipient candidate. Defaults: only
+  `out_of_office` keeps the stage. The reply alert follows communicator's plan (`notify`, `none` = silent) and names the
+  class. A due reminder from communicator becomes Activity `note`. `reply-routes/` and `reply-routes/<intent>/`; the
+  contact response carries `wrong_person_at`. Receivers tolerate a communicator without T4.
+- **Reply intent in the timeline (outbound roadmap T4, slice S10).** When communicator classified a reply (its
+  `Reply.intent`, needs a communicator with migration 0013), Activity `reply` reads `reply received: <intent>` and
+  carries `intent`, `intent_confidence` and `intent_return_date` in `data`. Unclassified replies read as before.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is

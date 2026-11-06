@@ -55,6 +55,7 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | Setting | Default | Meaning |
 |---|---|---|
 | `LEADS_QUEUE_DEFAULT` | `"leads_default"` | Celery queue of every task |
+| `LEADS_IMPORT_FIRES_RULES` | `true` | a company created by a CSV import enters its first stage with `stage_entered`, so its rules run; false = imported companies wait |
 | `LEADS_IMPORT_CHUNK_SIZE` | `500` | CSV rows per chunk; counters, report and resume point commit with each chunk |
 | `LEADS_IMPORT_TMP_DIR` | `<system temp>/django_leads` | uploads wait here as `<batch_id>.csv` (file 0600, directory 0700) |
 | `LEADS_IMPORT_STALE_MINUTES` | `30` | a `pending`/`running` batch without progress this long is failed `stale`; also the form-submission retry cutoff |
@@ -112,10 +113,11 @@ only). Another package adds its own by declaring an entry point in that group.
 ## Bootstrap order
 
 ```
-manage.py migrate                        # 0001–0006
+manage.py migrate                        # 0001–0008
 # Django admin: create a Channel (idx = the channel of communicator, agreements and siteintel) with its stages
 #   — the lowest `order` is where new companies enter; one stage with kind=unresponsive for rotation;
-#   one stage with on_reply=True to move replying companies
+#   one stage with on_reply=True to move replying companies; one with on_sent=True (usually "contacted") for the
+#   first sent message
 # admin API: analysis-profiles/ (key leads.analysis), recipient-profiles/ (key leads.pick_recipient), rules/
 manage.py leads_import_csv --channel <idx> --file leads.csv --sync   # first import, no worker needed
 ```

@@ -11,8 +11,10 @@ from django_leads.models import (
     Contact,
     ImportBatch,
     LeadType,
+    Pilot,
     RecipientPickProfile,
     RuleRun,
+    ScoringProfile,
     Stage,
     StageRule,
 )
@@ -29,7 +31,7 @@ class ReadOnlyAdmin(admin.ModelAdmin):
 class StageInline(admin.TabularInline):
     model = Stage
     extra = 0
-    fields = ("order", "key", "label", "kind", "is_terminal", "on_reply")
+    fields = ("order", "key", "label", "kind", "is_terminal", "on_reply", "on_sent")
 
 
 class LeadTypeInline(admin.TabularInline):
@@ -104,3 +106,15 @@ class AnalysisProfileAdmin(admin.ModelAdmin):
 @admin.register(RecipientPickProfile)
 class RecipientPickProfileAdmin(admin.ModelAdmin):
     list_display = ("channel", "key", "model")
+
+
+@admin.register(ScoringProfile)
+class ScoringProfileAdmin(admin.ModelAdmin):
+    list_display = ("channel", "key", "is_active")
+
+
+@admin.register(Pilot)
+class PilotAdmin(admin.ModelAdmin):
+    list_display = ("company", "start_date", "end_date", "result", "license_switch_date")
+    list_filter = ("result",)
+    raw_id_fields = ("company",)

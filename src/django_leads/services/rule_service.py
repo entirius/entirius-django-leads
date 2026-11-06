@@ -81,12 +81,17 @@ def _complete(run: RuleRun, outcome: str, detail: str, *, state: str = ClaimStat
 
 def _check(rule: StageRule, company: Company) -> tuple[str | None, str]:
     """Conditions on the locked row; `None` outcome = outreach follows outside the lock."""
-    from django_leads.services import intel_service, recipient_service
+    from django_leads.services import intel_service, recipient_service, scoring_service
 
     if company.do_not_contact:
         return _stop(company, rule, RuleOutcome.BLOCKED, ActivityKind.BLOCKED, "blocked: do_not_contact")
     if _in_cooldown(rule, company):
         return _stop(company, rule, RuleOutcome.COOLDOWN, ActivityKind.RULE, "rule cooldown")
+    if rule.action == RuleAction.SCORE:
+        result = scoring_service.score_and_record(company, actor=f"rule:{rule.pk}")
+        if result is None:
+            return _stop(company, rule, RuleOutcome.SKIPPED, ActivityKind.SKIPPED, "skipped: no scoring profile")
+        return RuleOutcome.FIRED, f"scored {result.segment}"
     if rule.action == RuleAction.REQUEST_AUDIT:
         intel_service.request_audit_for(company, actor=f"rule:{rule.pk}")
         return RuleOutcome.FIRED, "audit requested"

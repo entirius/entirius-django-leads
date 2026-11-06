@@ -16,6 +16,8 @@ from django_leads.services import company_service
 
 CHANNEL_IDX = "default-europe"
 
+pytest_plugins = ["tests.reply_flow"]  # T4 fixtures: fake_intent, inbox
+
 
 @pytest.fixture(autouse=True)
 def eager_celery():
@@ -44,7 +46,7 @@ def polish(db) -> Language:
 def channel(polish) -> Channel:
     channel = Channel.objects.create(idx=CHANNEL_IDX, name="Default Europe", default_language=polish)
     Stage.objects.create(channel=channel, key="new", label="New", order=0)
-    Stage.objects.create(channel=channel, key="contacted", label="Contacted", order=10)
+    Stage.objects.create(channel=channel, key="contacted", label="Contacted", order=10, on_sent=True)
     Stage.objects.create(channel=channel, key="won", label="Won", order=20, kind=StageKind.WON, is_terminal=True)
     Stage.objects.create(channel=channel, key="replied", label="Replied", order=30, on_reply=True)
     Stage.objects.create(

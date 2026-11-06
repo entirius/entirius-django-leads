@@ -3,7 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Response schemas of the leads admin API v2."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,6 +19,7 @@ class StageResponse(BaseModel):
     kind: str = Field(description="open, won, lost or unresponsive.", examples=["open"])
     is_terminal: bool = Field(description="No further stages.", examples=[False])
     on_reply: bool = Field(description="Target on a reply.", examples=[False])
+    on_sent: bool = Field(description="Target when a message is sent (forward only).", examples=[False])
 
 
 class LeadTypeResponse(BaseModel):
@@ -47,6 +48,9 @@ class ContactResponse(BaseModel):
     legal_basis: str | None = Field(description="GDPR legal basis; null when none.", examples=["consent"])
     opt_out_at: datetime | None = Field(description="Opted out.", examples=[None])
     anonymised_at: datetime | None = Field(description="Anonymised.", examples=[None])
+    wrong_person_at: datetime | None = Field(
+        description="A reply said this is the wrong person; no more outreach to the contact.", examples=[None]
+    )
 
     @classmethod
     def of(cls, contact) -> "ContactResponse":
@@ -82,6 +86,9 @@ class CompanyResponse(BaseModel):
     stage: StageResponse = Field(description="Current stage.")
     stage_entered_at: datetime = Field(description="Entered the current stage.", examples=["2026-09-13T12:00:00Z"])
     source: str = Field(description="csv, form, manual or connector.", examples=["csv"])
+    origin: str = Field(
+        description="Business origin (ecom.house, a partner); empty when unknown.", examples=["ecom.house"]
+    )
     external_ref: str = Field(description="External reference.", examples=[""])
     do_not_contact: bool = Field(description="Never contact.", examples=[False])
     customer_uid: str | None = Field(description="Linked customer uid (read-only).", examples=[None])
@@ -168,7 +175,7 @@ class RuleResponse(BaseModel):
     id: int = Field(description="Rule id.", examples=[100])
     trigger: str = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
     stage_id: int | None = Field(description="Stage id.", examples=[102])
-    action: str = Field(description="request_audit or communicate.", examples=["communicate"])
+    action: str = Field(description="request_audit, communicate or score.", examples=["communicate"])
     template_key: str = Field(description="Communicator template.", examples=["lead.cold.b2b"])
     contact_strategy: str = Field(description="primary or ai_pick.", examples=["primary"])
     require_hooks: bool = Field(description="Skip companies without hooks.", examples=[True])
@@ -228,6 +235,98 @@ class AnalysisProfileListResponse(BaseModel):
     results: list[AnalysisProfileResponse] = Field(description="Profiles of the channel.")
 
 
+class ScoringProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Profile id.", examples=[100])
+    key: str = Field(description="Profile key.", examples=["leads.scoring"])
+    thresholds: dict[str, int] = Field(
+        description="Points for S3 (S), S2 (M), S1 (L).", examples=[{"S": 20, "M": 40, "L": 70}]
+    )
+    rules: list[dict[str, Any]] = Field(description="Point rules.", examples=[[]])
+    disqualifiers: list[dict[str, Any]] = Field(description="Conditions forcing S4.", examples=[[]])
+    is_active: bool = Field(description="Used by scoring.", examples=[True])
+
+
+class ScoringProfileListResponse(BaseModel):
+    results: list[ScoringProfileResponse] = Field(description="Profiles of the channel.")
+
+
+class ScoreResponse(BaseModel):
+    segment: str = Field(description="S1 (best) to S4.", examples=["S2"])
+    points: int = Field(description="Sum of the matching rules.", examples=[45])
+    disqualified: bool = Field(description="A disqualifier forced S4.", examples=[False])
+    reasons: list[str] = Field(description="Matching rules or disqualifiers.", examples=[["retailer: +30"]])
+    profile_id: int | None = Field(description="Profile used.", examples=[100])
+
+
+class PilotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Pilot id.", examples=[100])
+    company_id: int = Field(description="Company id.", examples=[101])
+    start_date: date = Field(description="First day.", examples=["2026-11-10"])
+    end_date: date | None = Field(description="Last day.", examples=["2026-12-10"])
+    success_criterion: str = Field(description="What counts as success.", examples=["10 orders in 30 days"])
+    result: str = Field(description="pending, success, failure or cancelled.", examples=["pending"])
+    result_note: str = Field(description="Outcome in words.", examples=[""])
+    license_switch_date: date | None = Field(description="Day of the switch to a licence.", examples=["2026-12-15"])
+
+
+class PilotListResponse(_Page):
+    results: list[PilotResponse] = Field(description="Pilots, newest start first.")
+
+
+class LicenseSwitchDue(BaseModel):
+    pilot_id: int = Field(description="Pilot id.", examples=[100])
+    company_id: int = Field(description="Company id.", examples=[101])
+    domain: str = Field(description="Company domain.", examples=["example-shop-2.test"])
+    switch_date: date = Field(description="Licence switch day.", examples=["2026-12-15"])
+
+
+class PilotReportResponse(BaseModel):
+    as_of: date = Field(description="Day the report is computed for.", examples=["2026-11-10"])
+    total: int = Field(description="All pilots of the channel.", examples=[4])
+    by_result: dict[str, int] = Field(description="Pilots per result, every result present.", examples=[{"pending": 2}])
+    running: int = Field(description="Pending pilots started and not past their end date.", examples=[2])
+    overdue: int = Field(description="Pending pilots past their end date.", examples=[1])
+    avg_length_days: float | None = Field(
+        description="Mean length of finished pilots with an end date.", examples=[28.5]
+    )
+    license_switch_due: list[LicenseSwitchDue] = Field(description="Successful pilots switching within 30 days.")
+
+
+class FunnelTransition(BaseModel):
+    from_stage: str = Field(description="Stage key left.", examples=["new"])
+    to_stage: str = Field(description="Stage key entered.", examples=["contacted"])
+    count: int = Field(description="Transitions in the window.", examples=[12])
+    avg_seconds_in_from_stage: float | None = Field(
+        description="Mean time spent in `from_stage` first.", examples=[86400.0]
+    )
+
+
+class FunnelStage(BaseModel):
+    stage: str = Field(description="Stage key.", examples=["contacted"])
+    current: int = Field(description="Companies in the stage now (origin filter, no date window).", examples=[5])
+    entered: int = Field(description="Transitions into the stage in the window.", examples=[12])
+    left: int = Field(description="Transitions out of the stage in the window.", examples=[7])
+    avg_seconds_in_stage: float | None = Field(
+        description="Mean time in the stage before leaving.", examples=[172800.0]
+    )
+
+
+class FunnelOrigin(BaseModel):
+    origin: str = Field(description="Origin; empty = unknown.", examples=["ecom.house"])
+    companies: int = Field(description="Companies of the channel.", examples=[40])
+
+
+class FunnelResponse(BaseModel):
+    companies: int = Field(description="Companies matching the origin filter.", examples=[40])
+    transitions: list[FunnelTransition] = Field(description="Per (from, to) pair, most frequent first.")
+    stages: list[FunnelStage] = Field(description="Per stage seen.")
+    origins: list[FunnelOrigin] = Field(description="Companies per origin, whole channel (never filtered).")
+
+
 class DraftResponse(BaseModel):
     message_id: int = Field(description="Communicator message id.", examples=[7])
     status: str = Field(description="Message status.", examples=["review_required"])
@@ -274,3 +373,16 @@ class GdprEraseResponse(BaseModel):
     modules: dict[str, dict[str, int]] = Field(
         description="App name → rows touched per kind.", examples=[{"django_leads": {"contacts": 1, "activities": 4}}]
     )
+
+
+class ReplyRouteResponse(BaseModel):
+    intent: str = Field(description="The reply intent class.", examples=["not_interested"])
+    action: str = Field(description="reply_stage, stage or none.", examples=["stage"])
+    stage_id: int | None = Field(description="Target stage of action stage.", examples=[4])
+    stage_key: str | None = Field(description="Its key.", examples=["lost"])
+    flag_contact: bool = Field(description="Flag the replying contact as the wrong person.", examples=[False])
+    is_default: bool = Field(description="No row: the code default applies.", examples=[True])
+
+
+class ReplyRouteListResponse(BaseModel):
+    results: list[ReplyRouteResponse] = Field(description="One entry per intent class.", examples=[[]])

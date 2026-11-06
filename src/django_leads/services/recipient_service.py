@@ -23,7 +23,9 @@ class PickRejected(Exception):
 
 
 def candidates(company: Company) -> list[Contact]:
-    contacts = company.contacts.exclude(email="").filter(opt_out_at__isnull=True, anonymised_at__isnull=True)
+    contacts = company.contacts.exclude(email="").filter(
+        opt_out_at__isnull=True, anonymised_at__isnull=True, wrong_person_at__isnull=True
+    )
     return list(contacts.select_related("language").order_by("-is_primary", "pk"))
 
 
@@ -34,6 +36,7 @@ def block_reason(contact: Contact) -> str | None:
         (not contact.email, "no_email"),
         (contact.opt_out_at is not None, "opted_out"),
         (contact.anonymised_at is not None, "anonymised"),
+        (contact.wrong_person_at is not None, "wrong_person"),
         (not contact.legal_basis, "no_legal_basis"),
     )
     return next((reason for failed, reason in checks if failed), None)

@@ -12,8 +12,8 @@ from agreements, website facts from siteintel, human attention from notification
 | Model | Holds | Key rule |
 |---|---|---|
 | `Channel` | `idx`, languages, `retention_days` | own scoping model (created in Django admin, never from signals); its `idx` is the same channel in communicator, agreements and siteintel |
-| `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply` | new companies enter the lowest `order`; unique `(channel, key)` |
-| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at` | unique `(channel, domain)`; `domain` is always the registrable domain |
+| `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply`, `on_sent` | new companies enter the lowest `order`; unique `(channel, key)` |
+| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source` (entry path), `origin` (business origin, e.g. `ecom.house`), `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at` | unique `(channel, domain)`; `domain` is always the registrable domain |
 | `LeadType` | `code`, `label`, `order`, `is_active` | configuration per channel, unique `(channel, code)`; `Company.lead_type` holds the code (no FK); `UNKNOWN` is built in, never a row |
 | `Contact` | email, names, job title, phone, language, `is_primary`, `legal_basis`, `opt_out_at`, `anonymised_at` | unique `(company, email)` for non-empty emails; `legal_basis` null = none recorded |
 | `Activity` | `kind`, `message`, `data`, `actor` per company (and contact) | written only by `activity_service`, which also moves `Company.last_activity_at` |
@@ -21,6 +21,8 @@ from agreements, website facts from siteintel, human attention from notification
 | `StageRule` | trigger, stage, action, template, contact strategy, conditions, cooldown, order | evaluated by `rule_service` |
 | `RuleRun` | one evaluation: `outcome`, `state`, `event_key`, `detail` | unique `(rule, company, event_key)` for non-empty keys |
 | `Claim` | `key`, `state` (`claimed`, `done`, `retry`, `failed`), `failures` | idempotency of paid calls outside rules |
+| `Pilot` | trial run of a company: `start_date`, `end_date`, `success_criterion`, `result` (pending, success, failure, cancelled), `license_switch_date`; no stage coupling — move the company with a normal transition | changes of `result` are Activity `note` |
+| `ScoringProfile` | thresholds S/M/L, point rules, disqualifiers per channel and key; `scoring_service.score` gives segment S1-S4 and reasons, stored as Activity `score` (rule action `score`, or `POST companies/<id>/score/`) | no toolbox, pure arithmetic on company facts |
 | `AnalysisProfile` / `RecipientPickProfile` | prompt, JSON schema, toolbox model per channel and key | never logged, never in API lists |
 | `ErasedAddress` | token of an erased or anonymised address | never the address |
 
@@ -68,7 +70,7 @@ import / form / manual ──▶ first stage
 ```
 
 `stage_service.transition_stage` is the only stage change: it writes Activity `stage` and sends `stage_entered`
-after commit. A company created by an import enters its first stage without the signal. A stage holding companies
+after commit. A company created by an import enters its first stage with the signal (`LEADS_IMPORT_FIRES_RULES`). A stage holding companies
 cannot be deleted.
 
 ## Rules
@@ -98,7 +100,7 @@ outside the candidates, a toolbox error or a missing profile falls back to the f
 ## Outreach gate
 
 `recipient_service.block_reason(contact)` in this order: `do_not_contact`, `no_email`, `opted_out`, `anonymised`,
-`no_legal_basis`. It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
+`wrong_person`, `no_legal_basis`. It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
 the company, then the contact, and calls communicator `communicate()` on those rows — an opt-out or `do_not_contact`
 either commits first (blocked) or waits for the draft to commit. Every path (rules, rotation, manual communicate)
 goes through it exactly once; a refusal is one Activity `blocked: <reason>`, never a draft. The gate is the only
@@ -110,11 +112,22 @@ language, lead type) → (default language, any). A type without its own variant
 template at all is communicator's `no_template` failure, as before. Follow-ups of a sequence resolve without an
 audience (communicator does not keep one per thread).
 
+## Reply next steps (T4)
+
+communicator classifies a human reply (`Reply.intent`, needs the AI toolbox) and applies the sequence and alert part of
+the next step (its `reply-actions/`). leads applies the part only it can: `ReplyIntentRoute` per channel and class
+(`reply-routes/`), else the code default. `action` is `reply_stage` (move to the `on_reply` stage, what every reply did
+before), `stage` (move to a chosen stage, never out of a terminal one) or `none` (keep the stage); `flag_contact` sets
+`Contact.wrong_person_at`, which the outreach gate and the recipient candidates honour (`wrong_person`). Defaults:
+everything keeps the old move, `out_of_office` keeps the stage (it is not an answer), `wrong_person` flags the contact.
+A reply with no class takes the pre-T4 path. The alert follows communicator's plan (`notify`, `none` = silent). A due
+reminder (`reply_followup_due`) writes Activity `note` "follow-up reminder: <intent>".
+
 ## Integration
 
 | Module | leads calls | leads receives |
 |---|---|---|
-| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply`, `on_reply` stage, high notification; `company_skipped` (reviewer) → `do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`; `sequence_finished` → rotation task |
+| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` (with the communicator intent class when it classified the reply), `on_reply` stage, high notification; `company_skipped` (reviewer) → `do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent` and, once, the `on_sent` stage (forward only, never out of a terminal stage); `sequence_finished` → rotation task |
 | agreements | `resolve_clause_set(channel_idx, legal_basis, language)` + `render_legal_footer` (contact language, else channel default); `LegalBasis` enum | — (a missing clause set → Activity `skipped: no clause set`, no draft) |
 | siteintel | `request_audit(domain, channel_idx, requested_by)` | `report_ready(audit, succeeded_sources)` → analysis task |
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |
