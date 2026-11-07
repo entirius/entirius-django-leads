@@ -3,17 +3,30 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Request schemas of the leads admin API v2."""
 
+from datetime import date
+from typing import Literal
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 
-from django_leads.enums import UNKNOWN_LEAD_TYPE, ContactStrategy, RuleAction, RuleTrigger, StageKind
+from django_leads.enums import (
+    UNKNOWN_LEAD_TYPE,
+    ContactStrategy,
+    PilotResult,
+    ReplyStageAction,
+    RuleAction,
+    RuleTrigger,
+    StageKind,
+)
 from django_leads.services.company_service import SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
 # Format only — whether a code is an active lead type of the channel is the service's call (`lead_type_service`).
 LEAD_TYPE_PATTERN = r"^[A-Z0-9_]+$"
+# A sender route key (communicator defines the routes); blank clears it.
+ROUTE_PATTERN = r"^[a-z0-9_-]*$"
 
 
 class CompanyListQuery(BaseModel):
@@ -32,6 +45,10 @@ class CompanyListQuery(BaseModel):
         examples=["RETAILER"],
     )
     do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
+    origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.")
+    sender_route: str | None = Field(
+        default=None, max_length=64, description="Exact sender route key; empty string = companies without one."
+    )
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
 
     @field_validator("sort")
@@ -52,6 +69,9 @@ class CompanyCreateRequest(BaseModel):
         default=UNKNOWN_LEAD_TYPE, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code."
     )
     industry: str = Field(default="", max_length=128, description="Industry.")
+    origin: str = Field(
+        default="", max_length=64, description="Business origin, e.g. ecom.house.", examples=["ecom.house"]
+    )
 
     @field_validator("domain")
     @classmethod
@@ -66,9 +86,13 @@ class CompanyUpdateRequest(BaseModel):
     website: HttpUrl | None = Field(default=None, description="Website URL.")
     lead_type: str | None = Field(default=None, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code.")
     industry: str | None = Field(default=None, max_length=128, description="Industry.")
+    origin: str | None = Field(default=None, max_length=64, description="Business origin, e.g. ecom.house.")
     description: str | None = Field(default=None, description="Free-text description.")
     do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
     external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
+    sender_route: str | None = Field(
+        default=None, max_length=64, pattern=ROUTE_PATTERN, description="Sender route key; empty = channel default."
+    )
 
 
 class TransitionRequest(BaseModel):
@@ -81,6 +105,9 @@ class ContactListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+    email_status: Literal["unknown", "valid", "risky", "invalid"] | None = Field(
+        default=None, description="Address verification status filter."
+    )
 
 
 CONSENT_REF_DESCRIPTION = "Where consent was given (document, call, form); required when legal_basis is consent."
@@ -135,6 +162,7 @@ class StageRequest(BaseModel):
     kind: StageKind = Field(default=StageKind.OPEN, description="open, won, lost or unresponsive.")
     is_terminal: bool = Field(default=False, description="No further stages after this one.")
     on_reply: bool = Field(default=False, description="Companies move here when a contact replies.")
+    on_sent: bool = Field(default=False, description="Companies move here (forward only) when a message is sent.")
 
 
 class StageUpdateRequest(BaseModel):
@@ -146,6 +174,7 @@ class StageUpdateRequest(BaseModel):
     kind: StageKind | None = Field(default=None, description="open, won, lost or unresponsive.")
     is_terminal: bool | None = Field(default=None, description="No further stages after this one.")
     on_reply: bool | None = Field(default=None, description="Companies move here when a contact replies.")
+    on_sent: bool | None = Field(default=None, description="Companies move here (forward only) when a message is sent.")
 
 
 class LeadTypeRequest(BaseModel):
@@ -180,7 +209,7 @@ class RuleRequest(BaseModel):
 
     trigger: RuleTrigger = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
     stage_id: int | None = Field(default=None, description="Stage; required for stage_entered.", examples=[102])
-    action: RuleAction = Field(default=RuleAction.COMMUNICATE, description="request_audit or communicate.")
+    action: RuleAction = Field(default=RuleAction.COMMUNICATE, description="request_audit, communicate or score.")
     template_key: str = Field(default="", max_length=128, description="Communicator template; for communicate.")
     contact_strategy: ContactStrategy = Field(default=ContactStrategy.PRIMARY, description="primary or ai_pick.")
     require_hooks: bool = Field(default=True, description="Skip companies without hooks.")
@@ -195,7 +224,7 @@ class RuleUpdateRequest(BaseModel):
 
     trigger: RuleTrigger | None = Field(default=None, description="stage_entered or intel_ready.")
     stage_id: int | None = Field(default=None, description="Stage; null clears it.", examples=[102])
-    action: RuleAction | None = Field(default=None, description="request_audit or communicate.")
+    action: RuleAction | None = Field(default=None, description="request_audit, communicate or score.")
     template_key: str | None = Field(default=None, max_length=128, description="Communicator template.")
     contact_strategy: ContactStrategy | None = Field(default=None, description="primary or ai_pick.")
     require_hooks: bool | None = Field(default=None, description="Skip companies without hooks.")
@@ -237,6 +266,127 @@ class AnalysisProfileUpdateRequest(ProfileUpdateRequest):
     is_active: bool | None = Field(default=None, description="Used by the analysis.")
 
 
+ScoreField = Literal["lead_type", "industry", "platform", "domain", "hooks_count", "emails_count", "rotation_count"]
+ScoreOp = Literal["eq", "in", "contains", "gte", "lte"]
+
+
+class ScoreCondition(BaseModel):
+    """A test on one company fact; shared by scoring rules (with points) and disqualifiers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: ScoreField = Field(description="Company fact tested.", examples=["lead_type"])
+    op: ScoreOp = Field(description="eq, in (value is a list), contains (text), gte or lte (counts).", examples=["in"])
+    value: str | int | list[str] = Field(description="Compared value; a list for `in`.", examples=[["RETAILER"]])
+    label: str = Field(default="", max_length=120, description="Reason shown in the timeline.", examples=["retailer"])
+
+    @model_validator(mode="after")
+    def op_fits_value(self) -> "ScoreCondition":
+        counts = self.field in {"hooks_count", "emails_count", "rotation_count"}
+        if self.op == "in":
+            if counts or not isinstance(self.value, list):
+                raise ValueError("op `in` needs a list value and a text field")
+        elif isinstance(self.value, list):
+            raise ValueError("only op `in` takes a list value")
+        elif counts and (self.op == "contains" or not isinstance(self.value, int)):
+            raise ValueError("count fields take eq, gte or lte with an integer")
+        elif not counts and (self.op in {"gte", "lte"} or not isinstance(self.value, str)):
+            raise ValueError("text fields take eq, in or contains with a string")
+        return self
+
+
+class ScoreRuleItem(ScoreCondition):
+    points: int = Field(ge=-100, le=100, description="Added when the condition holds.", examples=[30])
+
+
+class Thresholds(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    S: int = Field(ge=0, le=1000, description="Points from which a company is S3.", examples=[20])
+    M: int = Field(ge=0, le=1000, description="Points from which a company is S2.", examples=[40])
+    L: int = Field(ge=0, le=1000, description="Points from which a company is S1.", examples=[70])
+
+    @model_validator(mode="after")
+    def ordered(self) -> "Thresholds":
+        if not self.S <= self.M <= self.L:
+            raise ValueError("thresholds must satisfy S <= M <= L")
+        return self
+
+
+class ScoringProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(
+        default="leads.scoring", min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$", description="Profile key."
+    )
+    thresholds: Thresholds = Field(description="Points needed for S3, S2 and S1; below S is S4.")
+    rules: list[ScoreRuleItem] = Field(default_factory=list, max_length=100, description="Point rules.")
+    disqualifiers: list[ScoreCondition] = Field(default_factory=list, max_length=50, description="Force S4.")
+    is_active: bool = Field(default=True, description="Used by scoring.")
+
+
+class ScoringProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$")
+    thresholds: Thresholds | None = Field(default=None, description="Points needed for S3, S2 and S1.")
+    rules: list[ScoreRuleItem] | None = Field(default=None, max_length=100, description="Point rules.")
+    disqualifiers: list[ScoreCondition] | None = Field(default=None, max_length=50, description="Force S4.")
+    is_active: bool | None = Field(default=None, description="Used by scoring.")
+
+
+class PilotListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+    result: PilotResult | None = Field(default=None, description="pending, success, failure or cancelled.")
+
+
+class PilotReportQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    as_of: date | None = Field(default=None, description="Day the report is computed for; today when omitted.")
+
+
+class PilotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_id: int = Field(description="Company of the channel.", examples=[101])
+    start_date: date = Field(description="First day of the pilot.", examples=["2026-11-10"])
+    end_date: date | None = Field(default=None, description="Planned or actual last day.")
+    success_criterion: str = Field(default="", description="What counts as success.", examples=["10 orders in 30 days"])
+    result: PilotResult = Field(default=PilotResult.PENDING, description="pending, success, failure or cancelled.")
+    result_note: str = Field(default="", description="Outcome in words.")
+    license_switch_date: date | None = Field(default=None, description="Day the company moves to a licence (S5).")
+
+
+class PilotUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_date: date | None = Field(default=None, description="First day of the pilot.")
+    end_date: date | None = Field(default=None, description="Last day; null clears it.")
+    success_criterion: str | None = Field(default=None, description="What counts as success.")
+    result: PilotResult | None = Field(default=None, description="pending, success, failure or cancelled.")
+    result_note: str | None = Field(default=None, description="Outcome in words.")
+    license_switch_date: date | None = Field(default=None, description="Licence switch day; null clears it.")
+
+
+class FunnelQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    origin: str | None = Field(
+        default=None, max_length=64, description="Exact origin; empty string = companies without one; omit = any."
+    )
+    date_from: AwareDatetime | None = Field(default=None, description="Transitions at or after this time.")
+    date_to: AwareDatetime | None = Field(default=None, description="Transitions at or before this time.")
+
+    @model_validator(mode="after")
+    def window_is_ordered(self) -> "FunnelQuery":
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from is after date_to")
+        return self
+
+
 class CommunicateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -252,6 +402,17 @@ class DevEvaluateRequest(BaseModel):
     company_id: int = Field(description="Company id.", examples=[102])
     trigger: RuleTrigger = Field(description="stage_entered or intel_ready.")
     stage_key: str | None = Field(default=None, max_length=64, description="Stage; default the company's stage.")
+
+
+class DevResumeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: AwareDatetime | None = Field(
+        default=None,
+        description="Clock of the resume run: contacts due by then are resumed; now when omitted.",
+        examples=["2026-12-15T06:00:00Z"],
+    )
+    company_id: int | None = Field(default=None, description="Only this company's contacts; omit = the channel.")
 
 
 class DevAnonymiseRequest(BaseModel):
@@ -276,3 +437,81 @@ class GdprRequest(BaseModel):
         except DjangoValidationError:
             raise ValueError("not a valid email address") from None
         return value.strip()
+
+
+class ReplyRouteRequest(BaseModel):
+    """The whole route of one reply intent class; omitted fields take the defaults."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: ReplyStageAction = Field(
+        default=ReplyStageAction.REPLY_STAGE,
+        description="reply_stage (the on-reply stage, as before T4), stage (the stage below, never out of a terminal "
+        "stage) or none (keep the stage).",
+        examples=["stage"],
+    )
+    stage_id: int | None = Field(
+        default=None,
+        description="Required for action stage, forbidden otherwise; a stage of this channel.",
+        examples=[4],
+    )
+    flag_contact: bool = Field(
+        default=False,
+        description="Mark the replying contact as the wrong person: no more outreach to them.",
+        examples=[False],
+    )
+
+
+class BulkSenderRouteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_ids: list[int] = Field(min_length=1, max_length=1000, description="Companies of the channel.")
+    sender_route: str = Field(
+        max_length=64, pattern=ROUTE_PATTERN, description="Route key to set; empty clears it (channel default)."
+    )
+
+
+class ChannelSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_sender_route: str | None = Field(
+        default=None,
+        max_length=64,
+        pattern=ROUTE_PATTERN,
+        description="Route of companies without their own; empty = communicator's; omit = unchanged.",
+    )
+    resume_days: dict[Literal["not_now", "out_of_office"], int] | None = Field(
+        default=None,
+        description="Days until a contact is approached again after a reply with no date, per class (1..365). "
+        "Replaces the whole map; a class left out uses the module default; omit = unchanged.",
+        examples=[{"not_now": 45}],
+    )
+
+    @field_validator("resume_days")
+    @classmethod
+    def _days_in_range(cls, value):
+        if value is not None and any(not 1 <= days <= 365 for days in value.values()):
+            raise ValueError("days must be 1..365")
+        return value
+
+
+class DoNotContactRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(default="", max_length=254, description="An address to stop everywhere.")
+    domain: str = Field(default="", max_length=253, description="A domain to stop everywhere (instead of email).")
+    reason: str = Field(min_length=1, max_length=200, description="Why (a request, a complaint, ...).")
+
+    @model_validator(mode="after")
+    def one_of(self) -> "DoNotContactRequest":
+        if bool(self.email.strip()) == bool(self.domain.strip()):
+            raise ValueError("give exactly one of email or domain")
+        return self
+
+
+class UploadOptions(BaseModel):
+    """Optional form fields of the CSV upload."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    sender_route: str = Field(default="", max_length=64, pattern=ROUTE_PATTERN, description="Route for the file.")

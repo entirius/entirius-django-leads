@@ -32,6 +32,7 @@ class CandidateRow:
     legal_basis: str
     phone: str
     external_ref: str = ""
+    origin: str = ""
 
 
 class Connector(Protocol):

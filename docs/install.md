@@ -55,6 +55,7 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | Setting | Default | Meaning |
 |---|---|---|
 | `LEADS_QUEUE_DEFAULT` | `"leads_default"` | Celery queue of every task |
+| `LEADS_IMPORT_FIRES_RULES` | `true` | a company created by a CSV import enters its first stage with `stage_entered`, so its rules run; false = imported companies wait |
 | `LEADS_IMPORT_CHUNK_SIZE` | `500` | CSV rows per chunk; counters, report and resume point commit with each chunk |
 | `LEADS_IMPORT_TMP_DIR` | `<system temp>/django_leads` | uploads wait here as `<batch_id>.csv` (file 0600, directory 0700) |
 | `LEADS_IMPORT_STALE_MINUTES` | `30` | a `pending`/`running` batch without progress this long is failed `stale`; also the form-submission retry cutoff |
@@ -71,6 +72,25 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | `LEADS_ANALYSIS_MAX_HOOKS` | `10` | hooks kept from one intel analysis |
 | `LEADS_RETENTION_DAYS` | `180` | idle days before contacts are anonymised, when `Channel.retention_days` is null |
 | `LEADS_ANONYMISED_DOMAIN` | `"anonymised.invalid"` | host of anonymised-address tokens; communicator and agreements read the same setting — keep one value |
+| `LEADS_VERIFY_ENABLED` | `False` | the gate verifies unverified or stale addresses and the daily task re-checks them; off = nothing queries DNS (a stored `invalid` still blocks) |
+| `LEADS_VERIFY_MAX_AGE_DAYS` | `30` | a verification older than this is repeated |
+| `LEADS_VERIFY_BATCH` | `200` | addresses checked per scheduled run |
+| `LEADS_VERIFY_DNS_TIMEOUT_S` | `5` | DNS lifetime per lookup |
+| `LEADS_DISPOSABLE_DOMAINS` | ten well-known hosts | `invalid / disposable`, subdomains included; replace with a fuller list |
+| `LEADS_VERIFY_SMTP_PROBE` | `False` | RCPT probe of the first MX; needs `LEADS_VERIFY_SMTP_FROM`; touches third-party servers |
+| `LEADS_VERIFY_SMTP_FROM` | `""` | MAIL FROM of the probe |
+| `LEADS_VERIFY_SMTP_PER_MINUTE` | `10` | probe rate limit (shared cache) |
+| `LEADS_VERIFY_SMTP_TIMEOUT_S` | `10` | probe socket timeout |
+| `LEADS_VERIFY_EXTERNAL` | `""` | dotted path of `callable(email) -> (status, reason) or None`: hook for an external verification API (never overrides `invalid`) |
+| `LEADS_BOUNCE_SYNC_DAYS` | `14` | hard bounces of communicator read back this far by the daily task |
+| `LEADS_RESUME_ENABLED` | `False` | "not now" loop: the daily task drafts again to contacts whose day has come (always through the outreach gate); off = the day is only planned and shown in the queue |
+| `LEADS_RESUME_DEFAULT_DAYS` | `{"not_now": 30, "out_of_office": 7}` | days until the return when the reply named no date; a channel overrides it in `resume_days` (settings API) |
+| `LEADS_RESUME_BATCH` | `50` | drafts one resume run requests at most |
+| `LEADS_QUEUE_SEGMENTS` | `["S1", "S2"]` | score segments that count as over the threshold in the queue |
+| `LEADS_QUEUE_LIMIT` | `50` | rows per queue section |
+| `LEADS_QUEUE_REPLY_DAYS` | `14` | age after which an unhandled reply or flagged contact leaves the queue |
+| `LEADS_DIGEST_ENABLED` | `False` | the daily digest notification per channel; off = the task does nothing |
+| `LEADS_DIGEST_HOURS` | `24` | window the digest covers |
 | `ENVIRONMENT` | — | `"development"` routes and enables the `test/` endpoints |
 
 ## Celery
@@ -88,6 +108,9 @@ Every task runs on `LEADS_QUEUE_DEFAULT`. The host owns the beat schedule — th
 | `django_leads.retry_failed_analyses` | beat | every 10 minutes |
 | `django_leads.rotate_unresponsive` | beat | daily |
 | `django_leads.anonymise_inactive` | beat | daily |
+| `django_leads.reverify_addresses` | beat | daily (hard bounces always; address checks only with `LEADS_VERIFY_ENABLED`) |
+| `django_leads.resume_contacts` | beat | daily; does nothing until `LEADS_RESUME_ENABLED` |
+| `django_leads.send_digest` | beat | daily, in the morning; does nothing until `LEADS_DIGEST_ENABLED` |
 
 ```python
 CELERY_BEAT_SCHEDULE = {
@@ -95,6 +118,9 @@ CELERY_BEAT_SCHEDULE = {
     "leads-retry-analyses": {"task": "django_leads.retry_failed_analyses", "schedule": 600},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
+    "leads-reverify-addresses": {"task": "django_leads.reverify_addresses", "schedule": crontab(hour=3, minute=0)},
+    "leads-resume-contacts": {"task": "django_leads.resume_contacts", "schedule": crontab(hour=6, minute=0)},
+    "leads-send-digest": {"task": "django_leads.send_digest", "schedule": crontab(hour=7, minute=0)},
 }
 ```
 
@@ -112,10 +138,11 @@ only). Another package adds its own by declaring an entry point in that group.
 ## Bootstrap order
 
 ```
-manage.py migrate                        # 0001–0006
+manage.py migrate                        # 0001–0008
 # Django admin: create a Channel (idx = the channel of communicator, agreements and siteintel) with its stages
 #   — the lowest `order` is where new companies enter; one stage with kind=unresponsive for rotation;
-#   one stage with on_reply=True to move replying companies
+#   one stage with on_reply=True to move replying companies; one with on_sent=True (usually "contacted") for the
+#   first sent message
 # admin API: analysis-profiles/ (key leads.analysis), recipient-profiles/ (key leads.pick_recipient), rules/
 manage.py leads_import_csv --channel <idx> --file leads.csv --sync   # first import, no worker needed
 ```

@@ -18,16 +18,25 @@ from django_leads.api.admin.views._base import ERROR_RESPONSES, AdminView, parse
 from django_leads.api.admin.views.import_views import UPLOAD_SCHEMA, read_upload
 from django_leads.enums import RuleTrigger
 from django_leads.models import Company, Stage
-from django_leads.schemas.requests import DevAnonymiseRequest, DevEvaluateRequest
+from django_leads.schemas.requests import DevAnonymiseRequest, DevEvaluateRequest, DevResumeRequest
 from django_leads.schemas.responses import (
     DevAnonymiseResponse,
+    DevDigestResponse,
     DevEvaluateResponse,
+    DevResumeResponse,
     DevRetryAnalysesResponse,
     DevRotateResponse,
     ImportBatchDetailResponse,
     RuleRunResponse,
 )
-from django_leads.services import import_service, intel_service, rotation_service, rule_service
+from django_leads.services import (
+    digest_service,
+    import_service,
+    intel_service,
+    resume_service,
+    rotation_service,
+    rule_service,
+)
 from django_leads.tasks import anonymise_inactive
 
 _TAGS = ["Leads (development)"]
@@ -117,6 +126,34 @@ class DevAnonymiseNowView(DevelopmentView):
         self.channel(channel_idx)
         counts = anonymise_inactive(as_of=body.as_of.isoformat() if body.as_of else None)
         return Response(DevAnonymiseResponse(anonymised=counts).model_dump())
+
+
+class DevResumeNowView(DevelopmentView):
+    @extend_schema(
+        tags=_TAGS,
+        summary='Run the "not now" resume of this channel now (development only)',
+        description="In this process and whatever `LEADS_RESUME_ENABLED` says; `as_of` moves the clock, so a return "
+        "30 days away can be reached at once. Every draft passes the outreach gate.",
+        request=DevResumeRequest,
+        responses={200: DevResumeResponse, **ERROR_RESPONSES},
+    )
+    def post(self, request: Request, channel_idx: str) -> Response:
+        body = parse(DevResumeRequest, request.data)
+        channel = self.channel(channel_idx)
+        counts = resume_service.run_due(now=body.as_of, channel_idx=channel.idx, company_id=body.company_id)
+        return Response(DevResumeResponse(**counts).model_dump())
+
+
+class DevDigestNowView(DevelopmentView):
+    @extend_schema(
+        tags=_TAGS,
+        summary="Send the daily digest of this channel now (development only)",
+        request=None,
+        responses={200: DevDigestResponse, **ERROR_RESPONSES},
+    )
+    def post(self, request: Request, channel_idx: str) -> Response:
+        sent = digest_service.send_all(self.channel(channel_idx).idx)
+        return Response(DevDigestResponse(sent=sent).model_dump())
 
 
 class DevRetryAnalysesView(DevelopmentView):

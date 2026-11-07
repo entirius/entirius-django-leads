@@ -1,5 +1,80 @@
 # Changelog
 
+## Unreleased
+
+- **"What to do today" queue and daily digest (outbound Q16).** `GET <channel>/queue/`: one list sorted by `value` of
+  replies to read (communicator `needs_review`), the drafts waiting for approval (one row, link to the approvals inbox),
+  contacts due today or overdue, companies over the scoring threshold (`LEADS_QUEUE_SEGMENTS`) nobody has written to,
+  and contacts flagged wrong person / possibly left. Read-only. Task `django_leads.send_digest` (off, `LEADS_DIGEST_ENABLED`)
+  sends one notification per channel with what the automation did and refused in the last day.
+- **"Not now" loop (outbound Q20, migration 0014).** `Contact.resume_at` / `resume_intent`, `Channel.resume_days`, Activity
+  kind `resume`. A `not_now` / `out_of_office` reply plans the return (day after the stated date, else the per-channel
+  window, default 30 / 7 days); a later reply cancels it. Task `django_leads.resume_contacts` (off, `LEADS_RESUME_ENABLED`)
+  drafts again through the normal outreach gate (opt-out, wrong person, shared list, address check), capped by
+  `LEADS_RESUME_BATCH`; never after an unsubscribe. `settings/` takes `resume_days`; `ContactResponse` shows `resume_at`.
+
+- **Glue with communicator.** `message_bounced` now marks the thread's contact `invalid / hard_bounce` at once (the daily
+  task stays as a safety net); `optout_confirmed` (also from the unsubscribe link) reaches the shared do-not-contact
+  list. Host setting for the sender: `COMMUNICATOR_PRESEND_CHECK =
+  "django_leads.services.verification_service.presend_check"`. `tests/test_glue_communicator.py` runs both modules
+  together (skipped with an older communicator or without `fakeredis`).
+- **Sender routes (outbound Q3).** `Company.sender_route`, `Channel.default_sender_route`, `ImportBatch.sender_route`
+  (migration 0013): a free key of a route defined in communicator. The CSV upload takes an optional form field
+  `sender_route` ("this whole file goes through route X"; set on created companies, filled on matched ones that have
+  none); `POST companies/bulk-sender-route/` changes chosen companies; `GET/PATCH settings/` holds the channel
+  default; `sender_route` filter and PATCH field on companies. The draft passes `sender_route=<company, else channel
+  default>` to `communicate()` when that function accepts it (checked by signature), nothing otherwise.
+- **Address verification loop (outbound Q5).** `Contact.email_status` (`unknown|valid|risky|invalid`),
+  `email_status_reason`, `email_verified_at`. `verification_service`: syntax, disposable domains, DNS (domain exists,
+  MX, null MX, address fallback = risky), optional SMTP RCPT probe (off, rate limited), hook `LEADS_VERIFY_EXTERNAL`
+  for an external API. Resolver and prober are injected; the suite installs stubs. Only `invalid` blocks (gate
+  reason `email_invalid`, also with the loop off). With `LEADS_VERIFY_ENABLED` the gate verifies an unverified or stale
+  address before it locks anything; the daily task `django_leads.reverify_addresses` re-checks older ones and reads hard
+  bounces back from communicator (`invalid / hard_bounce`, final). `POST contacts/<id>/verify/`,
+  `GET reports/verification/`, `email_status` filter on contacts, `presend_check(email)` for the sender.
+- **Compliance pack (outbound Q7).** One do-not-contact list across channels: the gate also refuses `opted_out_elsewhere`,
+  `domain_do_not_contact_elsewhere`, `suppressed_elsewhere`; `dnc_service.add` and `GET/POST do-not-contact/` stop an
+  address or domain in every leads channel and communicator channel. A confirmed opt-out in communicator
+  (`optout_confirmed`) now sets `opt_out_at` on every contact with the address (before, leads never learned of it).
+  `GET contacts/<id>/send-check/` returns every gate reason plus legal basis and its source, address status, retention due
+  date and effective route. Open points that need a lawyer are listed in `docs/concept.md`.
+
+- **First send moves the company (outbound roadmap F3).** `Stage.on_sent` (migration 0008): when the first message
+  to a company is sent, it moves to the first stage flagged `on_sent`, forward only and never out of a terminal
+  stage (so a company that already replied stays where it is). `StageResponse`, `StageRequest` and
+  `StageUpdateRequest` carry the flag.
+- **Import fires the first-stage rules (outbound roadmap F1).** A company created by a CSV import now sends
+  `stage_entered` for its first stage after the chunk commits; matched companies send nothing. Switch off with
+  `LEADS_IMPORT_FIRES_RULES = False`. The CMS import page already promised this.
+
+- **Scoring (outbound roadmap B3).** `ScoringProfile` per channel (migration 0009): thresholds S/M/L, point rules and
+  disqualifiers. `scoring_service.score` returns a segment S1-S4 with reasons; the result is Activity `score`. Rule action
+  `score` runs it from `stage_entered` or `intel_ready`; `POST companies/<id>/score/` runs it by hand; CRUD under
+  `scoring-profiles/`.
+
+- **Pilots (outbound roadmap B9).** `Pilot` model (migration 0010): dates, success criterion, result, licence switch
+  date. CRUD under `pilots/`, `pilots/report/` for running, overdue and licence-switch-due counts. A pilot does not
+  move the company between stages.
+
+- **Lead origin and funnel report (outbound roadmap B5).** `Company.origin` (migration 0011), free text such as
+  `ecom.house` or a partner name; set on create, patch and the new CSV column `origin`, filter on `GET companies/`.
+  `GET reports/funnel/` counts stage transitions and mean time in a stage from the timeline, filtered by origin and
+  date window. The CSV header test now expects the extra `origin` column.
+
+- **Golden set of replies (outbound roadmap T4, slice S12).** Tests only: `tests/test_reply_golden.py` runs the sample
+  replies through a real communicator ingest over a fake toolbox client (`tests/fake_toolbox.py`,
+  `tests/reply_flow.py`).
+- **Reply next steps per class (outbound roadmap T4, slice S11).** `ReplyIntentRoute` (migration 0012): per channel and
+  reply intent class, `action` `reply_stage` (default, as before) / `stage` (a chosen stage, never out of a terminal one)
+  / `none`, plus `flag_contact`. `Contact.wrong_person_at` (same migration) is set by a `wrong_person` reply by default;
+  the outreach gate then answers `wrong_person` and the contact is no longer a recipient candidate. Defaults: only
+  `out_of_office` keeps the stage. The reply alert follows communicator's plan (`notify`, `none` = silent) and names the
+  class. A due reminder from communicator becomes Activity `note`. `reply-routes/` and `reply-routes/<intent>/`; the
+  contact response carries `wrong_person_at`. Receivers tolerate a communicator without T4.
+- **Reply intent in the timeline (outbound roadmap T4, slice S10).** When communicator classified a reply (its
+  `Reply.intent`, needs a communicator with migration 0013), Activity `reply` reads `reply received: <intent>` and
+  carries `intent`, `intent_confidence` and `intent_return_date` in `data`. Unclassified replies read as before.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is

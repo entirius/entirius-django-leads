@@ -36,6 +36,7 @@ dependencies = [
     "celery>=5.3",
     "celery-once>=3.0.1",
     "tldextract>=5.3",
+    "dnspython>=2.4",
     "entirius-django-utils>=2.3.0",
     "entirius-django-regional>=2.0.1",
     "entirius-django-agreements>=2.1.0",

@@ -39,6 +39,7 @@ from django_leads.services import (
     lead_type_service,
     stage_service,
 )
+from django_leads.signals import stage_entered
 from django_leads.utils.domains import email_domain, registrable_domain
 from django_leads.utils.emails import normalize_email
 
@@ -60,8 +61,13 @@ class Lookups:
     lead_types: frozenset[str]
 
 
-def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: str) -> ImportBatch:
-    return ImportBatch.objects.create(channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by)
+def create_batch(
+    channel: Channel, filename: str, size_bytes: int, created_by: str, sender_route: str = ""
+) -> ImportBatch:
+    """`sender_route` (Q3): the whole file goes through this communicator route; blank = the channel default."""
+    return ImportBatch.objects.create(
+        channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by, sender_route=sender_route
+    )
 
 
 def build_lookups(channel: Channel) -> Lookups:
@@ -170,9 +176,22 @@ def apply_chunk(batch: ImportBatch, rows: list[tuple[int, dict[str, str]]], look
     try:
         with transaction.atomic():
             writer.flush()
+            announce_created(writer.new, lookups.stage)
     except (DataError, IntegrityError):
         writer.outcomes = [_apply_alone(batch, *row) for row in prepared]
     save_progress(batch, [*writer.skipped, *writer.outcomes], rows[-1][0])
+
+
+def announce_created(instances: Iterable[Any], stage: Stage) -> None:
+    """F1: a company the import created enters its first stage like any other, so that stage's rules run.
+
+    `stage_entered` is a signal whose receiver defers to the commit of the chunk (a rolled-back chunk fires nothing)
+    and dedupes by company and entry time, so a resumed chunk never evaluates twice."""
+    if not leads_settings.LEADS_IMPORT_FIRES_RULES:
+        return
+    for company in instances:
+        if isinstance(company, Company):
+            stage_entered.send(sender=Company, company=company, stage=stage)
 
 
 def save_progress(batch: ImportBatch, outcomes: list[tuple[int, str, str]], last_line: int) -> None:
@@ -200,6 +219,7 @@ def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any]
         "website": raw["website"],
         "lead_type": _row_lead_type(raw, lookups.lead_types),
         "industry": raw["industry"],
+        "origin": raw["origin"],
         "source": LeadSource.CSV,
     }
     _check_lengths(Company, company)
@@ -288,6 +308,8 @@ def _upsert_row(batch: ImportBatch, line: int, company_row: dict, contact_row: d
         contact.save(update_fields=["legal_basis", "modified_at"])
         activities.append(activity)
     activity_service.record_many(activities)
+    if created:
+        announce_created([company], company.stage)
     return line, "created" if created else "matched", ""
 
 
@@ -318,7 +340,9 @@ class _ChunkWriter:
         prepared = []
         for line, raw in rows:
             try:
-                prepared.append((line, *normalise_row(raw, self.lookups)))
+                company_row, contact_row = normalise_row(raw, self.lookups)
+                company_row["sender_route"] = self.batch.sender_route
+                prepared.append((line, company_row, contact_row))
             except SkipRow as reason:
                 self.skipped.append((line, "skipped", str(reason)))
         return self._without_erased(prepared)

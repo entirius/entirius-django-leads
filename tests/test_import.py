@@ -14,6 +14,7 @@ from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, ImportStatus
 from django_leads.models import Activity, Company, Contact, ImportBatch, LeadType
 from django_leads.services import company_service, import_service
+from django_leads.signals import stage_entered
 
 HEADER = (
     "company_name,domain,website,company_type,industry,first_name,last_name,email,job_title,language,legal_basis,phone"
@@ -102,6 +103,7 @@ def test_item4_whitespace_header_reads_its_own_column():
             "language": "",
             "legal_basis": "",
             "phone": "",
+            "origin": "",
         }
     ]
 
@@ -304,3 +306,44 @@ def test_import_reads_the_lead_type_column_and_still_the_old_company_type_one(ch
         "a-shop.pl": "MANUFACTURER",
         "b-shop.pl": "RETAILER",
     }
+
+
+def _entered() -> list:
+    received: list = []
+    stage_entered.connect(
+        lambda sender, company, stage, **kw: received.append((company.domain, stage.key)), weak=False, dispatch_uid="f1"
+    )
+    return received
+
+
+def test_F1_import_sends_stage_entered_for_created_companies_only(channel):
+    received = _entered()
+    try:
+        run(channel)
+        run(channel)  # second run matches everything: nothing new enters a stage
+    finally:
+        stage_entered.disconnect(dispatch_uid="f1")
+
+    assert sorted(received) == [("lesna-shop.pl", "new"), ("myogrod.pl", "new"), ("ogrod.pl", "new")]
+
+
+def test_F1_import_fires_nothing_when_switched_off(channel, monkeypatch):
+    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_FIRES_RULES", False)
+    received = _entered()
+    try:
+        run(channel)
+    finally:
+        stage_entered.disconnect(dispatch_uid="f1")
+
+    assert received == []
+
+
+def test_F1_slow_path_rows_also_announce(channel):
+    received = _entered()
+    try:
+        with mock.patch.object(import_service._ChunkWriter, "flush", side_effect=IntegrityError("race")):
+            batch = run(channel, csv_of("Slow,slow-shop.pl,,,,,,,,,,"))
+    finally:
+        stage_entered.disconnect(dispatch_uid="f1")
+
+    assert counts(batch) == (1, 0, 0) and received == [("slow-shop.pl", "new")]

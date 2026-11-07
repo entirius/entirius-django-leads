@@ -37,12 +37,18 @@ class ContactListView(AdminView):
         tags=_TAGS,
         operation_id="leads_contacts_list",
         summary="Contacts of the channel",
-        parameters=[OpenApiParameter("company", int, description="Company id."), *PAGE_PARAMETERS],
+        parameters=[
+            OpenApiParameter("company", int, description="Company id."),
+            OpenApiParameter("email_status", str, description="unknown, valid, risky or invalid."),
+            *PAGE_PARAMETERS,
+        ],
         responses={200: ContactListResponse, **ERROR_RESPONSES},
     )
     def get(self, request: Request, channel_idx: str) -> Response:
         query = parse(ContactListQuery, request.query_params.dict())
-        contacts = contact_service.list_contacts(self.channel(channel_idx), company_id=query.company)
+        contacts = contact_service.list_contacts(
+            self.channel(channel_idx), company_id=query.company, email_status=query.email_status
+        )
         return self.paginated(request, contacts, ContactResponse.of)
 
     @extend_schema(

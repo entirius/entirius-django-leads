@@ -12,8 +12,8 @@ from agreements, website facts from siteintel, human attention from notification
 | Model | Holds | Key rule |
 |---|---|---|
 | `Channel` | `idx`, languages, `retention_days` | own scoping model (created in Django admin, never from signals); its `idx` is the same channel in communicator, agreements and siteintel |
-| `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply` | new companies enter the lowest `order`; unique `(channel, key)` |
-| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at` | unique `(channel, domain)`; `domain` is always the registrable domain |
+| `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply`, `on_sent` | new companies enter the lowest `order`; unique `(channel, key)` |
+| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source` (entry path), `origin` (business origin, e.g. `ecom.house`), `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at` | unique `(channel, domain)`; `domain` is always the registrable domain |
 | `LeadType` | `code`, `label`, `order`, `is_active` | configuration per channel, unique `(channel, code)`; `Company.lead_type` holds the code (no FK); `UNKNOWN` is built in, never a row |
 | `Contact` | email, names, job title, phone, language, `is_primary`, `legal_basis`, `opt_out_at`, `anonymised_at` | unique `(company, email)` for non-empty emails; `legal_basis` null = none recorded |
 | `Activity` | `kind`, `message`, `data`, `actor` per company (and contact) | written only by `activity_service`, which also moves `Company.last_activity_at` |
@@ -21,6 +21,8 @@ from agreements, website facts from siteintel, human attention from notification
 | `StageRule` | trigger, stage, action, template, contact strategy, conditions, cooldown, order | evaluated by `rule_service` |
 | `RuleRun` | one evaluation: `outcome`, `state`, `event_key`, `detail` | unique `(rule, company, event_key)` for non-empty keys |
 | `Claim` | `key`, `state` (`claimed`, `done`, `retry`, `failed`), `failures` | idempotency of paid calls outside rules |
+| `Pilot` | trial run of a company: `start_date`, `end_date`, `success_criterion`, `result` (pending, success, failure, cancelled), `license_switch_date`; no stage coupling — move the company with a normal transition | changes of `result` are Activity `note` |
+| `ScoringProfile` | thresholds S/M/L, point rules, disqualifiers per channel and key; `scoring_service.score` gives segment S1-S4 and reasons, stored as Activity `score` (rule action `score`, or `POST companies/<id>/score/`) | no toolbox, pure arithmetic on company facts |
 | `AnalysisProfile` / `RecipientPickProfile` | prompt, JSON schema, toolbox model per channel and key | never logged, never in API lists |
 | `ErasedAddress` | token of an erased or anonymised address | never the address |
 
@@ -68,7 +70,7 @@ import / form / manual ──▶ first stage
 ```
 
 `stage_service.transition_stage` is the only stage change: it writes Activity `stage` and sends `stage_entered`
-after commit. A company created by an import enters its first stage without the signal. A stage holding companies
+after commit. A company created by an import enters its first stage with the signal (`LEADS_IMPORT_FIRES_RULES`). A stage holding companies
 cannot be deleted.
 
 ## Rules
@@ -97,8 +99,9 @@ outside the candidates, a toolbox error or a missing profile falls back to the f
 
 ## Outreach gate
 
-`recipient_service.block_reason(contact)` in this order: `do_not_contact`, `no_email`, `opted_out`, `anonymised`,
-`no_legal_basis`. It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
+`recipient_service.block_reason(contact)` (first of `block_reasons`) in this order: `do_not_contact`, `no_email`,
+`opted_out`, `anonymised`, `wrong_person`, `no_legal_basis`, `email_invalid`, then the shared list of other channels
+(`opted_out_elsewhere`, `domain_do_not_contact_elsewhere`, `suppressed_elsewhere`). It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
 the company, then the contact, and calls communicator `communicate()` on those rows — an opt-out or `do_not_contact`
 either commits first (blocked) or waits for the draft to commit. Every path (rules, rotation, manual communicate)
 goes through it exactly once; a refusal is one Activity `blocked: <reason>`, never a draft. The gate is the only
@@ -110,11 +113,22 @@ language, lead type) → (default language, any). A type without its own variant
 template at all is communicator's `no_template` failure, as before. Follow-ups of a sequence resolve without an
 audience (communicator does not keep one per thread).
 
+## Reply next steps (T4)
+
+communicator classifies a human reply (`Reply.intent`, needs the AI toolbox) and applies the sequence and alert part of
+the next step (its `reply-actions/`). leads applies the part only it can: `ReplyIntentRoute` per channel and class
+(`reply-routes/`), else the code default. `action` is `reply_stage` (move to the `on_reply` stage, what every reply did
+before), `stage` (move to a chosen stage, never out of a terminal one) or `none` (keep the stage); `flag_contact` sets
+`Contact.wrong_person_at`, which the outreach gate and the recipient candidates honour (`wrong_person`). Defaults:
+everything keeps the old move, `out_of_office` keeps the stage (it is not an answer), `wrong_person` flags the contact.
+A reply with no class takes the pre-T4 path. The alert follows communicator's plan (`notify`, `none` = silent). A due
+reminder (`reply_followup_due`) writes Activity `note` "follow-up reminder: <intent>".
+
 ## Integration
 
 | Module | leads calls | leads receives |
 |---|---|---|
-| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply`, `on_reply` stage, high notification; `company_skipped` (reviewer) → `do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`; `sequence_finished` → rotation task |
+| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` (with the communicator intent class when it classified the reply), `on_reply` stage, high notification; `company_skipped` (reviewer) → `do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent` and, once, the `on_sent` stage (forward only, never out of a terminal stage); `sequence_finished` → rotation task |
 | agreements | `resolve_clause_set(channel_idx, legal_basis, language)` + `render_legal_footer` (contact language, else channel default); `LegalBasis` enum | — (a missing clause set → Activity `skipped: no clause set`, no draft) |
 | siteintel | `request_audit(domain, channel_idx, requested_by)` | `report_ready(audit, succeeded_sources)` → analysis task |
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |
@@ -152,6 +166,57 @@ the draft (template of the last draft) is requested outside the lock; only a dra
 writes Activity `rotation`. No draft → `rotation_failed`, claim `retry` after `LEADS_ROTATION_RETRY_HOURS`; after
 `LEADS_ROTATION_MAX_FAILURES` → `rotation_gave_up`, claim `failed`. A draft refused because the toolbox is switched
 off → Activity `skipped: AI toolbox disabled`, claim `retry` with no failure counted.
+
+## Sender routes (Q3)
+
+A route is a key defined in communicator (which mailbox sends, who is copied). Leads stores only the key: on the
+company, on an import batch (the whole file) and as `Channel.default_sender_route`. The effective key is the
+company's, else the channel default, else blank (communicator's default). `outreach_service` passes it as
+`sender_route=` to `communicate()` when that function has such a parameter.
+
+## Address verification (Q5)
+
+`verification_service.verify_address` returns `(status, reason)`: invalid `syntax`, `disposable`, `domain_not_found`,
+`null_mx`, `no_mail_server`, `mailbox_rejected` (probe), `hard_bounce`; risky `no_mx_address_fallback`; unknown
+`dns_error`; valid `mx_ok` / `smtp_accepted`. Only `invalid` blocks. Where it runs: (a) the gate, before locking, when
+`LEADS_VERIFY_ENABLED` and the address is unverified or older than `LEADS_VERIFY_MAX_AGE_DAYS`; (b) the daily
+`reverify_addresses` task, `LEADS_VERIFY_BATCH` per run, oldest first; (c) a hard bounce from communicator (daily
+read-back of `bounce_hard` replies, or the optional `message_bounced` signal) — final, never re-checked. The SMTP
+probe cannot see catch-all servers (they accept everything) and many hosts refuse it; leave it off unless needed.
+A status change to or from `invalid`/`risky` is an Activity `verification`.
+
+## Do-not-contact and the send check (Q7)
+
+Opt-outs are per person, not per mailbox: the sender routes are mailboxes inside one communicator channel, so its
+suppressions already cover them. The gap was between leads channels; `dnc_service.shared_block` closes it and
+`dnc_service.add` writes everywhere. `compliance_service.explain` is the "why" report behind `send-check/`.
+
+Open points that need a lawyer, not code (nothing here is a legal interpretation): which legal basis may be set for
+imported lists and whether the owner's "same legal person" statement for ecom.house and entirius.com suffices for
+shared opt-outs; retention length (180 days idle) and the `won` exemption (won companies are never anonymised);
+how long an erased-address token and a suppression may be kept; whether a hard-bounce or risky status is personal data
+to expire with the contact; the content of the legal footer per basis (agreements clause sets); evidence kept for
+`legitimate_interest` (no balancing-test record exists in the module, only the basis and its source); the wording of
+the one-click unsubscribe (Q6, communicator).
+
+## "What to do today" queue and the "not now" loop (Q16, Q20)
+
+`queue_service` builds one read-only list for the salesperson from data that already exists: communicator replies flagged
+`needs_review`, the review-required drafts (one row linking to the approvals inbox), contacts due for their return,
+companies over the scoring threshold nobody has written to, and contacts flagged `wrong_person` (and `possibly_left` when
+Q9 adds the marker). Communicator has no "reply handled" mark, so a reply leaves the queue when a draft or sent message
+followed on the company, or after `LEADS_QUEUE_REPLY_DAYS`.
+
+`resume_service` plans the return: a reply of class `not_now` or `out_of_office` sets `Contact.resume_at` (the day after the
+stated return date, else now plus the channel's `resume_days` / `LEADS_RESUME_DEFAULT_DAYS`) and writes Activity `resume`.
+Any other later reply cancels the plan. The daily task `resume_contacts` (off by default) requests a draft with the template
+of the contact's last draft through `outreach_service.request_draft`, i.e. the same gate: opt-out, wrong person, company
+`do_not_contact`, the shared list, an invalid address (verified again first when `LEADS_VERIFY_ENABLED`). A refusal ends the
+loop for that contact; nothing resumes after an unsubscribe or refusal. Drafts per run are capped by `LEADS_RESUME_BATCH`;
+the draft still waits for human approval and communicator's own limits apply when it is sent. A dated out-of-office reply is
+resumed by communicator (sequence paused until return), so leads plans nothing then. `digest_service` (`send_digest`, off by
+default) counts from the timeline what the automation did (drafts, sent, resumed, replies) and refused (gate reasons, bad
+addresses, do-not-contact entries) plus what waits in the queue, and sends one low-severity notification per channel.
 
 ## GDPR and retention
 

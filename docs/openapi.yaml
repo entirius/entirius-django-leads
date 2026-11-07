@@ -252,6 +252,11 @@ paths:
           type: string
         description: Lead type code of the channel, or UNKNOWN.
       - in: query
+        name: origin
+        schema:
+          type: string
+        description: Exact origin.
+      - in: query
         name: page
         schema:
           type: integer
@@ -274,6 +279,11 @@ paths:
         schema:
           type: string
         description: Stage key.
+      - in: query
+        name: sender_route
+        schema:
+          type: string
+        description: Exact sender route; empty = without one.
       tags:
       - Leads Companies
       security:
@@ -536,6 +546,44 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/score/:
+    post:
+      operationId: api_leads_v2_admin_companies_score_create
+      description: Runs the channel's active scoring profile and writes Activity `score`. 409 `NO_SCORING_PROFILE` when the
+        channel has none.
+      summary: Score the company now
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/transition/:
     post:
       operationId: api_leads_v2_admin_companies_transition_create
@@ -605,6 +653,11 @@ paths:
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: email_status
+        schema:
+          type: string
+        description: unknown, valid, risky or invalid.
       tags:
       - Leads Contacts
       security:
@@ -841,6 +894,8 @@ paths:
                 file:
                   type: string
                   format: binary
+                sender_route:
+                  type: string
       security:
       - jwtAuth: []
       responses:
@@ -858,6 +913,7 @@ paths:
           description: No response body
         '404':
           description: No response body
+      description: 'Optional form field `sender_route`: the whole file goes through that communicator route.'
   /api/leads/v2/admin/{channel_idx}/imports/{id}/:
     get:
       operationId: api_leads_v2_admin_imports_retrieve
@@ -1075,6 +1131,235 @@ paths:
           description: No response body
         '409':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/pilots/:
+    get:
+      operationId: leads_pilots_list
+      summary: Pilots of the channel, newest start first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: company
+        schema:
+          type: integer
+        description: Company id.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: result
+        schema:
+          type: string
+        description: pending, success, failure or cancelled.
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_pilots_create
+      summary: Start a pilot for a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Pilots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PilotRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PilotRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PilotRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/pilots/{id}/:
+    get:
+      operationId: api_leads_v2_admin_pilots_retrieve
+      summary: One pilot
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_pilots_partial_update
+      description: A change of `result` writes a timeline note. Null only clears `end_date` and `license_switch_date`.
+      summary: Update a pilot
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Pilots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPilotUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPilotUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPilotUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_pilots_destroy
+      summary: Delete a pilot
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/pilots/report/:
+    get:
+      operationId: api_leads_v2_admin_pilots_report_retrieve
+      summary: Pilot report
+      parameters:
+      - in: query
+        name: as_of
+        schema:
+          type: string
+        description: Day (YYYY-MM-DD); today when omitted.
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Pilots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PilotReportResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/recipient-profiles/:
     get:
       operationId: leads_recipient_profiles_list
@@ -1247,6 +1532,162 @@ paths:
       responses:
         '204':
           description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/reply-routes/:
+    get:
+      operationId: leads_reply_routes_list
+      summary: Stage handling per reply intent class (stored route or the safe default)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Reply Routes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyRouteListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/reply-routes/{intent}/:
+    put:
+      operationId: api_leads_v2_admin_reply_routes_update
+      description: Replaces the whole route of the class. Applies to replies that arrive afterwards. The sequence and alerts
+        of the same class are set in communicator (`reply-actions/`).
+      summary: Set the stage handling of one intent class
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: intent
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Reply Routes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplyRouteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReplyRouteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReplyRouteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyRouteResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_reply_routes_destroy
+      summary: Back to the default for one intent class
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: intent
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Reply Routes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyRouteResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/reports/funnel/:
+    get:
+      operationId: api_leads_v2_admin_reports_funnel_retrieve
+      description: Built from the `stage` timeline entries. `origin` filters companies (empty value = no origin, omitted =
+        any); `date_from` / `date_to` bound the transition time. Companies still in a stage are counted in `current` but not
+        in the time averages.
+      summary: 'Funnel: transitions between stages and time spent in a stage'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: ISO 8601 datetime with offset.
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: ISO 8601 datetime with offset.
+      - in: query
+        name: origin
+        schema:
+          type: string
+        description: Exact company origin; empty = without origin.
+      tags:
+      - Leads Reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelResponse'
+          description: ''
         '400':
           description: No response body
         '401':
@@ -1460,6 +1901,186 @@ paths:
         required: true
       tags:
       - Leads Rules
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/:
+    get:
+      operationId: leads_scoring_profiles_list
+      summary: Scoring profiles of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_scoring_profiles_create
+      summary: Add a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/{id}/:
+    get:
+      operationId: api_leads_v2_admin_scoring_profiles_retrieve
+      summary: One scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_scoring_profiles_partial_update
+      summary: Update a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_scoring_profiles_destroy
+      summary: Delete a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
       security:
       - jwtAuth: []
       responses:
@@ -1907,6 +2528,389 @@ paths:
           description: No response body
         '403':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/bulk-sender-route/:
+    post:
+      operationId: companies_bulk_sender_route_create
+      summary: Set the sender route of the chosen companies
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Compliance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkSenderRouteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BulkSenderRouteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BulkSenderRouteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkResultResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/contacts/{id}/send-check/:
+    get:
+      operationId: contacts_send_check_retrieve
+      description: All gate reasons at once plus the legal basis and its source, the address status, the retention due date
+        and the effective sender route. Read-only.
+      summary: Why this contact is or is not mailable
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Compliance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendCheckResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/contacts/{id}/verify/:
+    post:
+      operationId: contacts_verify_create
+      description: Runs the check (syntax, disposable, DNS/MX, optional probe) even when the loop is switched off.
+      summary: Verify the contact's address now
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Compliance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/do-not-contact/:
+    get:
+      operationId: do_not_contact_retrieve
+      summary: The shared do-not-contact list
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Compliance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoNotContactListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: do_not_contact_create
+      description: 'There is no endpoint to remove an entry: lifting a refusal is a decision for a person and the law.'
+      summary: Stop an address or a domain in every channel and mailbox
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Compliance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DoNotContactRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DoNotContactRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DoNotContactRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoNotContactAddedResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/reports/verification/:
+    get:
+      operationId: reports_verification_retrieve
+      summary: Address verification state of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Compliance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationReportResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/settings/:
+    get:
+      operationId: settings_retrieve
+      summary: 'Channel settings: default sender route and "not now" windows'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Compliance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelSettingsResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: settings_partial_update
+      summary: Set the channel's default sender route and the "not now" windows
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Compliance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelSettingsResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/queue/:
+    get:
+      operationId: leads_queue_retrieve
+      description: Replies waiting for a person, the drafts waiting for approval (one row with a link), contacts due today
+        or overdue ("not now" / out-of-office), companies over the scoring threshold nobody has written to, and contacts flagged
+        wrong person or possibly left. Read-only; `value` orders the rows.
+      summary: 'What to do today: one queue sorted by value'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/test/resume-now/:
+    post:
+      operationId: leads_test_resume_now_create
+      description: In this process and whatever `LEADS_RESUME_ENABLED` says; `as_of` moves the clock, so a return 30 days
+        away can be reached at once. Every draft passes the outreach gate.
+      summary: Run the "not now" resume of this channel now (development only)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads (development)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevResumeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DevResumeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DevResumeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevResumeResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/test/digest-now/:
+    post:
+      operationId: leads_test_digest_now_create
+      description: Answers 404 outside `ENVIRONMENT == "development"`, even when a host mounts the URL.
+      summary: Send the daily digest of this channel now (development only)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads (development)
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevDigestResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
 components:
   schemas:
     ActivityListResponse:
@@ -2162,6 +3166,73 @@ components:
       - status
       title: AuditRequestedResponse
       type: object
+    BulkResultResponse:
+      properties:
+        updated:
+          description: Companies changed.
+          examples:
+          - 3
+          title: Updated
+          type: integer
+      required:
+      - updated
+      title: BulkResultResponse
+      type: object
+    BulkSenderRouteRequest:
+      additionalProperties: false
+      properties:
+        company_ids:
+          description: Companies of the channel.
+          items:
+            type: integer
+          maxItems: 1000
+          minItems: 1
+          title: Company Ids
+          type: array
+        sender_route:
+          description: Route key to set; empty clears it (channel default).
+          maxLength: 64
+          pattern: ^[a-z0-9_-]*$
+          title: Sender Route
+          type: string
+      required:
+      - company_ids
+      - sender_route
+      title: BulkSenderRouteRequest
+      type: object
+    ChannelSettingsResponse:
+      properties:
+        default_sender_route:
+          description: Route of companies without their own.
+          examples:
+          - entirius
+          title: Default Sender Route
+          type: string
+        resume_days:
+          additionalProperties:
+            type: integer
+          description: Days until a contact is approached again after a reply without a date, per intent class (not_now, out_of_office);
+            a missing class uses the module default.
+          examples:
+          - not_now: 30
+            out_of_office: 7
+          title: Resume Days
+          type: object
+        resume_defaults:
+          additionalProperties:
+            type: integer
+          description: The module defaults behind a missing class.
+          examples:
+          - not_now: 30
+            out_of_office: 7
+          title: Resume Defaults
+          type: object
+      required:
+      - default_sender_route
+      - resume_days
+      - resume_defaults
+      title: ChannelSettingsResponse
+      type: object
     CommunicateRequest:
       additionalProperties: false
       properties:
@@ -2221,6 +3292,14 @@ components:
           description: Industry.
           maxLength: 128
           title: Industry
+          type: string
+        origin:
+          default: ''
+          description: Business origin, e.g. ecom.house.
+          examples:
+          - ecom.house
+          maxLength: 64
+          title: Origin
           type: string
       required:
       - domain
@@ -2299,11 +3378,23 @@ components:
           - csv
           title: Source
           type: string
+        origin:
+          description: Business origin (ecom.house, a partner); empty when unknown.
+          examples:
+          - ecom.house
+          title: Origin
+          type: string
         external_ref:
           description: External reference.
           examples:
           - ''
           title: External Ref
+          type: string
+        sender_route:
+          description: Sender route key; empty = channel default.
+          examples:
+          - ecomhouse
+          title: Sender Route
           type: string
         do_not_contact:
           description: Never contact.
@@ -2346,6 +3437,13 @@ components:
             $ref: '#/components/schemas/ActivityResponse'
           title: Activities
           type: array
+        customer_name:
+          default: ''
+          description: Name of the linked customer; empty without accounts.
+          examples:
+          - Jan Kowalski
+          title: Customer Name
+          type: string
       required:
       - id
       - name
@@ -2359,7 +3457,9 @@ components:
       - stage
       - stage_entered_at
       - source
+      - origin
       - external_ref
+      - sender_route
       - do_not_contact
       - customer_uid
       - rotation_count
@@ -2478,11 +3578,23 @@ components:
           - csv
           title: Source
           type: string
+        origin:
+          description: Business origin (ecom.house, a partner); empty when unknown.
+          examples:
+          - ecom.house
+          title: Origin
+          type: string
         external_ref:
           description: External reference.
           examples:
           - ''
           title: External Ref
+          type: string
+        sender_route:
+          description: Sender route key; empty = channel default.
+          examples:
+          - ecomhouse
+          title: Sender Route
           type: string
         do_not_contact:
           description: Never contact.
@@ -2526,7 +3638,9 @@ components:
       - stage
       - stage_entered_at
       - source
+      - origin
       - external_ref
+      - sender_route
       - do_not_contact
       - customer_uid
       - rotation_count
@@ -2733,6 +3847,51 @@ components:
           examples:
           - null
           title: Anonymised At
+        wrong_person_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: A reply said this is the wrong person; no more outreach to the contact.
+          examples:
+          - null
+          title: Wrong Person At
+        email_status:
+          description: 'Address verification: unknown, valid, risky or invalid.'
+          examples:
+          - valid
+          title: Email Status
+          type: string
+        email_status_reason:
+          description: Short reason code of the status.
+          examples:
+          - mx_ok
+          title: Email Status Reason
+          type: string
+        email_verified_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: When the address was last verified.
+          examples:
+          - null
+          title: Email Verified At
+        resume_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: '"Not now" loop: the day the contact is approached again; null = none planned.'
+          examples:
+          - null
+          title: Resume At
+        resume_intent:
+          description: Reply class that planned it (not_now, out_of_office).
+          examples:
+          - ''
+          title: Resume Intent
+          type: string
       required:
       - id
       - company_id
@@ -2747,6 +3906,12 @@ components:
       - legal_basis
       - opt_out_at
       - anonymised_at
+      - wrong_person_at
+      - email_status
+      - email_status_reason
+      - email_verified_at
+      - resume_at
+      - resume_intent
       title: ContactResponse
       type: object
     ContactStrategy:
@@ -2864,6 +4029,79 @@ components:
       - rotated
       title: DevRotateResponse
       type: object
+    DoNotContactAddedResponse:
+      properties:
+        contacts:
+          description: Contacts newly opted out.
+          examples:
+          - 1
+          title: Contacts
+          type: integer
+        companies:
+          description: Companies newly marked.
+          examples:
+          - 0
+          title: Companies
+          type: integer
+      required:
+      - contacts
+      - companies
+      title: DoNotContactAddedResponse
+      type: object
+    DoNotContactListResponse:
+      properties:
+        contacts:
+          description: Opted-out contacts (email, channel, opt_out_at), max 500.
+          items:
+            additionalProperties: true
+            type: object
+          title: Contacts
+          type: array
+        companies:
+          description: Companies on the list (domain, channel), max 500.
+          items:
+            additionalProperties: true
+            type: object
+          title: Companies
+          type: array
+        suppressions:
+          description: Communicator email/domain suppressions, max 500.
+          items:
+            additionalProperties: true
+            type: object
+          title: Suppressions
+          type: array
+      required:
+      - contacts
+      - companies
+      - suppressions
+      title: DoNotContactListResponse
+      type: object
+    DoNotContactRequest:
+      additionalProperties: false
+      properties:
+        email:
+          default: ''
+          description: An address to stop everywhere.
+          maxLength: 254
+          title: Email
+          type: string
+        domain:
+          default: ''
+          description: A domain to stop everywhere (instead of email).
+          maxLength: 253
+          title: Domain
+          type: string
+        reason:
+          description: Why (a request, a complaint, ...).
+          maxLength: 200
+          minLength: 1
+          title: Reason
+          type: string
+      required:
+      - reason
+      title: DoNotContactRequest
+      type: object
     DraftResponse:
       properties:
         message_id:
@@ -2882,6 +4120,145 @@ components:
       - message_id
       - status
       title: DraftResponse
+      type: object
+    FieldEnum:
+      enum:
+      - lead_type
+      - industry
+      - platform
+      - domain
+      - hooks_count
+      - emails_count
+      - rotation_count
+      type: string
+    FunnelOrigin:
+      properties:
+        origin:
+          description: Origin; empty = unknown.
+          examples:
+          - ecom.house
+          title: Origin
+          type: string
+        companies:
+          description: Companies of the channel.
+          examples:
+          - 40
+          title: Companies
+          type: integer
+      required:
+      - origin
+      - companies
+      title: FunnelOrigin
+      type: object
+    FunnelResponse:
+      properties:
+        companies:
+          description: Companies matching the origin filter.
+          examples:
+          - 40
+          title: Companies
+          type: integer
+        transitions:
+          description: Per (from, to) pair, most frequent first.
+          items:
+            $ref: '#/components/schemas/FunnelTransition'
+          title: Transitions
+          type: array
+        stages:
+          description: Per stage seen.
+          items:
+            $ref: '#/components/schemas/FunnelStage'
+          title: Stages
+          type: array
+        origins:
+          description: Companies per origin, whole channel (never filtered).
+          items:
+            $ref: '#/components/schemas/FunnelOrigin'
+          title: Origins
+          type: array
+      required:
+      - companies
+      - transitions
+      - stages
+      - origins
+      title: FunnelResponse
+      type: object
+    FunnelStage:
+      properties:
+        stage:
+          description: Stage key.
+          examples:
+          - contacted
+          title: Stage
+          type: string
+        current:
+          description: Companies in the stage now (origin filter, no date window).
+          examples:
+          - 5
+          title: Current
+          type: integer
+        entered:
+          description: Transitions into the stage in the window.
+          examples:
+          - 12
+          title: Entered
+          type: integer
+        left:
+          description: Transitions out of the stage in the window.
+          examples:
+          - 7
+          title: Left
+          type: integer
+        avg_seconds_in_stage:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time in the stage before leaving.
+          examples:
+          - 172800.0
+          title: Avg Seconds In Stage
+      required:
+      - stage
+      - current
+      - entered
+      - left
+      - avg_seconds_in_stage
+      title: FunnelStage
+      type: object
+    FunnelTransition:
+      properties:
+        from_stage:
+          description: Stage key left.
+          examples:
+          - new
+          title: From Stage
+          type: string
+        to_stage:
+          description: Stage key entered.
+          examples:
+          - contacted
+          title: To Stage
+          type: string
+        count:
+          description: Transitions in the window.
+          examples:
+          - 12
+          title: Count
+          type: integer
+        avg_seconds_in_from_stage:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time spent in `from_stage` first.
+          examples:
+          - 86400.0
+          title: Avg Seconds In From Stage
+      required:
+      - from_stage
+      - to_stage
+      - count
+      - avg_seconds_in_from_stage
+      title: FunnelTransition
       type: object
     GdprEraseResponse:
       properties:
@@ -3004,6 +4381,12 @@ components:
           - 1024
           title: Size Bytes
           type: integer
+        sender_route:
+          description: Route the whole file was assigned to; empty = none.
+          examples:
+          - ''
+          title: Sender Route
+          type: string
         created_by:
           description: Uploader.
           examples:
@@ -3033,6 +4416,7 @@ components:
       - skipped_count
       - row_count
       - size_bytes
+      - sender_route
       - created_by
       - created_at
       - report
@@ -3131,6 +4515,12 @@ components:
           - 1024
           title: Size Bytes
           type: integer
+        sender_route:
+          description: Route the whole file was assigned to; empty = none.
+          examples:
+          - ''
+          title: Sender Route
+          type: string
         created_by:
           description: Uploader.
           examples:
@@ -3154,6 +4544,7 @@ components:
       - skipped_count
       - row_count
       - size_bytes
+      - sender_route
       - created_by
       - created_at
       title: ImportBatchResponse
@@ -3274,6 +4665,48 @@ components:
       - contract
       title: LegalBasis
       type: string
+    LicenseSwitchDue:
+      properties:
+        pilot_id:
+          description: Pilot id.
+          examples:
+          - 100
+          title: Pilot Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 101
+          title: Company Id
+          type: integer
+        domain:
+          description: Company domain.
+          examples:
+          - example-shop-2.test
+          title: Domain
+          type: string
+        switch_date:
+          description: Licence switch day.
+          examples:
+          - '2026-12-15'
+          format: date
+          title: Switch Date
+          type: string
+      required:
+      - pilot_id
+      - company_id
+      - domain
+      - switch_date
+      title: LicenseSwitchDue
+      type: object
+    OpEnum:
+      enum:
+      - eq
+      - in
+      - contains
+      - gte
+      - lte
+      type: string
     PatchedAnalysisProfileUpdateRequest:
       additionalProperties: false
       properties:
@@ -3320,6 +4753,36 @@ components:
           title: Is Active
       title: AnalysisProfileUpdateRequest
       type: object
+    PatchedChannelSettingsRequest:
+      additionalProperties: false
+      properties:
+        default_sender_route:
+          anyOf:
+          - maxLength: 64
+            pattern: ^[a-z0-9_-]*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Route of companies without their own; empty = communicator's; omit = unchanged.
+          title: Default Sender Route
+        resume_days:
+          anyOf:
+          - additionalProperties:
+              type: integer
+            propertyNames:
+              enum:
+              - not_now
+              - out_of_office
+            type: object
+          - type: 'null'
+          default: null
+          description: Days until a contact is approached again after a reply with no date, per class (1..365). Replaces the
+            whole map; a class left out uses the module default; omit = unchanged.
+          examples:
+          - not_now: 45
+          title: Resume Days
+      title: ChannelSettingsRequest
+      type: object
     PatchedCompanyUpdateRequest:
       additionalProperties: false
       properties:
@@ -3359,6 +4822,14 @@ components:
           default: null
           description: Industry.
           title: Industry
+        origin:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          default: null
+          description: Business origin, e.g. ecom.house.
+          title: Origin
         description:
           anyOf:
           - type: string
@@ -3489,6 +4960,55 @@ components:
           title: Is Active
       title: LeadTypeUpdateRequest
       type: object
+    PatchedPilotUpdateRequest:
+      additionalProperties: false
+      properties:
+        start_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: First day of the pilot.
+          title: Start Date
+        end_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Last day; null clears it.
+          title: End Date
+        success_criterion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: What counts as success.
+          title: Success Criterion
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/PilotResult'
+          - type: 'null'
+          default: null
+          description: pending, success, failure or cancelled.
+        result_note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Outcome in words.
+          title: Result Note
+        license_switch_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Licence switch day; null clears it.
+          title: License Switch Date
+      title: PilotUpdateRequest
+      type: object
     PatchedProfileUpdateRequest:
       additionalProperties: false
       properties:
@@ -3551,7 +5071,7 @@ components:
           - $ref: '#/components/schemas/RuleAction'
           - type: 'null'
           default: null
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           anyOf:
           - maxLength: 128
@@ -3607,6 +5127,53 @@ components:
           title: Order
       title: RuleUpdateRequest
       type: object
+    PatchedScoringProfileUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_.]+$
+            type: string
+          - type: 'null'
+          default: null
+          title: Key
+        thresholds:
+          anyOf:
+          - $ref: '#/components/schemas/Thresholds'
+          - type: 'null'
+          default: null
+          description: Points needed for S3, S2 and S1.
+        rules:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ScoreRuleItem'
+            maxItems: 100
+            type: array
+          - type: 'null'
+          default: null
+          description: Point rules.
+          title: Rules
+        disqualifiers:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ScoreCondition'
+            maxItems: 50
+            type: array
+          - type: 'null'
+          default: null
+          description: Force S4.
+          title: Disqualifiers
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Used by scoring.
+          title: Is Active
+      title: ScoringProfileUpdateRequest
+      type: object
     PatchedStageUpdateRequest:
       additionalProperties: false
       properties:
@@ -3658,8 +5225,240 @@ components:
           default: null
           description: Companies move here when a contact replies.
           title: On Reply
+        on_sent:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Companies move here (forward only) when a message is sent.
+          title: On Sent
       title: StageUpdateRequest
       type: object
+    PilotListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Pilots, newest start first.
+          items:
+            $ref: '#/components/schemas/PilotResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: PilotListResponse
+      type: object
+    PilotReportResponse:
+      properties:
+        as_of:
+          description: Day the report is computed for.
+          examples:
+          - '2026-11-10'
+          format: date
+          title: As Of
+          type: string
+        total:
+          description: All pilots of the channel.
+          examples:
+          - 4
+          title: Total
+          type: integer
+        by_result:
+          additionalProperties:
+            type: integer
+          description: Pilots per result, every result present.
+          examples:
+          - pending: 2
+          title: By Result
+          type: object
+        running:
+          description: Pending pilots started and not past their end date.
+          examples:
+          - 2
+          title: Running
+          type: integer
+        overdue:
+          description: Pending pilots past their end date.
+          examples:
+          - 1
+          title: Overdue
+          type: integer
+        avg_length_days:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean length of finished pilots with an end date.
+          examples:
+          - 28.5
+          title: Avg Length Days
+        license_switch_due:
+          description: Successful pilots switching within 30 days.
+          items:
+            $ref: '#/components/schemas/LicenseSwitchDue'
+          title: License Switch Due
+          type: array
+      required:
+      - as_of
+      - total
+      - by_result
+      - running
+      - overdue
+      - avg_length_days
+      - license_switch_due
+      title: PilotReportResponse
+      type: object
+    PilotRequest:
+      additionalProperties: false
+      properties:
+        company_id:
+          description: Company of the channel.
+          examples:
+          - 101
+          title: Company Id
+          type: integer
+        start_date:
+          description: First day of the pilot.
+          examples:
+          - '2026-11-10'
+          format: date
+          title: Start Date
+          type: string
+        end_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Planned or actual last day.
+          title: End Date
+        success_criterion:
+          default: ''
+          description: What counts as success.
+          examples:
+          - 10 orders in 30 days
+          title: Success Criterion
+          type: string
+        result:
+          $ref: '#/components/schemas/PilotResult'
+          default: pending
+          description: pending, success, failure or cancelled.
+        result_note:
+          default: ''
+          description: Outcome in words.
+          title: Result Note
+          type: string
+        license_switch_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Day the company moves to a licence (S5).
+          title: License Switch Date
+      required:
+      - company_id
+      - start_date
+      title: PilotRequest
+      type: object
+    PilotResponse:
+      properties:
+        id:
+          description: Pilot id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 101
+          title: Company Id
+          type: integer
+        start_date:
+          description: First day.
+          examples:
+          - '2026-11-10'
+          format: date
+          title: Start Date
+          type: string
+        end_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Last day.
+          examples:
+          - '2026-12-10'
+          title: End Date
+        success_criterion:
+          description: What counts as success.
+          examples:
+          - 10 orders in 30 days
+          title: Success Criterion
+          type: string
+        result:
+          description: pending, success, failure or cancelled.
+          examples:
+          - pending
+          title: Result
+          type: string
+        result_note:
+          description: Outcome in words.
+          examples:
+          - ''
+          title: Result Note
+          type: string
+        license_switch_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Day of the switch to a licence.
+          examples:
+          - '2026-12-15'
+          title: License Switch Date
+      required:
+      - id
+      - company_id
+      - start_date
+      - end_date
+      - success_criterion
+      - result
+      - result_note
+      - license_switch_date
+      title: PilotResponse
+      type: object
+    PilotResult:
+      enum:
+      - pending
+      - success
+      - failure
+      - cancelled
+      title: PilotResult
+      type: string
     ProfileDetailResponse:
       properties:
         id:
@@ -3774,10 +5573,112 @@ components:
       - model
       title: ProfileResponse
       type: object
+    ReplyRouteListResponse:
+      properties:
+        results:
+          description: One entry per intent class.
+          examples:
+          - []
+          items:
+            $ref: '#/components/schemas/ReplyRouteResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ReplyRouteListResponse
+      type: object
+    ReplyRouteRequest:
+      additionalProperties: false
+      description: The whole route of one reply intent class; omitted fields take the defaults.
+      properties:
+        action:
+          $ref: '#/components/schemas/ReplyStageAction'
+          default: reply_stage
+          description: reply_stage (the on-reply stage, as before T4), stage (the stage below, never out of a terminal stage)
+            or none (keep the stage).
+          examples:
+          - stage
+        stage_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: Required for action stage, forbidden otherwise; a stage of this channel.
+          examples:
+          - 4
+          title: Stage Id
+        flag_contact:
+          default: false
+          description: 'Mark the replying contact as the wrong person: no more outreach to them.'
+          examples:
+          - false
+          title: Flag Contact
+          type: boolean
+      title: ReplyRouteRequest
+      type: object
+    ReplyRouteResponse:
+      properties:
+        intent:
+          description: The reply intent class.
+          examples:
+          - not_interested
+          title: Intent
+          type: string
+        action:
+          description: reply_stage, stage or none.
+          examples:
+          - stage
+          title: Action
+          type: string
+        stage_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Target stage of action stage.
+          examples:
+          - 4
+          title: Stage Id
+        stage_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Its key.
+          examples:
+          - lost
+          title: Stage Key
+        flag_contact:
+          description: Flag the replying contact as the wrong person.
+          examples:
+          - false
+          title: Flag Contact
+          type: boolean
+        is_default:
+          description: 'No row: the code default applies.'
+          examples:
+          - true
+          title: Is Default
+          type: boolean
+      required:
+      - intent
+      - action
+      - stage_id
+      - stage_key
+      - flag_contact
+      - is_default
+      title: ReplyRouteResponse
+      type: object
+    ReplyStageAction:
+      enum:
+      - reply_stage
+      - stage
+      - none
+      title: ReplyStageAction
+      type: string
     RuleAction:
       enum:
       - request_audit
       - communicate
+      - score
       title: RuleAction
       type: string
     RuleListResponse:
@@ -3812,7 +5713,7 @@ components:
         action:
           $ref: '#/components/schemas/RuleAction'
           default: communicate
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           default: ''
           description: Communicator template; for communicate.
@@ -3879,7 +5780,7 @@ components:
           - 102
           title: Stage Id
         action:
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
           examples:
           - communicate
           title: Action
@@ -4031,6 +5932,374 @@ components:
       - intel_ready
       title: RuleTrigger
       type: string
+    ScoreCondition:
+      additionalProperties: false
+      description: A test on one company fact; shared by scoring rules (with points) and disqualifiers.
+      properties:
+        field:
+          allOf:
+          - $ref: '#/components/schemas/FieldEnum'
+          description: Company fact tested.
+          examples:
+          - lead_type
+          title: Field
+        op:
+          allOf:
+          - $ref: '#/components/schemas/OpEnum'
+          description: eq, in (value is a list), contains (text), gte or lte (counts).
+          examples:
+          - in
+          title: Op
+        value:
+          anyOf:
+          - type: string
+          - type: integer
+          - items:
+              type: string
+            type: array
+          description: Compared value; a list for `in`.
+          examples:
+          - - RETAILER
+          title: Value
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - retailer
+          maxLength: 120
+          title: Label
+          type: string
+      required:
+      - field
+      - op
+      - value
+      title: ScoreCondition
+      type: object
+    ScoreReason:
+      properties:
+        code:
+          description: The fact the condition tests (lead_type, industry, domain, ...).
+          examples:
+          - lead_type
+          title: Code
+          type: string
+        kind:
+          description: rule or disqualifier.
+          examples:
+          - rule
+          title: Kind
+          type: string
+        points:
+          description: Points added (0 for a disqualifier).
+          examples:
+          - 30
+          title: Points
+          type: integer
+        label:
+          description: The label typed in the profile, blank when none.
+          examples:
+          - retailer
+          title: Label
+          type: string
+        label_key:
+          description: Stable key for a localised text.
+          examples:
+          - leads.scoring.rule.lead_type
+          title: Label Key
+          type: string
+      required:
+      - code
+      - kind
+      - points
+      - label
+      - label_key
+      title: ScoreReason
+      type: object
+    ScoreResponse:
+      properties:
+        segment:
+          description: S1 (best) to S4.
+          examples:
+          - S2
+          title: Segment
+          type: string
+        points:
+          description: Sum of the matching rules.
+          examples:
+          - 45
+          title: Points
+          type: integer
+        disqualified:
+          description: A disqualifier forced S4.
+          examples:
+          - false
+          title: Disqualified
+          type: boolean
+        reasons:
+          description: Matching rules or disqualifiers.
+          examples:
+          - - 'retailer: +30'
+          items:
+            type: string
+          title: Reasons
+          type: array
+        reasons_structured:
+          description: The same reasons as data, in the same order.
+          items:
+            $ref: '#/components/schemas/ScoreReason'
+          title: Reasons Structured
+          type: array
+        profile_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Profile used.
+          examples:
+          - 100
+          title: Profile Id
+      required:
+      - segment
+      - points
+      - disqualified
+      - reasons
+      - profile_id
+      title: ScoreResponse
+      type: object
+    ScoreRuleItem:
+      additionalProperties: false
+      properties:
+        field:
+          allOf:
+          - $ref: '#/components/schemas/FieldEnum'
+          description: Company fact tested.
+          examples:
+          - lead_type
+          title: Field
+        op:
+          allOf:
+          - $ref: '#/components/schemas/OpEnum'
+          description: eq, in (value is a list), contains (text), gte or lte (counts).
+          examples:
+          - in
+          title: Op
+        value:
+          anyOf:
+          - type: string
+          - type: integer
+          - items:
+              type: string
+            type: array
+          description: Compared value; a list for `in`.
+          examples:
+          - - RETAILER
+          title: Value
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - retailer
+          maxLength: 120
+          title: Label
+          type: string
+        points:
+          description: Added when the condition holds.
+          examples:
+          - 30
+          maximum: 100
+          minimum: -100
+          title: Points
+          type: integer
+      required:
+      - field
+      - op
+      - value
+      - points
+      title: ScoreRuleItem
+      type: object
+    ScoringProfileListResponse:
+      properties:
+        results:
+          description: Profiles of the channel.
+          items:
+            $ref: '#/components/schemas/ScoringProfileResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ScoringProfileListResponse
+      type: object
+    ScoringProfileRequest:
+      additionalProperties: false
+      properties:
+        key:
+          default: leads.scoring
+          description: Profile key.
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_.]+$
+          title: Key
+          type: string
+        thresholds:
+          $ref: '#/components/schemas/Thresholds'
+          description: Points needed for S3, S2 and S1; below S is S4.
+        rules:
+          description: Point rules.
+          items:
+            $ref: '#/components/schemas/ScoreRuleItem'
+          maxItems: 100
+          title: Rules
+          type: array
+        disqualifiers:
+          description: Force S4.
+          items:
+            $ref: '#/components/schemas/ScoreCondition'
+          maxItems: 50
+          title: Disqualifiers
+          type: array
+        is_active:
+          default: true
+          description: Used by scoring.
+          title: Is Active
+          type: boolean
+      required:
+      - thresholds
+      title: ScoringProfileRequest
+      type: object
+    ScoringProfileResponse:
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.scoring
+          title: Key
+          type: string
+        thresholds:
+          additionalProperties:
+            type: integer
+          description: Points for S3 (S), S2 (M), S1 (L).
+          examples:
+          - L: 70
+            M: 40
+            S: 20
+          title: Thresholds
+          type: object
+        rules:
+          description: Point rules.
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Rules
+          type: array
+        disqualifiers:
+          description: Conditions forcing S4.
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Disqualifiers
+          type: array
+        is_active:
+          description: Used by scoring.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - key
+      - thresholds
+      - rules
+      - disqualifiers
+      - is_active
+      title: ScoringProfileResponse
+      type: object
+    SendCheckResponse:
+      properties:
+        contact_id:
+          description: Contact id.
+          examples:
+          - 100
+          title: Contact Id
+          type: integer
+        company_id:
+          description: Company id.
+          examples:
+          - 100
+          title: Company Id
+          type: integer
+        eligible:
+          description: True when a draft may be requested for the contact now.
+          examples:
+          - false
+          title: Eligible
+          type: boolean
+        reasons:
+          description: 'Every gate reason: do_not_contact, no_email, opted_out, anonymised, wrong_person, no_legal_basis,
+            email_invalid, opted_out_elsewhere, domain_do_not_contact_elsewhere, suppressed_elsewhere.'
+          examples:
+          - - opted_out
+          items:
+            type: string
+          title: Reasons
+          type: array
+        legal_basis:
+          additionalProperties: true
+          description: value, consent_ref, source and set_at of the legal basis.
+          title: Legal Basis
+          type: object
+        email:
+          additionalProperties: true
+          description: Verification status, reason and verified_at.
+          title: Email
+          type: object
+        opt_out_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Opted out.
+          examples:
+          - null
+          title: Opt Out At
+        company_do_not_contact:
+          description: The company is on the list.
+          examples:
+          - false
+          title: Company Do Not Contact
+          type: boolean
+        retention:
+          additionalProperties: true
+          description: days, exempt_won, anonymised_at and due_at (when idle data goes).
+          title: Retention
+          type: object
+        sender_route:
+          description: 'Effective route: the company''s, else the channel default.'
+          examples:
+          - ''
+          title: Sender Route
+          type: string
+      required:
+      - contact_id
+      - company_id
+      - eligible
+      - reasons
+      - legal_basis
+      - email
+      - opt_out_at
+      - company_do_not_contact
+      - retention
+      - sender_route
+      title: SendCheckResponse
+      type: object
     StageKind:
       enum:
       - open
@@ -4092,6 +6361,12 @@ components:
           description: Companies move here when a contact replies.
           title: On Reply
           type: boolean
+        on_sent:
+          description: Target when a message is sent (forward only).
+          examples:
+          - false
+          title: On Sent
+          type: boolean
       required:
       - key
       - label
@@ -4141,6 +6416,12 @@ components:
           - false
           title: On Reply
           type: boolean
+        on_sent:
+          description: Target when a message is sent (forward only).
+          examples:
+          - false
+          title: On Sent
+          type: boolean
       required:
       - id
       - key
@@ -4149,7 +6430,41 @@ components:
       - kind
       - is_terminal
       - on_reply
+      - on_sent
       title: StageResponse
+      type: object
+    Thresholds:
+      additionalProperties: false
+      properties:
+        S:
+          description: Points from which a company is S3.
+          examples:
+          - 20
+          maximum: 1000
+          minimum: 0
+          title: S
+          type: integer
+        M:
+          description: Points from which a company is S2.
+          examples:
+          - 40
+          maximum: 1000
+          minimum: 0
+          title: M
+          type: integer
+        L:
+          description: Points from which a company is S1.
+          examples:
+          - 70
+          maximum: 1000
+          minimum: 0
+          title: L
+          type: integer
+      required:
+      - S
+      - M
+      - L
+      title: Thresholds
       type: object
     TransitionRequest:
       additionalProperties: false
@@ -4165,6 +6480,259 @@ components:
       required:
       - stage_key
       title: TransitionRequest
+      type: object
+    VerificationReportResponse:
+      properties:
+        enabled:
+          description: 'LEADS_VERIFY_ENABLED: addresses are checked live and on schedule.'
+          examples:
+          - false
+          title: Enabled
+          type: boolean
+        max_age_days:
+          description: A check older than this is repeated.
+          examples:
+          - 30
+          title: Max Age Days
+          type: integer
+        counts:
+          additionalProperties:
+            type: integer
+          description: Contacts with an address per status.
+          examples:
+          - valid: 4
+          title: Counts
+          type: object
+        stale:
+          description: Contacts due for a check now.
+          examples:
+          - 0
+          title: Stale
+          type: integer
+      required:
+      - enabled
+      - max_age_days
+      - counts
+      - stale
+      title: VerificationReportResponse
+      type: object
+    QueueDraftsResponse:
+      properties:
+        count:
+          description: Drafts waiting for approval.
+          examples:
+          - 7
+          title: Count
+          type: integer
+        approvals_path:
+          description: CMS route of the approvals inbox.
+          examples:
+          - /leads/approvals
+          title: Approvals Path
+          type: string
+      required:
+      - count
+      - approvals_path
+      title: QueueDraftsResponse
+      type: object
+    QueueItemResponse:
+      properties:
+        kind:
+          description: reply, task, hot_company, decision or drafts.
+          examples:
+          - reply
+          title: Kind
+          type: string
+        value:
+          description: Higher = do it sooner; the list is sorted by it.
+          examples:
+          - 100
+          title: Value
+          type: integer
+        company_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Company; null for the drafts row.
+          examples:
+          - 12
+          title: Company Id
+        company_name:
+          description: Company name.
+          examples:
+          - Shop 12
+          title: Company Name
+          type: string
+        contact_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Contact when the row is about one.
+          examples:
+          - 34
+          title: Contact Id
+        contact_email:
+          description: Contact address (staff with `leads.companies` only).
+          examples:
+          - a@b.test
+          title: Contact Email
+          type: string
+        reason:
+          description: 'Why it is in the queue: the reply class (interested, unclear, ..., unclassified), the resume class
+            (not_now, out_of_office), the score segment (S1, S2), wrong_person / possibly_left, drafts_waiting.'
+          examples:
+          - interested
+          title: Reason
+          type: string
+        due_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: When it happened or is due.
+          examples:
+          - '2026-11-07T08:00:00Z'
+          title: Due At
+        excerpt:
+          description: Start of the reply text (replies only).
+          examples:
+          - Yes, send the offer
+          title: Excerpt
+          type: string
+        ref_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Communicator reply id (replies only).
+          examples:
+          - 5
+          title: Ref Id
+        count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Number of drafts (drafts row only).
+          examples:
+          - null
+          title: Count
+        path:
+          description: CMS route to open (drafts row only).
+          examples:
+          - /leads/approvals
+          title: Path
+          type: string
+      required:
+      - kind
+      - value
+      - company_id
+      - company_name
+      - contact_id
+      - contact_email
+      - reason
+      - due_at
+      - excerpt
+      - ref_id
+      - count
+      - path
+      title: QueueItemResponse
+      type: object
+    QueueResponse:
+      properties:
+        generated_at:
+          description: When the queue was built.
+          examples:
+          - '2026-11-07T08:00:00Z'
+          format: date-time
+          title: Generated At
+          type: string
+        counts:
+          additionalProperties:
+            type: integer
+          description: 'Rows per section before the per-section limit: reply, task, hot_company, decision, drafts.'
+          examples:
+          - decision: 0
+            drafts: 7
+            hot_company: 4
+            reply: 2
+            task: 1
+          title: Counts
+          type: object
+        drafts:
+          $ref: '#/components/schemas/QueueDraftsResponse'
+        items:
+          description: All rows, highest value first.
+          items:
+            $ref: '#/components/schemas/QueueItemResponse'
+          title: Items
+          type: array
+      required:
+      - generated_at
+      - counts
+      - drafts
+      - items
+      title: QueueResponse
+      type: object
+    DevResumeRequest:
+      additionalProperties: false
+      properties:
+        as_of:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          default: null
+          description: 'Clock of the resume run: contacts due by then are resumed; now when omitted.'
+          examples:
+          - '2026-12-15T06:00:00Z'
+          title: As Of
+        company_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: Only this company's contacts; omit = the channel.
+          title: Company Id
+      title: DevResumeRequest
+      type: object
+    DevResumeResponse:
+      properties:
+        resumed:
+          description: Contacts a draft was requested for.
+          examples:
+          - 1
+          title: Resumed
+          type: integer
+        cancelled:
+          description: Contacts the outreach gate refused (the loop ends for them).
+          examples:
+          - 0
+          title: Cancelled
+          type: integer
+        waiting:
+          description: Contacts kept for the next run (AI toolbox off).
+          examples:
+          - 0
+          title: Waiting
+          type: integer
+      required:
+      - resumed
+      - cancelled
+      - waiting
+      title: DevResumeResponse
+      type: object
+    DevDigestResponse:
+      properties:
+        sent:
+          additionalProperties:
+            type: integer
+          description: 'Per channel idx: 1 = the digest went to notifications, 0 = nothing to say.'
+          examples:
+          - x: 1
+          title: Sent
+          type: object
+      required:
+      - sent
+      title: DevDigestResponse
       type: object
   securitySchemes:
     jwtAuth:

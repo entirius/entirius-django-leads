@@ -43,6 +43,18 @@ item below: the rule, then where it is enforced.
 - **`legal_basis` is never filled by `fill_empty`** — only `propose_legal_basis` (import, form) or `set_legal_basis`
   (operator). `consent` without a `consent_ref` raises `ConsentRefRequired`.
 
+## Verification and the shared list
+
+- **No test, and no code path with the loop off, may query DNS or open SMTP.** The suite installs stubs in an autouse
+  fixture (`tests/conftest.py: dns`); a new test needing other answers sets `dns.answers[domain]`.
+- **Verification runs before the gate's locks, never inside them** (`outreach_service.request_draft`): DNS under a row
+  lock would stall every draft of the company.
+- **`hard_bounce` is final.** `needs_check` and the scheduled run skip it; clearing it is a manual database decision.
+- **The gate checks other channels only.** A suppression of the contact's own communicator channel is left to
+  `communicate()` (status `suppressed`), as before.
+- **Sender route is passed only when `communicate()` has a `sender_route` parameter** (signature check in
+  `sender_route_service`); an old communicator silently ignores routes.
+
 ## Rules, gate and paid calls
 
 - **The outreach gate runs only inside `outreach_service.request_draft`,** on locked company then contact rows. A new
@@ -62,10 +74,24 @@ item below: the rule, then where it is enforced.
   the rules twice (cooldown still applies to fired runs).
 - **`StageRule.require_legal_basis` has no effect** and is not exposed by the API — the gate is the only legal-basis
   decision.
-- **A company created by an import does not send `stage_entered`.** Its first-stage rules run only after a transition
-  or through `test/evaluate/`.
+- **A company created by an import sends `stage_entered` for the first stage** (`LEADS_IMPORT_FIRES_RULES`, default
+  true), after the chunk commits; companies the import only matched send nothing. Switch it off to import without
+  starting any rule.
 - **Profile prompts and rendered prompts never reach logs, Activity data or API lists.** Company and site values go
   into prompts only wrapped by `utils/prompts.as_data`.
+- **Scoring never calls the toolbox and writes only Activity `score`.** `Company` keeps no segment; the latest `score`
+  entry is the answer. Profile `rules` / `disqualifiers` / `thresholds` are validated by the request schemas only: a
+  profile saved through Django admin skips that check, and `scoring_service` assumes the shapes. One active profile per
+  channel is used (lowest `key`).
+
+## Queue and "not now" loop
+
+- **`resume_at` is cleared before the draft is requested** (a conditional update, so one worker wins) and restored only when
+  the AI toolbox is off; a crash between leaves no plan, never a double draft.
+- **The loop never bypasses the gate.** Do not add a path that drafts to a due contact except `request_draft`.
+- **Communicator resumes dated out-of-office sequences itself**; leads must not plan those too (double mail).
+- **The queue is read-only and holds no state**: "done" is derived (a later draft or sent message), because communicator
+  offers no handled mark. Do not add queue state to leads without that decision.
 
 ## Receivers
 

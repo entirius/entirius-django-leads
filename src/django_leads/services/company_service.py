@@ -14,9 +14,19 @@ from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind
 from django_leads.models import Activity, Channel, Company, Stage
 from django_leads.services import activity_service, lead_type_service, stage_service
 
-FILL_FIELDS = ("name", "website", "lead_type", "industry")
+FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin", "sender_route")
 EDITABLE_FIELDS = frozenset(
-    {"name", "website", "lead_type", "industry", "description", "do_not_contact", "external_ref"}
+    {
+        "name",
+        "website",
+        "lead_type",
+        "industry",
+        "origin",
+        "description",
+        "do_not_contact",
+        "external_ref",
+        "sender_route",
+    }
 )
 SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at"})
 EMPTY_VALUES = (None, "", UNKNOWN_LEAD_TYPE)
@@ -103,7 +113,9 @@ def list_companies(
     sort: str = "name",
     lead_type: str = "",
     do_not_contact: bool | None = None,
+    origin: str = "",
     has_reply: bool | None = None,
+    sender_route: str | None = None,
 ) -> QuerySet[Company]:
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
     active lead type of the channel (`UnknownLeadType`)."""
@@ -116,6 +128,10 @@ def list_companies(
         companies = companies.filter(Q(name__icontains=search) | Q(domain__icontains=search))
     if lead_type:
         lead_type_service.check_code(channel, lead_type)
+    if origin:
+        companies = companies.filter(origin=origin)
+    if sender_route is not None:
+        companies = companies.filter(sender_route=sender_route)
     companies = filter_flags(companies, lead_type, do_not_contact, has_reply)
     return companies.order_by(sort, "id")
 

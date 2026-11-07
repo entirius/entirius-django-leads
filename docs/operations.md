@@ -21,7 +21,7 @@ UTF-8 (a BOM is accepted), header row required — the batch fails `missing_head
 column after stripping surrounding whitespace (`" domain "` matches `domain`); values are then read through that
 same stripped mapping, so a padded header never imports empty values. Columns (all optional, unknown ones ignored):
 `company_name`, `domain`, `website`, `lead_type` (older files: `company_type`, read when `lead_type` is absent),
-`industry`, `first_name`, `last_name`, `email`, `job_title`, `language` (ISO 639-1), `legal_basis` (`consent`,
+`industry`, `origin` (business origin, e.g. `ecom.house`; fills an empty value only), `first_name`, `last_name`, `email`, `job_title`, `language` (ISO 639-1), `legal_basis` (`consent`,
 `legitimate_interest`, `contract`), `phone`.
 
 - The company domain is `domain`, else `website`, else the email host; a free-mail host without `domain`/`website`
