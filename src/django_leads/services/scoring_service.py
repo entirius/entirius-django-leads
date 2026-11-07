@@ -28,6 +28,7 @@ class ScoreResult:
     disqualified: bool = False
     reasons: list[str] = field(default_factory=list)
     profile_id: int | None = None
+    reasons_structured: list[dict[str, Any]] = field(default_factory=list)
 
     def as_data(self) -> dict[str, Any]:
         return {
@@ -36,6 +37,7 @@ class ScoreResult:
             "disqualified": self.disqualified,
             "reasons": self.reasons,
             "profile_id": self.profile_id,
+            "reasons_structured": self.reasons_structured,
         }
 
 
@@ -82,21 +84,41 @@ def segment_for(points: int, thresholds: dict[str, int]) -> str:
     return "S4"
 
 
+def _reason(kind: str, condition: dict[str, Any], points: int) -> dict[str, Any]:
+    """Machine-readable twin of a reason string: `code` is the fact field, `label_key` a stable i18n key."""
+    return {
+        "code": condition["field"],
+        "kind": kind,
+        "points": points,
+        "label": condition.get("label") or "",
+        "label_key": f"leads.scoring.{kind}.{condition['field']}",
+    }
+
+
 def score(company: Company, profile: ScoringProfile | None = None) -> ScoreResult | None:
     """`None` when the channel has no active profile. A disqualifier forces S4 whatever the points."""
     profile = profile or active_profile(company)
     if profile is None:
         return None
     values = facts(company)
-    points, reasons = 0, []
+    points, reasons, structured = 0, [], []
     for rule in profile.rules:
         if matches(rule, values):
             points += rule["points"]
             reasons.append(f"{rule.get('label') or rule['field']}: {rule['points']:+d}")
-    disqualifiers = [d.get("label") or d["field"] for d in profile.disqualifiers if matches(d, values)]
-    if disqualifiers:
-        return ScoreResult("S4", points, True, [f"disqualified: {label}" for label in disqualifiers], profile.pk)
-    return ScoreResult(segment_for(points, profile.thresholds), points, False, reasons, profile.pk)
+            structured.append(_reason("rule", rule, rule["points"]))
+    matched = [d for d in profile.disqualifiers if matches(d, values)]
+    if matched:
+        labels = [d.get("label") or d["field"] for d in matched]
+        return ScoreResult(
+            "S4",
+            points,
+            True,
+            [f"disqualified: {label}" for label in labels],
+            profile.pk,
+            [_reason("disqualifier", d, 0) for d in matched],
+        )
+    return ScoreResult(segment_for(points, profile.thresholds), points, False, reasons, profile.pk, structured)
 
 
 def score_and_record(company: Company, *, actor: str) -> ScoreResult | None:

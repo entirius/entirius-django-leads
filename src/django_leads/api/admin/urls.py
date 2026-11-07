@@ -9,6 +9,7 @@ from django.urls import path
 from django_leads.api.admin.views import activity_views as activity
 from django_leads.api.admin.views import company_action_views as action
 from django_leads.api.admin.views import company_views as company
+from django_leads.api.admin.views import compliance_views as compliance
 from django_leads.api.admin.views import contact_views as contact
 from django_leads.api.admin.views import import_views as imports
 from django_leads.api.admin.views import lead_type_views as lead_type
@@ -32,10 +33,17 @@ urlpatterns = [
     path("companies/<int:pk>/score/", scoring.CompanyScoreView.as_view(), name="admin-leads-score"),
     path("contacts/", contact.ContactListView.as_view(), name="admin-leads-contacts"),
     path("contacts/<int:pk>/", contact.ContactDetailView.as_view(), name="admin-leads-contact"),
+    path("contacts/<int:pk>/send-check/", compliance.SendCheckView.as_view(), name="admin-leads-send-check"),
+    path("contacts/<int:pk>/verify/", compliance.VerifyContactView.as_view(), name="admin-leads-verify-contact"),
+    path("reports/verification/", compliance.VerificationReportView.as_view(), name="admin-leads-verification"),
+    path("companies/bulk-sender-route/", compliance.BulkSenderRouteView.as_view(), name="admin-leads-bulk-route"),
+    path("settings/", compliance.ChannelSettingsView.as_view(), name="admin-leads-channel-settings"),
+    path("do-not-contact/", compliance.DoNotContactView.as_view(), name="admin-leads-do-not-contact"),
     path("reply-routes/", reply_route.ReplyRouteListView.as_view(), name="admin-leads-reply-routes"),
     path("reply-routes/<str:intent>/", reply_route.ReplyRouteDetailView.as_view(), name="admin-leads-reply-route"),
     path("stages/", stage.StageListView.as_view(), name="admin-leads-stages"),
     path("stages/<int:pk>/", stage.StageDetailView.as_view(), name="admin-leads-stage"),
+    path("queue/", report.QueueView.as_view(), name="admin-leads-queue"),
     path("reports/funnel/", report.FunnelReportView.as_view(), name="admin-leads-funnel"),
     path("pilots/", pilot.PilotListView.as_view(), name="admin-leads-pilots"),
     path("pilots/report/", pilot.PilotReportView.as_view(), name="admin-leads-pilot-report"),
@@ -80,5 +88,7 @@ if dev.is_development():
         path("test/evaluate/", dev.DevEvaluateView.as_view(), name="admin-leads-test-evaluate"),
         path("test/rotate-now/", dev.DevRotateNowView.as_view(), name="admin-leads-test-rotate-now"),
         path("test/anonymise-now/", dev.DevAnonymiseNowView.as_view(), name="admin-leads-test-anonymise-now"),
+        path("test/resume-now/", dev.DevResumeNowView.as_view(), name="admin-leads-test-resume-now"),
+        path("test/digest-now/", dev.DevDigestNowView.as_view(), name="admin-leads-test-digest-now"),
         path("test/retry-analyses/", dev.DevRetryAnalysesView.as_view(), name="admin-leads-test-retry-analyses"),
     ]

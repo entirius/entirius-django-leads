@@ -74,3 +74,16 @@ AI_TOOLBOX_CHANNEL = "zeno-test"
 # django_communicator: no celery-once backend in the module suite.
 COMMUNICATOR_REQUIRE_ONCE_BACKEND = False
 REDIS_URL = "redis://redis.test:6379"
+# Glue tests (tests/test_glue_communicator.py) send through the real communicator: mail stays in django.core.mail.outbox.
+DEFAULT_FROM_EMAIL = "fallback@example.test"
+EMAIL_SMTP_CONFIGURATION_CHANNELS = {
+    "default-europe": {
+        "EMAIL_HOST": "smtp.example.test",
+        "EMAIL_PORT": 25,
+        "EMAIL_HOST_USER": "",
+        "EMAIL_HOST_PASSWORD": "",
+        "EMAIL_USE_SSL": False,
+        "EMAIL_USE_TLS": False,
+        "DEFAULT_FROM_EMAIL": "outreach@mail.example.test",
+    }
+}

@@ -10,8 +10,9 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView
+from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView, parse
 from django_leads.models import ImportBatch
+from django_leads.schemas.requests import UploadOptions
 from django_leads.schemas.responses import ImportBatchDetailResponse, ImportBatchListResponse, ImportBatchResponse
 from django_leads.services import import_service
 from django_leads.tasks import enqueue_import
@@ -19,7 +20,10 @@ from django_leads.tasks import enqueue_import
 _TAGS = ["Leads Imports"]
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 UPLOAD_SCHEMA = {
-    "multipart/form-data": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}}
+    "multipart/form-data": {
+        "type": "object",
+        "properties": {"file": {"type": "string", "format": "binary"}, "sender_route": {"type": "string"}},
+    }
 }
 
 
@@ -53,12 +57,16 @@ class ImportListView(AdminView):
     @extend_schema(
         tags=_TAGS,
         summary="Upload a CSV; the import runs on the leads queue",
+        description="Optional form field `sender_route`: the whole file goes through that communicator route.",
         request=UPLOAD_SCHEMA,
         responses={202: ImportBatchResponse, **ERROR_RESPONSES},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
         filename, content, size_bytes = read_upload(request)
-        batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
+        route = parse(UploadOptions, {"sender_route": request.data.get("sender_route", "")}).sender_route
+        batch = import_service.create_batch(
+            self.channel(channel_idx), filename, size_bytes, request.user.username, sender_route=route
+        )
         import_service.store_upload(batch.pk, content)
         transaction.on_commit(lambda: enqueue_import(batch.pk))
         return Response(ImportBatchResponse.model_validate(batch).model_dump(mode="json"), status=202)

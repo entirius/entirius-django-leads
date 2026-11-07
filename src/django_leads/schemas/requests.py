@@ -25,6 +25,8 @@ from django_leads.utils.domains import registrable_domain
 
 # Format only — whether a code is an active lead type of the channel is the service's call (`lead_type_service`).
 LEAD_TYPE_PATTERN = r"^[A-Z0-9_]+$"
+# A sender route key (communicator defines the routes); blank clears it.
+ROUTE_PATTERN = r"^[a-z0-9_-]*$"
 
 
 class CompanyListQuery(BaseModel):
@@ -44,6 +46,9 @@ class CompanyListQuery(BaseModel):
     )
     do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
     origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.")
+    sender_route: str | None = Field(
+        default=None, max_length=64, description="Exact sender route key; empty string = companies without one."
+    )
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
 
     @field_validator("sort")
@@ -85,6 +90,9 @@ class CompanyUpdateRequest(BaseModel):
     description: str | None = Field(default=None, description="Free-text description.")
     do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
     external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
+    sender_route: str | None = Field(
+        default=None, max_length=64, pattern=ROUTE_PATTERN, description="Sender route key; empty = channel default."
+    )
 
 
 class TransitionRequest(BaseModel):
@@ -97,6 +105,9 @@ class ContactListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+    email_status: Literal["unknown", "valid", "risky", "invalid"] | None = Field(
+        default=None, description="Address verification status filter."
+    )
 
 
 CONSENT_REF_DESCRIPTION = "Where consent was given (document, call, form); required when legal_basis is consent."
@@ -393,6 +404,17 @@ class DevEvaluateRequest(BaseModel):
     stage_key: str | None = Field(default=None, max_length=64, description="Stage; default the company's stage.")
 
 
+class DevResumeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: AwareDatetime | None = Field(
+        default=None,
+        description="Clock of the resume run: contacts due by then are resumed; now when omitted.",
+        examples=["2026-12-15T06:00:00Z"],
+    )
+    company_id: int | None = Field(default=None, description="Only this company's contacts; omit = the channel.")
+
+
 class DevAnonymiseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -438,3 +460,58 @@ class ReplyRouteRequest(BaseModel):
         description="Mark the replying contact as the wrong person: no more outreach to them.",
         examples=[False],
     )
+
+
+class BulkSenderRouteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_ids: list[int] = Field(min_length=1, max_length=1000, description="Companies of the channel.")
+    sender_route: str = Field(
+        max_length=64, pattern=ROUTE_PATTERN, description="Route key to set; empty clears it (channel default)."
+    )
+
+
+class ChannelSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_sender_route: str | None = Field(
+        default=None,
+        max_length=64,
+        pattern=ROUTE_PATTERN,
+        description="Route of companies without their own; empty = communicator's; omit = unchanged.",
+    )
+    resume_days: dict[Literal["not_now", "out_of_office"], int] | None = Field(
+        default=None,
+        description="Days until a contact is approached again after a reply with no date, per class (1..365). "
+        "Replaces the whole map; a class left out uses the module default; omit = unchanged.",
+        examples=[{"not_now": 45}],
+    )
+
+    @field_validator("resume_days")
+    @classmethod
+    def _days_in_range(cls, value):
+        if value is not None and any(not 1 <= days <= 365 for days in value.values()):
+            raise ValueError("days must be 1..365")
+        return value
+
+
+class DoNotContactRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(default="", max_length=254, description="An address to stop everywhere.")
+    domain: str = Field(default="", max_length=253, description="A domain to stop everywhere (instead of email).")
+    reason: str = Field(min_length=1, max_length=200, description="Why (a request, a complaint, ...).")
+
+    @model_validator(mode="after")
+    def one_of(self) -> "DoNotContactRequest":
+        if bool(self.email.strip()) == bool(self.domain.strip()):
+            raise ValueError("give exactly one of email or domain")
+        return self
+
+
+class UploadOptions(BaseModel):
+    """Optional form fields of the CSV upload."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    sender_route: str = Field(default="", max_length=64, pattern=ROUTE_PATTERN, description="Route for the file.")

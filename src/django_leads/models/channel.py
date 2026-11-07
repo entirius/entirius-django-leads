@@ -25,6 +25,12 @@ class Channel(BaseModel):
     )
     languages = models.ManyToManyField("django_regional.Language", blank=True, related_name="leads_channels")
     retention_days = models.PositiveIntegerField(null=True, blank=True)
+    # Sender route (communicator key) of companies that have none of their own; blank = communicator's default.
+    default_sender_route = models.CharField(max_length=64, blank=True, default="")
+
+    # "Not now" loop (Q20): days until a contact is approached again when the reply gave no date, per intent class
+    # (`{"not_now": 30, "out_of_office": 7}`); a missing key falls back to `LEADS_RESUME_DEFAULT_DAYS`.
+    resume_days = models.JSONField(default=dict, blank=True)
 
     objects = ChannelManager()
 

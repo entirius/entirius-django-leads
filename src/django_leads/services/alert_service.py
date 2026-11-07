@@ -7,7 +7,7 @@
 import functools
 import logging
 
-from django_leads.models import Company
+from django_leads.models import Channel, Company
 from django_leads.settings import LEADS_NOTIFY_ROLE
 
 logger = logging.getLogger(__name__)
@@ -40,3 +40,24 @@ def alert(company: Company, *, severity: str, title: str, body: str = "") -> Non
         )
     except Exception:
         logger.exception("leads: notification for company %s failed", company.pk)
+
+
+def notify_channel(channel: Channel, *, severity: str, title: str, body: str = "") -> bool:
+    """A notification about the channel itself (the digest). True when handed to notifications; never raises."""
+    if not _notifications_available():
+        return False
+    from django_notifications.services.notify_service import notify
+
+    try:
+        notify(
+            channel_idx=channel.idx,
+            recipient_role=LEADS_NOTIFY_ROLE,
+            severity=severity,
+            subject_ref=f"leads.Channel:{channel.pk}",
+            title=title,
+            body=body,
+        )
+    except Exception:
+        logger.exception("leads: channel notification for %s failed", channel.idx)
+        return False
+    return True

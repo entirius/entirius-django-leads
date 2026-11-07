@@ -46,6 +46,17 @@ class ActivityKind(models.TextChoices):
     INTEL = "intel", "Intel"
     INTEL_EMPTY = "intel_empty", "Intel empty"
     SCORE = "score", "Score"
+    VERIFICATION = "verification", "Address verification"
+    RESUME = "resume", "Resume"
+
+
+class EmailStatus(models.TextChoices):
+    """Result of the address verification (Q5). Only `invalid` blocks outreach; `risky` is sent but shown."""
+
+    UNKNOWN = "unknown", "Unknown"
+    VALID = "valid", "Valid"
+    RISKY = "risky", "Risky"
+    INVALID = "invalid", "Invalid"
 
 
 class ReplyIntent(models.TextChoices):

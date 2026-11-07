@@ -30,6 +30,8 @@ def test_segment_from_points_and_reasons(shop, profile):
     result = scoring_service.score(shop)
     assert (result.points, result.segment) == (75, "S1")
     assert result.reasons == ["retail: +30", "has hooks: +25", "two emails: +20"]
+    assert [r["label"] for r in result.reasons_structured] == ["retail", "has hooks", "two emails"]
+    assert result.reasons_structured[0]["label_key"] == "leads.scoring.rule.lead_type"
     shop.lead_type = "MANUFACTURER"
     again = scoring_service.score(shop)
     assert (again.points, again.segment) == ((45, "S2"))
@@ -45,6 +47,10 @@ def test_disqualifier_forces_s4(shop, profile):
     result = scoring_service.score(shop)
     assert (result.segment, result.disqualified, result.points) == ("S4", True, 75)
     assert result.reasons == ["disqualified: blocked domain"]
+    assert result.reasons_structured == [
+        {"code": "domain", "kind": "disqualifier", "points": 0, "label": "blocked domain",
+         "label_key": "leads.scoring.disqualifier.domain"}
+    ]  # fmt: skip
 
 
 def test_no_profile_or_inactive_profile_scores_nothing(shop, profile):
@@ -121,9 +127,15 @@ def test_score_endpoint(admin_api, shop, profile):
     shop.save(update_fields=["lead_type"])
     response = admin_api.post(api_url(f"companies/{shop.pk}/score/"))
     assert response.status_code == 200
-    assert response.json() | {"reasons": None} == {
+    body = response.json()
+    assert body | {"reasons": None, "reasons_structured": None} == {
         "segment": "S1", "points": 75, "disqualified": False, "reasons": None, "profile_id": profile.pk,
+        "reasons_structured": None,
     }  # fmt: skip
+    assert [(r["code"], r["points"], r["kind"]) for r in body["reasons_structured"]] == [
+        ("lead_type", 30, "rule"), ("hooks_count", 25, "rule"), ("emails_count", 20, "rule"),
+    ]  # fmt: skip
+    assert len(body["reasons_structured"]) == len(body["reasons"])
     assert Activity.objects.filter(company=shop, kind=ActivityKind.SCORE).count() == 1
 
 

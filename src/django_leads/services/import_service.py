@@ -61,8 +61,13 @@ class Lookups:
     lead_types: frozenset[str]
 
 
-def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: str) -> ImportBatch:
-    return ImportBatch.objects.create(channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by)
+def create_batch(
+    channel: Channel, filename: str, size_bytes: int, created_by: str, sender_route: str = ""
+) -> ImportBatch:
+    """`sender_route` (Q3): the whole file goes through this communicator route; blank = the channel default."""
+    return ImportBatch.objects.create(
+        channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by, sender_route=sender_route
+    )
 
 
 def build_lookups(channel: Channel) -> Lookups:
@@ -335,7 +340,9 @@ class _ChunkWriter:
         prepared = []
         for line, raw in rows:
             try:
-                prepared.append((line, *normalise_row(raw, self.lookups)))
+                company_row, contact_row = normalise_row(raw, self.lookups)
+                company_row["sender_route"] = self.batch.sender_route
+                prepared.append((line, company_row, contact_row))
             except SkipRow as reason:
                 self.skipped.append((line, "skipped", str(reason)))
         return self._without_erased(prepared)

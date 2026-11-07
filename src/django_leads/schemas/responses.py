@@ -51,6 +51,13 @@ class ContactResponse(BaseModel):
     wrong_person_at: datetime | None = Field(
         description="A reply said this is the wrong person; no more outreach to the contact.", examples=[None]
     )
+    email_status: str = Field(description="Address verification: unknown, valid, risky or invalid.", examples=["valid"])
+    email_status_reason: str = Field(description="Short reason code of the status.", examples=["mx_ok"])
+    email_verified_at: datetime | None = Field(description="When the address was last verified.", examples=[None])
+    resume_at: datetime | None = Field(
+        description='"Not now" loop: the day the contact is approached again; null = none planned.', examples=[None]
+    )
+    resume_intent: str = Field(description="Reply class that planned it (not_now, out_of_office).", examples=[""])
 
     @classmethod
     def of(cls, contact) -> "ContactResponse":
@@ -90,6 +97,7 @@ class CompanyResponse(BaseModel):
         description="Business origin (ecom.house, a partner); empty when unknown.", examples=["ecom.house"]
     )
     external_ref: str = Field(description="External reference.", examples=[""])
+    sender_route: str = Field(description="Sender route key; empty = channel default.", examples=["ecomhouse"])
     do_not_contact: bool = Field(description="Never contact.", examples=[False])
     customer_uid: str | None = Field(description="Linked customer uid (read-only).", examples=[None])
     rotation_count: int = Field(description="Contact rotations.", examples=[0])
@@ -122,6 +130,7 @@ class ImportBatchResponse(BaseModel):
     skipped_count: int = Field(description="Rows skipped.", examples=[3])
     row_count: int = Field(description="Data rows processed so far.", examples=[12])
     size_bytes: int = Field(description="Uploaded file size.", examples=[1024])
+    sender_route: str = Field(description="Route the whole file was assigned to; empty = none.", examples=[""])
     created_by: str = Field(description="Uploader.", examples=["admin"])
     created_at: datetime = Field(description="Uploaded.", examples=["2026-09-13T12:00:00Z"])
 
@@ -252,11 +261,24 @@ class ScoringProfileListResponse(BaseModel):
     results: list[ScoringProfileResponse] = Field(description="Profiles of the channel.")
 
 
+class ScoreReason(BaseModel):
+    code: str = Field(
+        description="The fact the condition tests (lead_type, industry, domain, ...).", examples=["lead_type"]
+    )
+    kind: str = Field(description="rule or disqualifier.", examples=["rule"])
+    points: int = Field(description="Points added (0 for a disqualifier).", examples=[30])
+    label: str = Field(description="The label typed in the profile, blank when none.", examples=["retailer"])
+    label_key: str = Field(description="Stable key for a localised text.", examples=["leads.scoring.rule.lead_type"])
+
+
 class ScoreResponse(BaseModel):
     segment: str = Field(description="S1 (best) to S4.", examples=["S2"])
     points: int = Field(description="Sum of the matching rules.", examples=[45])
     disqualified: bool = Field(description="A disqualifier forced S4.", examples=[False])
     reasons: list[str] = Field(description="Matching rules or disqualifiers.", examples=[["retailer: +30"]])
+    reasons_structured: list[ScoreReason] = Field(
+        default_factory=list, description="The same reasons as data, in the same order."
+    )
     profile_id: int | None = Field(description="Profile used.", examples=[100])
 
 
@@ -354,6 +376,18 @@ class DevRetryAnalysesResponse(BaseModel):
     failed: int = Field(description="Analyses whose retry failed again.", examples=[0])
 
 
+class DevResumeResponse(BaseModel):
+    resumed: int = Field(description="Contacts a draft was requested for.", examples=[1])
+    cancelled: int = Field(description="Contacts the outreach gate refused (the loop ends for them).", examples=[0])
+    waiting: int = Field(description="Contacts kept for the next run (AI toolbox off).", examples=[0])
+
+
+class DevDigestResponse(BaseModel):
+    sent: dict[str, int] = Field(
+        description="Per channel idx: 1 = the digest went to notifications, 0 = nothing to say.", examples=[{"x": 1}]
+    )
+
+
 class DevAnonymiseResponse(BaseModel):
     anonymised: dict[str, int] = Field(
         description="Anonymised contacts per channel idx.", examples=[{"default-europe": 1}]
@@ -386,3 +420,92 @@ class ReplyRouteResponse(BaseModel):
 
 class ReplyRouteListResponse(BaseModel):
     results: list[ReplyRouteResponse] = Field(description="One entry per intent class.", examples=[[]])
+
+
+class SendCheckResponse(BaseModel):
+    contact_id: int = Field(description="Contact id.", examples=[100])
+    company_id: int = Field(description="Company id.", examples=[100])
+    eligible: bool = Field(description="True when a draft may be requested for the contact now.", examples=[False])
+    reasons: list[str] = Field(
+        description="Every gate reason: do_not_contact, no_email, opted_out, anonymised, wrong_person, no_legal_basis, "
+        "email_invalid, opted_out_elsewhere, domain_do_not_contact_elsewhere, suppressed_elsewhere.",
+        examples=[["opted_out"]],
+    )
+    legal_basis: dict[str, Any] = Field(description="value, consent_ref, source and set_at of the legal basis.")
+    email: dict[str, Any] = Field(description="Verification status, reason and verified_at.")
+    opt_out_at: datetime | None = Field(description="Opted out.", examples=[None])
+    company_do_not_contact: bool = Field(description="The company is on the list.", examples=[False])
+    retention: dict[str, Any] = Field(description="days, exempt_won, anonymised_at and due_at (when idle data goes).")
+    sender_route: str = Field(description="Effective route: the company's, else the channel default.", examples=[""])
+
+
+class VerificationReportResponse(BaseModel):
+    enabled: bool = Field(
+        description="LEADS_VERIFY_ENABLED: addresses are checked live and on schedule.", examples=[False]
+    )
+    max_age_days: int = Field(description="A check older than this is repeated.", examples=[30])
+    counts: dict[str, int] = Field(description="Contacts with an address per status.", examples=[{"valid": 4}])
+    stale: int = Field(description="Contacts due for a check now.", examples=[0])
+
+
+class ChannelSettingsResponse(BaseModel):
+    default_sender_route: str = Field(description="Route of companies without their own.", examples=["entirius"])
+    resume_days: dict[str, int] = Field(
+        description="Days until a contact is approached again after a reply without a date, per intent class "
+        "(not_now, out_of_office); a missing class uses the module default.",
+        examples=[{"not_now": 30, "out_of_office": 7}],
+    )
+    resume_defaults: dict[str, int] = Field(
+        description="The module defaults behind a missing class.", examples=[{"not_now": 30, "out_of_office": 7}]
+    )
+
+
+class BulkResultResponse(BaseModel):
+    updated: int = Field(description="Companies changed.", examples=[3])
+
+
+class DoNotContactListResponse(BaseModel):
+    contacts: list[dict[str, Any]] = Field(description="Opted-out contacts (email, channel, opt_out_at), max 500.")
+    companies: list[dict[str, Any]] = Field(description="Companies on the list (domain, channel), max 500.")
+    suppressions: list[dict[str, Any]] = Field(description="Communicator email/domain suppressions, max 500.")
+
+
+class DoNotContactAddedResponse(BaseModel):
+    contacts: int = Field(description="Contacts newly opted out.", examples=[1])
+    companies: int = Field(description="Companies newly marked.", examples=[0])
+
+
+class QueueItemResponse(BaseModel):
+    kind: str = Field(description="reply, task, hot_company, decision or drafts.", examples=["reply"])
+    value: int = Field(description="Higher = do it sooner; the list is sorted by it.", examples=[100])
+    company_id: int | None = Field(description="Company; null for the drafts row.", examples=[12])
+    company_name: str = Field(description="Company name.", examples=["Shop 12"])
+    contact_id: int | None = Field(description="Contact when the row is about one.", examples=[34])
+    contact_email: str = Field(
+        description="Contact address (staff with `leads.companies` only).", examples=["a@b.test"]
+    )
+    reason: str = Field(
+        description="Why it is in the queue: the reply class (interested, unclear, ..., unclassified), the resume "
+        "class (not_now, out_of_office), the score segment (S1, S2), wrong_person / possibly_left, drafts_waiting.",
+        examples=["interested"],
+    )
+    due_at: datetime | None = Field(description="When it happened or is due.", examples=["2026-11-07T08:00:00Z"])
+    excerpt: str = Field(description="Start of the reply text (replies only).", examples=["Yes, send the offer"])
+    ref_id: int | None = Field(description="Communicator reply id (replies only).", examples=[5])
+    count: int | None = Field(description="Number of drafts (drafts row only).", examples=[None])
+    path: str = Field(description="CMS route to open (drafts row only).", examples=["/leads/approvals"])
+
+
+class QueueDraftsResponse(BaseModel):
+    count: int = Field(description="Drafts waiting for approval.", examples=[7])
+    approvals_path: str = Field(description="CMS route of the approvals inbox.", examples=["/leads/approvals"])
+
+
+class QueueResponse(BaseModel):
+    generated_at: datetime = Field(description="When the queue was built.", examples=["2026-11-07T08:00:00Z"])
+    counts: dict[str, int] = Field(
+        description="Rows per section before the per-section limit: reply, task, hot_company, decision, drafts.",
+        examples=[{"reply": 2, "task": 1, "hot_company": 4, "decision": 0, "drafts": 7}],
+    )
+    drafts: QueueDraftsResponse
+    items: list[QueueItemResponse] = Field(description="All rows, highest value first.")

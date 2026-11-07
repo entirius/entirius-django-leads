@@ -16,7 +16,7 @@ from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
-from django_leads.services import activity_service, recipient_service
+from django_leads.services import activity_service, recipient_service, sender_route_service, verification_service
 
 SKIPPED_TOOLBOX_DISABLED = "skipped: AI toolbox disabled"
 CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", "hooks")
@@ -41,6 +41,7 @@ def request_draft(
     contact rows — an opt-out or `do_not_contact` either commits first (blocked) or waits for the draft commit.
     Raises `ToolboxDisabledError` (Activity `skipped: AI toolbox disabled`) for an AI template while the toolbox is
     switched off."""
+    verification_service.ensure_fresh(contact)  # DNS, if the loop is on: before any lock is taken
     try:
         with transaction.atomic():
             company, contact = _lock(company, contact)
@@ -75,6 +76,7 @@ def _blocked(company: Company, contact: Contact, reason: str, actor: str) -> Blo
 def _communicate(company: Company, contact: Contact, template_key: str, thread: Thread | None) -> Message:
     language = _language_code(company, contact)
     return communicate(
+        **sender_route_service.communicate_kwargs(company),
         channel_idx=company.channel.idx,
         template_key=template_key,
         recipient=RecipientData(

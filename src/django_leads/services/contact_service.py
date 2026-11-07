@@ -201,6 +201,9 @@ def remove_contact(contact: Contact, *, actor: str) -> Contact | None:
     return None
 
 
-def list_contacts(channel: Channel, company_id: int | None = None) -> QuerySet[Contact]:
+def list_contacts(
+    channel: Channel, company_id: int | None = None, email_status: str | None = None
+) -> QuerySet[Contact]:
     contacts = Contact.objects.filter(company__channel=channel).select_related("language").order_by("id")
-    return contacts.filter(company_id=company_id) if company_id else contacts
+    contacts = contacts.filter(company_id=company_id) if company_id else contacts
+    return contacts.filter(email_status=email_status) if email_status else contacts

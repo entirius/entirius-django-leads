@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- **"What to do today" queue and daily digest (outbound Q16).** `GET <channel>/queue/`: one list sorted by `value` of
+  replies to read (communicator `needs_review`), the drafts waiting for approval (one row, link to the approvals inbox),
+  contacts due today or overdue, companies over the scoring threshold (`LEADS_QUEUE_SEGMENTS`) nobody has written to,
+  and contacts flagged wrong person / possibly left. Read-only. Task `django_leads.send_digest` (off, `LEADS_DIGEST_ENABLED`)
+  sends one notification per channel with what the automation did and refused in the last day.
+- **"Not now" loop (outbound Q20, migration 0014).** `Contact.resume_at` / `resume_intent`, `Channel.resume_days`, Activity
+  kind `resume`. A `not_now` / `out_of_office` reply plans the return (day after the stated date, else the per-channel
+  window, default 30 / 7 days); a later reply cancels it. Task `django_leads.resume_contacts` (off, `LEADS_RESUME_ENABLED`)
+  drafts again through the normal outreach gate (opt-out, wrong person, shared list, address check), capped by
+  `LEADS_RESUME_BATCH`; never after an unsubscribe. `settings/` takes `resume_days`; `ContactResponse` shows `resume_at`.
+
+- **Glue with communicator.** `message_bounced` now marks the thread's contact `invalid / hard_bounce` at once (the daily
+  task stays as a safety net); `optout_confirmed` (also from the unsubscribe link) reaches the shared do-not-contact
+  list. Host setting for the sender: `COMMUNICATOR_PRESEND_CHECK =
+  "django_leads.services.verification_service.presend_check"`. `tests/test_glue_communicator.py` runs both modules
+  together (skipped with an older communicator or without `fakeredis`).
+- **Sender routes (outbound Q3).** `Company.sender_route`, `Channel.default_sender_route`, `ImportBatch.sender_route`
+  (migration 0013): a free key of a route defined in communicator. The CSV upload takes an optional form field
+  `sender_route` ("this whole file goes through route X"; set on created companies, filled on matched ones that have
+  none); `POST companies/bulk-sender-route/` changes chosen companies; `GET/PATCH settings/` holds the channel
+  default; `sender_route` filter and PATCH field on companies. The draft passes `sender_route=<company, else channel
+  default>` to `communicate()` when that function accepts it (checked by signature), nothing otherwise.
+- **Address verification loop (outbound Q5).** `Contact.email_status` (`unknown|valid|risky|invalid`),
+  `email_status_reason`, `email_verified_at`. `verification_service`: syntax, disposable domains, DNS (domain exists,
+  MX, null MX, address fallback = risky), optional SMTP RCPT probe (off, rate limited), hook `LEADS_VERIFY_EXTERNAL`
+  for an external API. Resolver and prober are injected; the suite installs stubs. Only `invalid` blocks (gate
+  reason `email_invalid`, also with the loop off). With `LEADS_VERIFY_ENABLED` the gate verifies an unverified or stale
+  address before it locks anything; the daily task `django_leads.reverify_addresses` re-checks older ones and reads hard
+  bounces back from communicator (`invalid / hard_bounce`, final). `POST contacts/<id>/verify/`,
+  `GET reports/verification/`, `email_status` filter on contacts, `presend_check(email)` for the sender.
+- **Compliance pack (outbound Q7).** One do-not-contact list across channels: the gate also refuses `opted_out_elsewhere`,
+  `domain_do_not_contact_elsewhere`, `suppressed_elsewhere`; `dnc_service.add` and `GET/POST do-not-contact/` stop an
+  address or domain in every leads channel and communicator channel. A confirmed opt-out in communicator
+  (`optout_confirmed`) now sets `opt_out_at` on every contact with the address (before, leads never learned of it).
+  `GET contacts/<id>/send-check/` returns every gate reason plus legal basis and its source, address status, retention due
+  date and effective route. Open points that need a lawyer are listed in `docs/concept.md`.
+
 - **First send moves the company (outbound roadmap F3).** `Stage.on_sent` (migration 0008): when the first message
   to a company is sent, it moves to the first stage flagged `on_sent`, forward only and never out of a terminal
   stage (so a company that already replied stays where it is). `StageResponse`, `StageRequest` and

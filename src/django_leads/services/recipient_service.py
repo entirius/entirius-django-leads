@@ -10,9 +10,9 @@ from django.conf import settings
 from django_utils.toolbox import ToolboxClient, ToolboxError
 from django_utils.toolbox.schemas import CompletionRequest
 
-from django_leads.enums import ActivityKind, ContactStrategy
+from django_leads.enums import ActivityKind, ContactStrategy, EmailStatus
 from django_leads.models import Company, Contact, RecipientPickProfile, StageRule
-from django_leads.services import activity_service
+from django_leads.services import activity_service, dnc_service
 from django_leads.utils.prompts import prompt_messages
 
 PICK_KEY = "leads.pick_recipient"
@@ -29,8 +29,8 @@ def candidates(company: Company) -> list[Contact]:
     return list(contacts.select_related("language").order_by("-is_primary", "pk"))
 
 
-def block_reason(contact: Contact) -> str | None:
-    """The outreach gate: why no draft may go to the contact (reason code), None when it may."""
+def block_reasons(contact: Contact) -> list[str]:
+    """Every reason the outreach gate refuses the contact, in gate order (empty = may be mailed)."""
     checks = (
         (contact.company.do_not_contact, "do_not_contact"),
         (not contact.email, "no_email"),
@@ -38,8 +38,18 @@ def block_reason(contact: Contact) -> str | None:
         (contact.anonymised_at is not None, "anonymised"),
         (contact.wrong_person_at is not None, "wrong_person"),
         (not contact.legal_basis, "no_legal_basis"),
+        (contact.email_status == EmailStatus.INVALID, "email_invalid"),
     )
-    return next((reason for failed, reason in checks if failed), None)
+    reasons = [reason for failed, reason in checks if failed]
+    if contact.email and (shared := dnc_service.shared_block(contact)):
+        reasons.append(shared)
+    return reasons
+
+
+def block_reason(contact: Contact) -> str | None:
+    """The outreach gate: why no draft may go to the contact (first reason code), None when it may."""
+    reasons = block_reasons(contact)
+    return reasons[0] if reasons else None
 
 
 def eligible(contact: Contact) -> bool:

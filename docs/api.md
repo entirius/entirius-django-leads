@@ -136,6 +136,36 @@ Report: `running` = pending, started, not past `end_date`; `overdue` = pending p
 `avg_length_days` = mean `end_date - start_date` of non-pending pilots with an end date (null when none);
 `license_switch_due` = successful pilots whose `license_switch_date` falls within 30 days of `as_of`.
 
+## Sender routes, verification and compliance (Q3, Q5, Q7)
+
+| Method | Path | Body / params | Success |
+|---|---|---|---|
+| POST | `<channel_idx>/imports/` | multipart `file`, optional `sender_route` (`[a-z0-9_-]*`) | 202 `ImportBatchResponse` with `sender_route` |
+| POST | `<channel_idx>/companies/bulk-sender-route/` | `company_ids` (1..1000), `sender_route` (empty clears) | 200 `{updated}`; Activity `note` per changed company |
+| GET / PATCH | `<channel_idx>/settings/` | PATCH `default_sender_route` and/or `resume_days` (`{not_now?, out_of_office?}`, each 1..365; replaces the map) | 200 `{default_sender_route, resume_days, resume_defaults}` (`leads.settings` area) |
+| GET | `<channel_idx>/companies/?sender_route=` | exact key; empty = without one | `CompanyResponse.sender_route` |
+| POST | `<channel_idx>/contacts/<id>/verify/` | none | 200 `ContactResponse` (`email_status`, `email_status_reason`, `email_verified_at`); 400 without an address |
+| GET | `<channel_idx>/contacts/?email_status=` | `unknown`, `valid`, `risky`, `invalid` | the visible list of bad addresses |
+| GET | `<channel_idx>/reports/verification/` | none | 200 `{enabled, max_age_days, counts, stale}` |
+| GET | `<channel_idx>/contacts/<id>/send-check/` | none | 200 `{eligible, reasons[], legal_basis{value, consent_ref, source, set_at}, email{status, reason, verified_at}, opt_out_at, company_do_not_contact, retention{days, exempt_won, anonymised_at, due_at}, sender_route}` |
+| GET | `<channel_idx>/do-not-contact/` | none | 200 `{contacts[], companies[], suppressions[]}` (max 500 each) |
+| POST | `<channel_idx>/do-not-contact/` | exactly one of `email`, `domain`; `reason` | 201 `{contacts, companies}` newly stopped; no delete endpoint by design |
+
+## What to do today and the "not now" loop (Q16, Q20)
+
+| Method | Path | Body / params | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/queue/` | none (`leads.companies` area) | 200 `QueueResponse`: `{generated_at, counts{reply, task, hot_company, decision, drafts}, drafts{count, approvals_path}, items[]}` |
+
+`items[]` is one list sorted by `value` (highest first), rows of `kind`: `reply` (communicator reply with `needs_review`,
+`ref_id` = reply id, `excerpt`, `reason` = intent class or `unclassified`; value 100 interested, 80 unclear/unclassified,
+60 wrong person, 55 not now, 50 out of office, 40 refusals), `drafts` (one summary row, value 70, `count`, `path` =
+`/leads/approvals`), `task` (a contact whose "not now" day is today or overdue, value 65 + overdue days up to 10, `due_at`),
+`hot_company` (latest score in `LEADS_QUEUE_SEGMENTS`, not disqualified, open stage, no draft or sent message yet; value
+80/60 for S1/S2 + points/10 up to 9, `reason` = segment), `decision` (contact flagged `wrong_person` or, once Q9 lands,
+`possibly_left` within `LEADS_QUEUE_REPLY_DAYS`; value 45). Every section is cut at `LEADS_QUEUE_LIMIT` rows; `counts`
+are before the cut. `ContactResponse` gains `resume_at` and `resume_intent` (the planned return of a "not now").
+
 ## Rules and prompt profiles
 
 | Method | Path | Body / params | Success |
@@ -187,6 +217,8 @@ Routed and answering only with `ENVIRONMENT == "development"` (404 otherwise). U
 | POST | `<channel_idx>/test/import-now/` | multipart `file`, as `imports/` | 200 `ImportBatchDetailResponse` — imported in the request, no worker or shared temp dir |
 | POST | `<channel_idx>/test/evaluate/` | `company_id`, `trigger`, `stage_key` (default: the company's stage) | 200 `{runs: [RuleRunResponse]}` — no event key, so no redelivery dedupe |
 | POST | `<channel_idx>/test/rotate-now/` | — | 200 `{rotated}` — the daily rotation scan, this channel only |
+| POST | `<channel_idx>/test/resume-now/` | `as_of` (aware datetime, optional), `company_id` (optional) | 200 `{resumed, cancelled, waiting}` — the "not now" resume of this channel in-process, whatever `LEADS_RESUME_ENABLED` says |
+| POST | `<channel_idx>/test/digest-now/` | — | 200 `{sent: {channel_idx: 0 or 1}}` — the digest of this channel through notifications |
 | POST | `<channel_idx>/test/retry-analyses/` | — | 200 `{recovered, failed}` — the intel analysis retry in-process, **every** channel |
 | POST | `<channel_idx>/test/anonymise-now/` | `as_of` (aware datetime, optional) | 200 `{anonymised: {channel_idx: count}}` — the retention task in-process, **every** channel |
 

@@ -27,6 +27,8 @@ class Company(BaseModel):
     # Where the lead came from in business terms ("ecom.house", an implementation partner); `source` is only how it
     # entered the module (csv, form, ...). Free text, set on create, patch and CSV import; blank = unknown.
     origin = models.CharField(max_length=64, blank=True, default="")
+    # Key of a sender route defined in communicator (Q3); blank = the channel's default route, else communicator's own.
+    sender_route = models.CharField(max_length=64, blank=True, default="")
     external_ref = models.CharField(max_length=128, blank=True, default="")
     do_not_contact = models.BooleanField(default=False)
     customer_uid = models.UUIDField(null=True, blank=True)

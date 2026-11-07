@@ -67,6 +67,7 @@ class CompanyListView(AdminView):
             OpenApiParameter("lead_type", str, description="Lead type code of the channel, or UNKNOWN."),
             OpenApiParameter("do_not_contact", bool, description="do_not_contact flag."),
             OpenApiParameter("origin", str, description="Exact origin."),
+            OpenApiParameter("sender_route", str, description="Exact sender route; empty = without one."),
             OpenApiParameter("has_reply", bool, description="At least one reply activity (true) or none (false)."),
             *PAGE_PARAMETERS,
         ],

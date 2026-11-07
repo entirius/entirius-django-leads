@@ -23,6 +23,8 @@ class ImportBatch(BaseModel):
     row_count = models.PositiveIntegerField(default=0)
     # CSV line of the last committed row — a retried run resumes after it.
     last_row_done = models.PositiveIntegerField(default=0)
+    # Q3: the whole file goes through this sender route (set on created companies, filled on matched ones without one).
+    sender_route = models.CharField(max_length=64, blank=True, default="")
     report = models.JSONField(default=list, blank=True)
     created_by = models.CharField(max_length=150, blank=True, default="")
 

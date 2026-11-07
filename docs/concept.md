@@ -99,8 +99,9 @@ outside the candidates, a toolbox error or a missing profile falls back to the f
 
 ## Outreach gate
 
-`recipient_service.block_reason(contact)` in this order: `do_not_contact`, `no_email`, `opted_out`, `anonymised`,
-`wrong_person`, `no_legal_basis`. It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
+`recipient_service.block_reason(contact)` (first of `block_reasons`) in this order: `do_not_contact`, `no_email`,
+`opted_out`, `anonymised`, `wrong_person`, `no_legal_basis`, `email_invalid`, then the shared list of other channels
+(`opted_out_elsewhere`, `domain_do_not_contact_elsewhere`, `suppressed_elsewhere`). It is evaluated only inside `outreach_service.request_draft`, in one short transaction that locks
 the company, then the contact, and calls communicator `communicate()` on those rows — an opt-out or `do_not_contact`
 either commits first (blocked) or waits for the draft to commit. Every path (rules, rotation, manual communicate)
 goes through it exactly once; a refusal is one Activity `blocked: <reason>`, never a draft. The gate is the only
@@ -165,6 +166,57 @@ the draft (template of the last draft) is requested outside the lock; only a dra
 writes Activity `rotation`. No draft → `rotation_failed`, claim `retry` after `LEADS_ROTATION_RETRY_HOURS`; after
 `LEADS_ROTATION_MAX_FAILURES` → `rotation_gave_up`, claim `failed`. A draft refused because the toolbox is switched
 off → Activity `skipped: AI toolbox disabled`, claim `retry` with no failure counted.
+
+## Sender routes (Q3)
+
+A route is a key defined in communicator (which mailbox sends, who is copied). Leads stores only the key: on the
+company, on an import batch (the whole file) and as `Channel.default_sender_route`. The effective key is the
+company's, else the channel default, else blank (communicator's default). `outreach_service` passes it as
+`sender_route=` to `communicate()` when that function has such a parameter.
+
+## Address verification (Q5)
+
+`verification_service.verify_address` returns `(status, reason)`: invalid `syntax`, `disposable`, `domain_not_found`,
+`null_mx`, `no_mail_server`, `mailbox_rejected` (probe), `hard_bounce`; risky `no_mx_address_fallback`; unknown
+`dns_error`; valid `mx_ok` / `smtp_accepted`. Only `invalid` blocks. Where it runs: (a) the gate, before locking, when
+`LEADS_VERIFY_ENABLED` and the address is unverified or older than `LEADS_VERIFY_MAX_AGE_DAYS`; (b) the daily
+`reverify_addresses` task, `LEADS_VERIFY_BATCH` per run, oldest first; (c) a hard bounce from communicator (daily
+read-back of `bounce_hard` replies, or the optional `message_bounced` signal) — final, never re-checked. The SMTP
+probe cannot see catch-all servers (they accept everything) and many hosts refuse it; leave it off unless needed.
+A status change to or from `invalid`/`risky` is an Activity `verification`.
+
+## Do-not-contact and the send check (Q7)
+
+Opt-outs are per person, not per mailbox: the sender routes are mailboxes inside one communicator channel, so its
+suppressions already cover them. The gap was between leads channels; `dnc_service.shared_block` closes it and
+`dnc_service.add` writes everywhere. `compliance_service.explain` is the "why" report behind `send-check/`.
+
+Open points that need a lawyer, not code (nothing here is a legal interpretation): which legal basis may be set for
+imported lists and whether the owner's "same legal person" statement for ecom.house and entirius.com suffices for
+shared opt-outs; retention length (180 days idle) and the `won` exemption (won companies are never anonymised);
+how long an erased-address token and a suppression may be kept; whether a hard-bounce or risky status is personal data
+to expire with the contact; the content of the legal footer per basis (agreements clause sets); evidence kept for
+`legitimate_interest` (no balancing-test record exists in the module, only the basis and its source); the wording of
+the one-click unsubscribe (Q6, communicator).
+
+## "What to do today" queue and the "not now" loop (Q16, Q20)
+
+`queue_service` builds one read-only list for the salesperson from data that already exists: communicator replies flagged
+`needs_review`, the review-required drafts (one row linking to the approvals inbox), contacts due for their return,
+companies over the scoring threshold nobody has written to, and contacts flagged `wrong_person` (and `possibly_left` when
+Q9 adds the marker). Communicator has no "reply handled" mark, so a reply leaves the queue when a draft or sent message
+followed on the company, or after `LEADS_QUEUE_REPLY_DAYS`.
+
+`resume_service` plans the return: a reply of class `not_now` or `out_of_office` sets `Contact.resume_at` (the day after the
+stated return date, else now plus the channel's `resume_days` / `LEADS_RESUME_DEFAULT_DAYS`) and writes Activity `resume`.
+Any other later reply cancels the plan. The daily task `resume_contacts` (off by default) requests a draft with the template
+of the contact's last draft through `outreach_service.request_draft`, i.e. the same gate: opt-out, wrong person, company
+`do_not_contact`, the shared list, an invalid address (verified again first when `LEADS_VERIFY_ENABLED`). A refusal ends the
+loop for that contact; nothing resumes after an unsubscribe or refusal. Drafts per run are capped by `LEADS_RESUME_BATCH`;
+the draft still waits for human approval and communicator's own limits apply when it is sent. A dated out-of-office reply is
+resumed by communicator (sequence paused until return), so leads plans nothing then. `digest_service` (`send_digest`, off by
+default) counts from the timeline what the automation did (drafts, sent, resumed, replies) and refused (gate reasons, bad
+addresses, do-not-contact entries) plus what waits in the queue, and sends one low-severity notification per channel.
 
 ## GDPR and retention
 

@@ -9,8 +9,8 @@ from rest_framework.response import Response
 
 from django_leads.api.admin.views._base import ERROR_RESPONSES, AdminView, parse
 from django_leads.schemas.requests import FunnelQuery
-from django_leads.schemas.responses import FunnelResponse
-from django_leads.services import funnel_service
+from django_leads.schemas.responses import FunnelResponse, QueueResponse
+from django_leads.services import funnel_service, queue_service
 
 
 class FunnelReportView(AdminView):
@@ -33,3 +33,19 @@ class FunnelReportView(AdminView):
         query = parse(FunnelQuery, request.query_params.dict())
         body = funnel_service.report(self.channel(channel_idx), **query.model_dump())
         return Response(FunnelResponse(**body).model_dump())
+
+
+class QueueView(AdminView):
+    access_area = "leads.companies"
+
+    @extend_schema(
+        tags=["Leads Reports"],
+        summary="What to do today: one queue sorted by value",
+        description="Replies waiting for a person, the drafts waiting for approval (one row with a link), contacts due "
+        'today or overdue ("not now" / out-of-office), companies over the scoring threshold nobody has written to, and '
+        "contacts flagged wrong person or possibly left. Read-only; `value` orders the rows.",
+        responses={200: QueueResponse, **ERROR_RESPONSES},
+    )
+    def get(self, request: Request, channel_idx: str) -> Response:
+        body = queue_service.build(self.channel(channel_idx))
+        return Response(QueueResponse(**body).model_dump(mode="json"))

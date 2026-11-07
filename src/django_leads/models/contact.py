@@ -6,7 +6,7 @@ from django.db import models
 from django_agreements.enums import LegalBasis
 from django_utils.models.base_model import BaseModel
 
-from django_leads.enums import LeadSource
+from django_leads.enums import EmailStatus, LeadSource
 
 
 class Contact(BaseModel):
@@ -30,6 +30,14 @@ class Contact(BaseModel):
     wrong_person_at = models.DateTimeField(
         null=True, blank=True, help_text="A reply said this is the wrong person (T4): no more outreach to this contact."
     )
+    # Address verification (Q5): `unknown` until the first check; the reason is a short code, never the address.
+    email_status = models.CharField(max_length=8, choices=EmailStatus.choices, default=EmailStatus.UNKNOWN)
+    email_status_reason = models.CharField(max_length=64, blank=True, default="")
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    # "Not now" loop (Q20): a reply of class not_now / out_of_office set the day the contact is approached again.
+    # Cleared when it is done, cancelled (a newer reply, an opt-out) or the contact is anonymised.
+    resume_at = models.DateTimeField(null=True, blank=True)
+    resume_intent = models.CharField(max_length=24, blank=True, default="")
 
     class Meta:
         ordering = ["-is_primary", "last_name", "first_name"]
@@ -37,6 +45,10 @@ class Contact(BaseModel):
             models.UniqueConstraint(
                 fields=["company", "email"], condition=~models.Q(email=""), name="leads_contact_company_email_uniq"
             )
+        ]
+        indexes = [
+            models.Index(fields=["email_status", "email_verified_at"], name="leads_contact_email_status"),
+            models.Index(fields=["resume_at"], name="leads_contact_resume_at"),
         ]
 
     def __str__(self) -> str:

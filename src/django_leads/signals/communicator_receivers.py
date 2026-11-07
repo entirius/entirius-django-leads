@@ -20,9 +20,12 @@ from django_leads.models import Activity, Company, Contact, Stage
 from django_leads.services import (
     activity_service,
     alert_service,
+    dnc_service,
     recipient_service,
     reply_route_service,
+    resume_service,
     stage_service,
+    verification_service,
 )
 from django_leads.signals._deferred import after_commit
 from django_leads.utils.refs import company_from_ref
@@ -36,6 +39,12 @@ def connect() -> None:
     message_sent.connect(on_message_sent, dispatch_uid="django_leads.on_message_sent")
     sequence_finished.connect(on_sequence_finished, dispatch_uid="django_leads.on_sequence_finished")
     draft_retry_requested.connect(on_draft_retry_requested, dispatch_uid="django_leads.on_draft_retry_requested")
+    optout_confirmed = getattr(communicator_signals, "optout_confirmed", None)
+    if optout_confirmed is not None:
+        optout_confirmed.connect(on_optout_confirmed, dispatch_uid="django_leads.on_optout_confirmed")
+    message_bounced = getattr(communicator_signals, "message_bounced", None)  # older communicators: the daily sync
+    if message_bounced is not None:
+        message_bounced.connect(on_message_bounced, dispatch_uid="django_leads.on_message_bounced")
     followup_due = getattr(communicator_signals, "reply_followup_due", None)  # communicator with T4
     if followup_due is not None:
         followup_due.connect(on_reply_followup_due, dispatch_uid="django_leads.on_reply_followup_due")
@@ -43,6 +52,15 @@ def connect() -> None:
 
 def on_reply_received(sender, thread, reply, **kwargs) -> None:
     after_commit(lambda: record_reply(thread, reply), "on_reply_received")
+
+
+def on_optout_confirmed(sender, subject_ref, email, **kwargs) -> None:
+    after_commit(lambda: record_optout(subject_ref, email), "on_optout_confirmed")
+
+
+def on_message_bounced(sender, message, hard=True, **kwargs) -> None:
+    if hard:
+        after_commit(lambda: verification_service.mark_thread_bounce(message.thread), "on_message_bounced")
 
 
 def on_reply_followup_due(sender, thread, reply, **kwargs) -> None:
@@ -105,6 +123,7 @@ def record_reply(thread, reply) -> None:
     activity_service.record(company, ActivityKind.REPLY, message, contact=contact, data=data)
     route = reply_route_service.route_for(company.channel, intent)
     apply_route(company, contact, route)
+    resume_service.on_reply(company, contact, reply)
     plan = getattr(reply, "action_applied", None) or {}  # communicator's plan for the class (T4); none = pre-T4
     severity = plan.get("notify", "high")
     if severity != "none":
@@ -126,6 +145,15 @@ def apply_route(company, contact, route) -> None:
     if route.flag_contact and contact is not None and contact.wrong_person_at is None:
         Contact.objects.filter(pk=contact.pk).update(wrong_person_at=timezone.now())
         activity_service.record(company, ActivityKind.NOTE, "contact flagged: wrong person", contact=contact)
+
+
+def record_optout(subject_ref: str, email: str) -> None:
+    """A confirmed opt-out stops the address in every channel: `dnc_service.add` marks all its contacts and makes sure
+    every communicator channel suppresses it (the confirm only suppressed the thread's channel)."""
+    company = company_from_ref(subject_ref)
+    if company is None:
+        return
+    dnc_service.add(email=email, reason="opt-out confirmed", actor="communicator")
 
 
 def record_followup_due(thread, reply) -> None:

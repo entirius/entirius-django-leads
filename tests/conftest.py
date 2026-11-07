@@ -12,7 +12,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django_leads import settings as leads_settings
 from django_leads.enums import LeadSource, RuleTrigger, StageKind
 from django_leads.models import Channel, Company, Contact, LeadType, Stage, StageRule
-from django_leads.services import company_service
+from django_leads.services import company_service, verification_service
+from django_leads.services.verification_service import DnsAnswer, Verdict
 
 CHANNEL_IDX = "default-europe"
 
@@ -25,6 +26,51 @@ def eager_celery():
     current_app.conf.task_always_eager = True
     yield
     current_app.conf.task_always_eager = False
+
+
+class StubResolver:
+    """Q5: the only DNS the suite ever sees. Unknown domains get one MX; `answers` overrides per domain."""
+
+    def __init__(self) -> None:
+        self.answers: dict[str, DnsAnswer] = {}
+        self.calls: list[str] = []
+
+    def lookup(self, domain: str) -> DnsAnswer:
+        self.calls.append(domain)
+        return self.answers.get(domain, DnsAnswer(mx_hosts=("mx.stub.test",)))
+
+
+class StubProber:
+    def __init__(self) -> None:
+        self.result: Verdict | None = None
+        self.calls: list[tuple[str, str]] = []
+
+    def probe(self, mx_host: str, email: str) -> Verdict | None:
+        self.calls.append((mx_host, email))
+        return self.result
+
+
+@pytest.fixture(autouse=True)
+def dns(monkeypatch) -> StubResolver:
+    """No test reaches the network: resolver and SMTP prober are stubs, the loop is off unless a test enables it."""
+    resolver = StubResolver()
+    verification_service.use_resolver(resolver)
+    verification_service.use_prober(StubProber())
+    yield resolver
+    verification_service.use_resolver(None)
+    verification_service.use_prober(None)
+
+
+@pytest.fixture
+def prober() -> StubProber:
+    stub = StubProber()
+    verification_service.use_prober(stub)
+    return stub
+
+
+@pytest.fixture
+def verify_on(monkeypatch) -> None:
+    monkeypatch.setattr(leads_settings, "LEADS_VERIFY_ENABLED", True)
 
 
 @pytest.fixture(autouse=True)
