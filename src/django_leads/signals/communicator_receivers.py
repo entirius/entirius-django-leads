@@ -5,7 +5,11 @@
 """communicator → leads: timeline, the event → stage map (first send, replies by class, finished sequences),
 do-not-contact (reviewer skips, confirmed opt-outs), hard bounces; the outreach gate on draft retries."""
 
+import logging
+
+from django_communicator.services.reply_plan_service import reply_title
 from django_communicator.signals import (
+    REPLY_ALERTED,
     company_skipped,
     draft_retry_requested,
     message_bounced,
@@ -24,10 +28,13 @@ from django_leads.services import (
     contact_service,
     follow_up_service,
     recipient_service,
+    sequence_note_service,
     stage_event_service,
 )
 from django_leads.signals._deferred import after_commit
 from django_leads.utils.refs import company_from_ref
+
+logger = logging.getLogger(__name__)
 
 REPLY_EXCERPT = 200
 WRONG_PERSON = "wrong_person"
@@ -44,8 +51,14 @@ def connect() -> None:
     message_bounced.connect(on_message_bounced, dispatch_uid="django_leads.on_message_bounced")
 
 
-def handle_reply_received(sender, thread, reply, **kwargs) -> None:
-    after_commit(lambda: record_reply(thread, reply), "handle_reply_received")
+def handle_reply_received(sender, thread, reply, **kwargs) -> str | None:
+    """Synchronous: communicator sends the signal after its commit and raises its own alert unless a receiver
+    answers `REPLY_ALERTED`. A failure is logged and answers None — communicator alerts instead."""
+    try:
+        return REPLY_ALERTED if record_reply(thread, reply) else None
+    except Exception:
+        logger.exception("leads: receiver handle_reply_received failed")
+        return None
 
 
 def on_company_skipped(sender, subject_ref, **kwargs) -> None:
@@ -95,25 +108,32 @@ def record_retry_blocked(company, contact, message, reason: str) -> None:
     activity_service.record(company, ActivityKind.BLOCKED, f"blocked: {reason}", contact=contact, data=data)
 
 
-def record_reply(thread, reply) -> None:
-    """Timeline with the reply's class, the wrong-person flag, the map, an alert of the plan's severity, and the
-    owner's next step as a task."""
+def record_reply(thread, reply) -> bool:
+    """Timeline with the reply's class, the wrong-person flag, the map, the sequence note, the owner's next step as
+    a task, and last an alert of the plan's severity. True when the alert went out."""
     company = company_from_ref(thread.subject_ref)
     if company is None:
-        return
+        return False
     contact = company.contacts.filter(email__iexact=thread.recipient_email).first()
     intent = reply.intent
-    data = {"thread_id": thread.pk, "reply_id": reply.pk, "class": intent}
+    data = {"event": "reply", "thread_id": thread.pk, "reply_id": reply.pk, "class": intent}
     message = f"reply received: {intent}" if intent else "reply received"
     activity_service.record(company, ActivityKind.REPLY, message, contact=contact, data=data)
     if contact is not None and intent == WRONG_PERSON:
         contact_service.flag_wrong_person(contact, actor="system")
     company = stage_event_service.apply(company, stage_event_service.reply_event(intent))
-    severity = (reply.plan_applied or {}).get("notify") or "high"
-    if severity != NO_ALERT:
-        body = (reply.body_text or "")[:REPLY_EXCERPT]
-        alert_service.alert(company, severity=severity, title=f"Reply from {company.name}", body=body)
+    sequence_note_service.record(company, contact, thread_id=thread.pk, since=reply.received_at, actor="system")
     follow_up_service.on_reply(company, contact, reply)
+    return alert_reply(company, reply)
+
+
+def alert_reply(company, reply) -> bool:
+    """`Reply from <company> — <class words>` to the owner, else the role; nothing for a plan without an alert."""
+    severity = (reply.plan_applied or {}).get("notify") or "high"
+    if severity == NO_ALERT:
+        return False
+    body = (reply.body_text or "")[:REPLY_EXCERPT]
+    return alert_service.alert(company, severity=severity, title=reply_title(company.name, reply.intent), body=body)
 
 
 def block_company(subject_ref: str) -> None:

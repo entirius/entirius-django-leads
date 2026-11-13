@@ -18,7 +18,7 @@ from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
-from django_leads.services import activity_service, fact_service, recipient_service
+from django_leads.services import activity_service, fact_service, recipient_service, sequence_note_service
 
 SKIPPED_TOOLBOX_DISABLED = "skipped: AI toolbox disabled"
 CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", "hooks")
@@ -93,9 +93,9 @@ def compose_message(
             message = compose_service.compose(
                 channel_idx=company.channel.idx, recipient=_recipient(company, contact), subject=subject,
                 body_text=body, subject_ref=subject_ref(company), author=actor, mailbox_user_id=company.owner_id,
-                in_reply_to=reply,
+                in_reply_to=reply, subject_label=company.name,
             )  # fmt: skip
-            _record_draft(company, contact, message, username, text="written by hand")
+            _record_composed(company, contact, message, username)
     except (ClauseSetMissing, AgreementsChannel.DoesNotExist, LegalFooterRequiredError):
         raise NoLegalBasis from None
     return message
@@ -117,6 +117,7 @@ def _communicate(company: Company, contact: Contact, template_key: str, thread: 
         thread=thread,
         audience=company.lead_type,  # the template's lead-type variant, else its any-audience default
         mailbox_user_id=company.owner_id,  # the owner's mailbox, else the channel default
+        subject_label=company.name,
     )
 
 
@@ -179,12 +180,27 @@ def _text(value: object) -> str:
     return ", ".join(value) if isinstance(value, list) else str(value)
 
 
+def _record_composed(company: Company, contact: Contact, message: Message, actor: str) -> None:
+    """Activity `draft` "written by hand" (event `composed`), then the note of the sequence it stopped."""
+    extra = {"event": "composed", "thread_id": message.thread_id}
+    _record_draft(company, contact, message, actor, text="written by hand", extra=extra)
+    since = message.created_at
+    sequence_note_service.record(company, contact, thread_id=message.thread_id, since=since, actor=actor)
+
+
 def _record_draft(
-    company: Company, contact: Contact, message: Message, actor: str, *, template_key: str = "", text: str = ""
+    company: Company,
+    contact: Contact,
+    message: Message,
+    actor: str,
+    *,
+    template_key: str = "",
+    text: str = "",
+    extra: dict | None = None,
 ) -> None:
     """Activity `draft` (`draft <status>`, or the given text) with the message id; a suppressed message also
     `blocked`."""
-    data = {"message_id": message.pk, "status": message.status, "template_key": template_key}
+    data = {"message_id": message.pk, "status": message.status, "template_key": template_key, **(extra or {})}
     text = text or f"draft {message.status}"
     activity_service.record(company, ActivityKind.DRAFT, text, contact=contact, data=data, actor=actor)
     if message.status == MessageStatus.SUPPRESSED:

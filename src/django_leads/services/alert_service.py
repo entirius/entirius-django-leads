@@ -24,11 +24,11 @@ def _notifications_available() -> bool:
     return True
 
 
-def alert(company: Company, *, severity: str, title: str, body: str = "") -> None:
-    """To the company's owner when it has one, else to everyone with the role. Never raises: a missing
-    notifications channel is logged."""
+def alert(company: Company, *, severity: str, title: str, body: str = "") -> bool:
+    """To the company's owner when it has one, else to everyone with the role; True when the notification was
+    raised. Never raises: a missing notifications channel is logged."""
     if not _notifications_available():
-        return
+        return False
     from django_notifications.services.notify_service import notify
 
     try:
@@ -43,3 +43,5 @@ def alert(company: Company, *, severity: str, title: str, body: str = "") -> Non
         )
     except Exception:
         logger.exception("leads: notification for company %s failed", company.pk)
+        return False
+    return True
