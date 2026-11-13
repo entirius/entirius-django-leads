@@ -1832,7 +1832,7 @@ paths:
           description: No response body
     delete:
       operationId: api_leads_v2_admin_stages_destroy
-      description: 409 while companies sit in the stage — move them first.
+      description: 409 while companies sit in the stage or a stage event targets it — move them or change the event first.
       summary: Delete a stage
       parameters:
       - in: path

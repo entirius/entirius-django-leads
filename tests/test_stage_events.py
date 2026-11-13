@@ -248,6 +248,11 @@ def test_stage_requests_no_longer_take_on_reply(channel, admin_api):
     assert "on_reply" not in admin_api.get(api_url("stages/")).json()["results"][0]
 
 
+def test_a_stage_event_target_cannot_be_deleted(channel, admin_api):
+    response = admin_api.delete(api_url(f"stages/{stage('replied').pk}/"))
+    assert response.status_code == 409 and Stage.objects.filter(key="replied").exists()
+
+
 def test_upsert_refuses_a_stage_of_another_channel(channel, polish):
     other = type(channel).objects.create(idx="other")
     foreign = Stage.objects.create(channel=other, key="x", label="X")

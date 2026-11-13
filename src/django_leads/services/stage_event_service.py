@@ -8,6 +8,8 @@ move never leaves a `won` or `lost` stage and, with `forward_only`, only goes to
 from dataclasses import dataclass
 from typing import Any
 
+from django.db import transaction
+
 from django_leads.enums import StageEvent, StageKind
 from django_leads.models import Channel, Company, Stage, StageEventRule
 from django_leads.services import stage_service
@@ -53,13 +55,16 @@ def may_move(current: Stage, target: Stage, *, forward_only: bool) -> bool:
 
 
 def apply(company: Company, event: str) -> Company:
-    """Moves the company through `transition_stage` when the map says so; otherwise returns it unchanged."""
+    """Moves the company through `transition_stage` when the map says so; otherwise returns it unchanged. The
+    guards read the stage of the locked row, so concurrent events never move a company twice or backwards."""
     rule = resolve(company.channel, event)
     if rule is None or rule.target_stage is None:
         return company
-    if not may_move(company.stage, rule.target_stage, forward_only=rule.forward_only):
-        return company
-    return stage_service.transition_stage(company, rule.target_stage, actor="system")
+    with transaction.atomic():
+        locked = Company.objects.select_for_update(of=("self",)).select_related("stage", "channel").get(pk=company.pk)
+        if not may_move(locked.stage, rule.target_stage, forward_only=rule.forward_only):
+            return locked
+        return stage_service.transition_stage(locked, rule.target_stage, actor="system")
 
 
 def effective(channel: Channel) -> list[EffectiveEvent]:

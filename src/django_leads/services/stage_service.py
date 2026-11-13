@@ -11,7 +11,7 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from django_leads.enums import ActivityKind
-from django_leads.models import Channel, Company, Stage
+from django_leads.models import Channel, Company, Stage, StageEventRule
 from django_leads.services import activity_service
 from django_leads.signals import stage_entered
 
@@ -65,6 +65,8 @@ def update_stage(stage: Stage, updates: dict[str, Any]) -> Stage:
 def delete_stage(stage: Stage) -> None:
     if stage.companies.exists():
         raise StageInUse(f"stage {stage.key!r} still holds companies")
+    if StageEventRule.objects.filter(target_stage=stage).exists():
+        raise StageInUse(f"stage {stage.key!r} is the target of a stage event")
     stage.delete()
 
 

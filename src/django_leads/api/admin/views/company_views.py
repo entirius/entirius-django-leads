@@ -6,6 +6,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from django.db import transaction
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
@@ -127,10 +128,10 @@ class CompanyDetailView(AdminView):
         if None in updates.values():
             raise ValidationError({"detail": ["null is only allowed for website"]})
         do_not_contact = updates.pop("do_not_contact", None)
-        with unknown_lead_type_as_400():
+        with unknown_lead_type_as_400(), transaction.atomic():
             company = company_service.update_company(self.company(channel_idx, pk), updates)
-        if do_not_contact is not None:
-            company_service.set_do_not_contact(company, do_not_contact, actor=request.user.username)
+            if do_not_contact is not None:
+                company_service.set_do_not_contact(company, do_not_contact, actor=request.user.username)
         return Response(detail(company))
 
 

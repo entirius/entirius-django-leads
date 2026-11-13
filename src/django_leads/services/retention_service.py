@@ -21,10 +21,14 @@ from django_leads.utils.emails import anonymised_address, email_hash
 PERSONAL_FIELDS = ("first_name", "last_name", "job_title", "phone")
 
 
+def retention_days(channel: Channel) -> int:
+    return channel.retention_days or leads_settings.LEADS_RETENTION_DAYS
+
+
 def select_inactive_contacts(channel: Channel, *, as_of: datetime) -> QuerySet[Contact]:
     """Contacts not yet anonymised at companies of the channel idle since the cutoff (never in a `won` stage),
     without an Activity of their own after it."""
-    cutoff = as_of - timedelta(days=channel.retention_days or leads_settings.LEADS_RETENTION_DAYS)
+    cutoff = as_of - timedelta(days=retention_days(channel))
     companies = Company.objects.filter(channel=channel, last_activity_at__lt=cutoff).exclude(stage__kind=StageKind.WON)
     recent = Activity.objects.filter(contact=OuterRef("pk"), created_at__gte=cutoff)
     contacts = Contact.objects.filter(company__in=companies, anonymised_at__isnull=True).exclude(Exists(recent))

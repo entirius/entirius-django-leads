@@ -122,6 +122,26 @@ def test_release_keeps_a_suppression_added_in_communicator(mailer, shop):
     assert suppressed("domain") == [("example-shop-4.test", "manual")]
 
 
+def test_global_domain_row_stays_while_another_channel_holds_it(mailer, shop, polish, monkeypatch):
+    monkeypatch.setattr(communicator_settings, "COMMUNICATOR_SUPPRESSION_SCOPE", "install")
+    elsewhere = other_channel_contact(polish).company
+    Company.objects.filter(pk=elsewhere.pk).update(domain=shop.domain, do_not_contact=True)
+    company_service.set_do_not_contact(shop, True, actor="operator")
+    company_service.set_do_not_contact(shop, False, actor="operator")
+    assert Suppression.objects.filter(kind="domain", channel=None).exists()
+    Company.objects.filter(pk=elsewhere.pk).update(do_not_contact=False)
+    company_service.set_do_not_contact(shop, True, actor="operator")
+    company_service.set_do_not_contact(shop, False, actor="operator")
+    assert not suppressed("domain")
+
+
+def test_do_not_contact_reads_the_stored_flag(mailer, shop):
+    stale = Company.objects.get(pk=shop.pk)
+    company_service.set_do_not_contact(shop, True, actor="operator")
+    company_service.set_do_not_contact(stale, True, actor="other")
+    assert notes(shop) == ["do not contact: on"]
+
+
 def test_patch_do_not_contact_goes_through_the_writer(mailer, shop, admin_api):
     response = admin_api.patch(api_url(f"companies/{shop.pk}/"), {"do_not_contact": True}, format="json")
     assert response.status_code == 200 and response.json()["do_not_contact"] is True

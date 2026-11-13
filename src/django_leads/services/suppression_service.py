@@ -12,7 +12,7 @@ from django_communicator.enums import SuppressionKind, SuppressionScope, Suppres
 from django_communicator.models import Channel as CommunicatorChannel
 from django_communicator.services import suppression_service as store
 
-from django_leads.models import Channel
+from django_leads.models import Channel, Company
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +42,22 @@ def suppress_domain(channel: Channel, domain: str) -> None:
 
 
 def release_domain(channel: Channel, domain: str) -> None:
-    """Removes only the domain row leads wrote; a suppression added in communicator by hand stays."""
+    """Removes only the domain row leads wrote; a suppression added in communicator by hand stays, and a global row
+    stays while a do-not-contact company of another channel has the domain."""
     target = communicator_channel(channel)
     if target is None:
         return
-    rows = store.list_suppressions(target, {"value": domain})
-    for row in rows.filter(kind=SuppressionKind.DOMAIN, reason=DO_NOT_CONTACT_REASON):
+    rows = store.list_suppressions(target, {"value": domain}).filter(
+        kind=SuppressionKind.DOMAIN, reason=DO_NOT_CONTACT_REASON
+    )
+    if _held_elsewhere(channel, domain):
+        rows = rows.exclude(channel=None)
+    for row in rows:
         store.delete_suppression(target, row.pk)
+
+
+def _held_elsewhere(channel: Channel, domain: str) -> bool:
+    return Company.objects.filter(domain=domain, do_not_contact=True).exclude(channel=channel).exists()
 
 
 def refusal(channel: Channel, email: str) -> str | None:

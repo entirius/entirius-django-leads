@@ -14,7 +14,7 @@ class StageEventRule(BaseModel):
     channel = models.ForeignKey("django_leads.Channel", on_delete=models.CASCADE, related_name="stage_events")
     event = models.CharField(max_length=32, choices=StageEvent.choices)
     target_stage = models.ForeignKey(
-        "django_leads.Stage", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+        "django_leads.Stage", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
     # Move only to a stage of a higher `order` than the current one.
     forward_only = models.BooleanField(default=True)

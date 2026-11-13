@@ -96,11 +96,11 @@ def update_company(company: Company, updates: dict[str, Any]) -> Company:
 
 def set_do_not_contact(company: Company, value: bool, *, actor: str) -> Company:
     """The only writer of `do_not_contact`: on suppresses the company's domain in communicator, off removes that
-    suppression. Setting the current value changes nothing."""
-    if company.do_not_contact == value:
-        return company
-    Company.objects.filter(pk=company.pk).update(do_not_contact=value, modified_at=timezone.now())
+    suppression. Setting the current value (as stored) changes nothing."""
+    changed = Company.objects.filter(pk=company.pk, do_not_contact=not value)
     company.do_not_contact = value
+    if not changed.update(do_not_contact=value, modified_at=timezone.now()):
+        return company
     message = f"do not contact: {'on' if value else 'off'}"
     activity_service.record(company, ActivityKind.NOTE, message, actor=actor)
     if value:

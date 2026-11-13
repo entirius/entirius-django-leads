@@ -199,7 +199,7 @@ upper-cased; `message` is human-readable; `details` is empty for these (no field
 | Code (`error`) | Raised by |
 |---|---|
 | `STAGE_EXISTS` | `POST`/`PATCH stages/`: another stage of the channel already has this key |
-| `STAGE_NOT_EMPTY` | `DELETE stages/<pk>/`: the stage still holds companies |
+| `STAGE_NOT_EMPTY` | `DELETE stages/<pk>/`: the stage still holds companies, or a stage event moves companies to it |
 | `LEAD_TYPE_EXISTS` | `POST lead-types/`: the channel already has this code, or the code is the built-in `UNKNOWN` |
 | `LEAD_TYPE_IN_USE` | `DELETE lead-types/<pk>/`: companies of the channel still carry the code — retype them or deactivate the type |
 | `DOMAIN_EXISTS` | `POST companies/`: another company of the channel already has this registrable domain |

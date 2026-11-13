@@ -7,10 +7,9 @@ suppression answer and the retention clock — one read for the "mailable" dialo
 from datetime import timedelta
 from typing import Any
 
-from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, StageKind
 from django_leads.models import Company, Contact
-from django_leads.services import recipient_service, suppression_service
+from django_leads.services import recipient_service, retention_service, suppression_service
 
 
 def mailable(contact: Contact) -> dict[str, Any]:
@@ -40,6 +39,6 @@ def _communicator(contact: Contact) -> dict[str, Any] | None:
 
 
 def _retention(company: Company) -> dict[str, Any]:
-    days = company.channel.retention_days or leads_settings.LEADS_RETENTION_DAYS
+    days = retention_service.retention_days(company.channel)
     due_at = company.last_activity_at + timedelta(days=days) if company.last_activity_at else None
     return {"days": days, "due_at": due_at, "exempt_won": company.stage.kind == StageKind.WON}
