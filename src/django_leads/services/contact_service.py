@@ -11,12 +11,13 @@ from typing import Any
 
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
+from django.utils import timezone
 from django_agreements.enums import LegalBasis
 from django_communicator.models import Thread
 
 from django_leads.enums import ActivityKind
 from django_leads.models import Activity, Channel, Company, Contact
-from django_leads.services import activity_service, retention_service
+from django_leads.services import activity_service, retention_service, suppression_service
 from django_leads.services.company_service import fill_empty
 from django_leads.services.outreach_service import subject_ref
 from django_leads.utils.emails import normalize_email
@@ -199,6 +200,48 @@ def remove_contact(contact: Contact, *, actor: str) -> Contact | None:
         activity_service.record(locked.company, ActivityKind.NOTE, "contact removed", actor=actor)
         locked.delete()
     return None
+
+
+def opt_out(contact: Contact, *, reason: str, actor: str) -> Contact:
+    """The only writer of `opt_out_at`: set once (Activity `optout`), and the address suppressed in communicator."""
+    if not _stamp(contact, "opt_out_at"):
+        return contact
+    data = {"reason": reason}
+    activity_service.record(contact.company, ActivityKind.OPTOUT, "opted out", contact=contact, data=data, actor=actor)
+    if contact.email:
+        suppression_service.suppress_address(contact.company.channel, contact.email, reason=reason)
+    return contact
+
+
+def opt_out_address(email: str, channel_idx: str, *, actor: str) -> int:
+    """A confirmed opt-out from communicator: every contact with the address in the channel, or in every channel
+    when suppressions hold install-wide. Returns the contacts opted out now."""
+    contacts = Contact.objects.filter(email=normalize_email(email), opt_out_at__isnull=True)
+    if not suppression_service.install_wide():
+        contacts = contacts.filter(company__channel__idx=channel_idx)
+    found = list(contacts.select_related("company__channel"))
+    for contact in found:
+        opt_out(contact, reason="optout_confirmed", actor=actor)
+    return len(found)
+
+
+def flag_wrong_person(contact: Contact, *, actor: str) -> Contact:
+    """Set once by a `wrong_person` reply; the gate refuses the contact from then on."""
+    if _stamp(contact, "wrong_person_at"):
+        message = "contact flagged: wrong person"
+        activity_service.record(contact.company, ActivityKind.NOTE, message, contact=contact, actor=actor)
+    return contact
+
+
+def _stamp(contact: Contact, field: str) -> bool:
+    """Sets an empty timestamp field in one conditional update; False when it was already set."""
+    now = timezone.now()
+    updated = Contact.objects.filter(pk=contact.pk, **{f"{field}__isnull": True}).update(
+        **{field: now}, modified_at=now
+    )
+    if updated:
+        setattr(contact, field, now)
+    return bool(updated)
 
 
 def list_contacts(channel: Channel, company_id: int | None = None) -> QuerySet[Contact]:

@@ -13,8 +13,8 @@ from rest_framework.response import Response
 from django_leads.api.admin.views._base import ERROR_RESPONSES, AdminView, Conflict, parse
 from django_leads.models import Company
 from django_leads.schemas.requests import CommunicateRequest
-from django_leads.schemas.responses import AuditRequestedResponse, DraftResponse
-from django_leads.services import intel_service, outreach_service
+from django_leads.schemas.responses import AuditRequestedResponse, DraftResponse, MailableResponse
+from django_leads.services import intel_service, mailable_service, outreach_service
 
 _TAGS = ["Leads Companies"]
 
@@ -32,7 +32,7 @@ class CompanyCommunicateView(CompanyActionView):
         tags=_TAGS,
         summary="Request a reviewable draft for a contact",
         description="No rule conditions or cooldown. 409 when the outreach gate refuses the contact (do_not_contact, "
-        "opted_out, anonymised, no_legal_basis) or no draft can be built (no clause set); 400 for a foreign or "
+        "opted_out, anonymised, wrong_person, no_legal_basis, suppressed, address_invalid) or no draft can be built (no clause set); 400 for a foreign or "
         "email-less contact; 503 `AI_TOOLBOX_DISABLED` for an AI template while the toolbox is off.",
         request=CommunicateRequest,
         responses={201: DraftResponse, **ERROR_RESPONSES, 409: None, 503: None},
@@ -66,3 +66,19 @@ class CompanyRequestAuditView(CompanyActionView):
     def post(self, request: Request, channel_idx: str, pk: int) -> Response:
         audit = intel_service.request_audit_for(self.company(channel_idx, pk), actor=request.user.username)
         return Response(AuditRequestedResponse(audit_id=str(audit.pk), status=audit.status).model_dump(), status=202)
+
+
+class ContactMailableView(CompanyActionView):
+    @extend_schema(
+        tags=_TAGS,
+        summary="Why a contact may (not) be mailed",
+        description="Every reason of the outreach gate, the legal basis and its source, communicator's suppression "
+        "answer and the retention clock. Read only: the gate itself runs when a draft is requested.",
+        responses={200: MailableResponse, **ERROR_RESPONSES},
+    )
+    def get(self, request: Request, channel_idx: str, pk: int, contact_id: int) -> Response:
+        company = self.company(channel_idx, pk)
+        contacts = company.contacts.select_related("company__channel", "company__stage")
+        contact = self.get_in(contacts, contact_id, "Contact")
+        body = MailableResponse.model_validate(mailable_service.mailable(contact))
+        return Response(body.model_dump(mode="json"))

@@ -67,6 +67,7 @@ class CompanyListView(AdminView):
             OpenApiParameter("lead_type", str, description="Lead type code of the channel, or UNKNOWN."),
             OpenApiParameter("do_not_contact", bool, description="do_not_contact flag."),
             OpenApiParameter("has_reply", bool, description="At least one reply activity (true) or none (false)."),
+            OpenApiParameter("origin", str, description="Exact origin."),
             *PAGE_PARAMETERS,
         ],
         responses={200: CompanyListResponse, **ERROR_RESPONSES},
@@ -115,7 +116,8 @@ class CompanyDetailView(AdminView):
     @extend_schema(
         tags=_TAGS,
         summary="Update editable company fields",
-        description="Stage, domain, hooks and customer link are not editable here.",
+        description="Stage, domain, hooks and customer link are not editable here. Turning do_not_contact on "
+        "suppresses the company's domain in communicator; turning it off removes that suppression.",
         request=CompanyUpdateRequest,
         responses={200: CompanyDetailResponse, **ERROR_RESPONSES},
     )
@@ -124,8 +126,11 @@ class CompanyDetailView(AdminView):
         updates = {field: "" if value is None and field == "website" else value for field, value in updates.items()}
         if None in updates.values():
             raise ValidationError({"detail": ["null is only allowed for website"]})
+        do_not_contact = updates.pop("do_not_contact", None)
         with unknown_lead_type_as_400():
             company = company_service.update_company(self.company(channel_idx, pk), updates)
+        if do_not_contact is not None:
+            company_service.set_do_not_contact(company, do_not_contact, actor=request.user.username)
         return Response(detail(company))
 
 

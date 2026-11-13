@@ -12,7 +12,7 @@ from django_utils.toolbox.schemas import CompletionRequest
 
 from django_leads.enums import ActivityKind, ContactStrategy
 from django_leads.models import Company, Contact, RecipientPickProfile, StageRule
-from django_leads.services import activity_service
+from django_leads.services import activity_service, suppression_service
 from django_leads.utils.prompts import prompt_messages
 
 PICK_KEY = "leads.pick_recipient"
@@ -23,20 +23,31 @@ class PickRejected(Exception):
 
 
 def candidates(company: Company) -> list[Contact]:
-    contacts = company.contacts.exclude(email="").filter(opt_out_at__isnull=True, anonymised_at__isnull=True)
+    contacts = company.contacts.exclude(email="").filter(
+        opt_out_at__isnull=True, anonymised_at__isnull=True, wrong_person_at__isnull=True
+    )
     return list(contacts.select_related("language").order_by("-is_primary", "pk"))
 
 
-def block_reason(contact: Contact) -> str | None:
-    """The outreach gate: why no draft may go to the contact (reason code), None when it may."""
+def block_reasons(contact: Contact) -> list[str]:
+    """The outreach gate: every reason no draft may go to the contact, in gate order; communicator's `can_mail` code
+    last (asked only for a contact with an email)."""
     checks = (
         (contact.company.do_not_contact, "do_not_contact"),
         (not contact.email, "no_email"),
         (contact.opt_out_at is not None, "opted_out"),
         (contact.anonymised_at is not None, "anonymised"),
+        (contact.wrong_person_at is not None, "wrong_person"),
         (not contact.legal_basis, "no_legal_basis"),
     )
-    return next((reason for failed, reason in checks if failed), None)
+    reasons = [reason for failed, reason in checks if failed]
+    refusal = suppression_service.refusal(contact.company.channel, contact.email) if contact.email else None
+    return [*reasons, refusal] if refusal else reasons
+
+
+def block_reason(contact: Contact) -> str | None:
+    """The first reason of `block_reasons`, None when a draft may go to the contact."""
+    return next(iter(block_reasons(contact)), None)
 
 
 def eligible(contact: Contact) -> bool:

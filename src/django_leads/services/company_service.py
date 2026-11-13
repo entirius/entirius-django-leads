@@ -12,12 +12,11 @@ from django.utils import timezone
 
 from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind
 from django_leads.models import Activity, Channel, Company, Stage
-from django_leads.services import activity_service, lead_type_service, stage_service
+from django_leads.services import activity_service, lead_type_service, stage_service, suppression_service
 
-FILL_FIELDS = ("name", "website", "lead_type", "industry")
-EDITABLE_FIELDS = frozenset(
-    {"name", "website", "lead_type", "industry", "description", "do_not_contact", "external_ref"}
-)
+FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin")
+# `do_not_contact` has its own writer: `set_do_not_contact`.
+EDITABLE_FIELDS = frozenset({"name", "website", "lead_type", "industry", "description", "external_ref", "origin"})
 SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at"})
 EMPTY_VALUES = (None, "", UNKNOWN_LEAD_TYPE)
 
@@ -95,6 +94,22 @@ def update_company(company: Company, updates: dict[str, Any]) -> Company:
     return company
 
 
+def set_do_not_contact(company: Company, value: bool, *, actor: str) -> Company:
+    """The only writer of `do_not_contact`: on suppresses the company's domain in communicator, off removes that
+    suppression. Setting the current value changes nothing."""
+    if company.do_not_contact == value:
+        return company
+    Company.objects.filter(pk=company.pk).update(do_not_contact=value, modified_at=timezone.now())
+    company.do_not_contact = value
+    message = f"do not contact: {'on' if value else 'off'}"
+    activity_service.record(company, ActivityKind.NOTE, message, actor=actor)
+    if value:
+        suppression_service.suppress_domain(company.channel, company.domain)
+    else:
+        suppression_service.release_domain(company.channel, company.domain)
+    return company
+
+
 def list_companies(
     channel: Channel,
     *,
@@ -104,6 +119,7 @@ def list_companies(
     lead_type: str = "",
     do_not_contact: bool | None = None,
     has_reply: bool | None = None,
+    origin: str = "",
 ) -> QuerySet[Company]:
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
     active lead type of the channel (`UnknownLeadType`)."""
@@ -114,6 +130,8 @@ def list_companies(
         companies = companies.filter(stage__key=stage)
     if search:
         companies = companies.filter(Q(name__icontains=search) | Q(domain__icontains=search))
+    if origin:
+        companies = companies.filter(origin=origin)
     if lead_type:
         lead_type_service.check_code(channel, lead_type)
     companies = filter_flags(companies, lead_type, do_not_contact, has_reply)
