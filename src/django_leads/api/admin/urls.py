@@ -8,6 +8,7 @@ from django.urls import path
 
 from django_leads.api.admin.views import activity_views as activity
 from django_leads.api.admin.views import attribute_views as attribute
+from django_leads.api.admin.views import channel_views as channel
 from django_leads.api.admin.views import company_action_views as action
 from django_leads.api.admin.views import company_views as company
 from django_leads.api.admin.views import contact_views as contact
@@ -29,6 +30,7 @@ urlpatterns = [
     path("companies/<int:pk>/transition/", company.CompanyTransitionView.as_view(), name="admin-leads-transition"),
     path("companies/<int:pk>/score/", scoring.CompanyScoreView.as_view(), name="admin-leads-company-score"),
     path("companies/<int:pk>/communicate/", action.CompanyCommunicateView.as_view(), name="admin-leads-communicate"),
+    path("companies/<int:pk>/compose/", action.CompanyComposeView.as_view(), name="admin-leads-compose"),
     path(
         "companies/<int:pk>/request-audit/", action.CompanyRequestAuditView.as_view(), name="admin-leads-request-audit"
     ),
@@ -37,6 +39,7 @@ urlpatterns = [
         action.ContactMailableView.as_view(),
         name="admin-leads-contact-mailable",
     ),
+    path("channel/", channel.ChannelSettingsView.as_view(), name="admin-leads-channel"),
     path("assignable-users/", owner.AssignableUserListView.as_view(), name="admin-leads-assignable-users"),
     path("contacts/", contact.ContactListView.as_view(), name="admin-leads-contacts"),
     path("contacts/<int:pk>/", contact.ContactDetailView.as_view(), name="admin-leads-contact"),

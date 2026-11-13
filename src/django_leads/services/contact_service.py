@@ -17,7 +17,13 @@ from django_communicator.models import Thread
 
 from django_leads.enums import ActivityKind, AttributeEntity
 from django_leads.models import Activity, Channel, Company, Contact
-from django_leads.services import activity_service, attribute_service, retention_service, suppression_service
+from django_leads.services import (
+    activity_service,
+    attribute_service,
+    follow_up_service,
+    retention_service,
+    suppression_service,
+)
 from django_leads.services.company_service import ATTRIBUTES, fill_empty
 from django_leads.services.outreach_service import subject_ref
 from django_leads.utils.emails import normalize_email
@@ -225,6 +231,7 @@ def opt_out(contact: Contact, *, reason: str, actor: str) -> Contact:
     activity_service.record(contact.company, ActivityKind.OPTOUT, "opted out", contact=contact, data=data, actor=actor)
     if contact.email:
         suppression_service.suppress_address(contact.company.channel, contact.email, reason=reason)
+    follow_up_service.cancel_resume(contact, follow_up_service.OPTED_OUT)
     return contact
 
 

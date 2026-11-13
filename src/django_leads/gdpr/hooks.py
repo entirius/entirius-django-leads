@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 
 from django_leads.models import Activity, Company, Contact
-from django_leads.services import erased_address_service, retention_service
+from django_leads.services import erased_address_service, retention_service, task_bridge
 from django_leads.utils.emails import anonymised_address, normalize_email
 
 ERASED = "[erased]"
@@ -30,16 +30,18 @@ def gdpr_export(email: str) -> dict[str, Any]:
         "Contact": list(contacts.values()),
         "Company": list(Company.objects.filter(pk__in=contacts.values("company_id")).values()),
         "Activity": list(Activity.objects.filter(contact__in=contacts).values()),
+        "Task": task_bridge.export(list(contacts)),
     }
 
 
 def gdpr_erase(email: str) -> dict[str, int]:
-    """The address remembered as erased (contact or not), contacts anonymised (actor `gdpr`, locked, once), then
-    every Activity of those contacts scrubbed."""
+    """The address remembered as erased (contact or not), contacts anonymised (actor `gdpr`, locked, once) and their
+    tasks scrubbed, then every Activity of those contacts scrubbed."""
     with transaction.atomic():
         contacts = list(contacts_of_email(email))
         erased_address_service.remember(email)
         for contact in contacts:
             retention_service.anonymise_contact(contact, actor="gdpr")
+            task_bridge.scrub(contact)  # also the tasks of a contact anonymised before
         activities = Activity.objects.filter(contact__in=contacts).update(message=ERASED, data={"erased": True})
     return {"contacts": len(contacts), "activities": activities}

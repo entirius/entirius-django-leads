@@ -6,11 +6,13 @@
 
 from dataclasses import dataclass
 
+from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 from django_agreements.models import Channel as AgreementsChannel
 from django_agreements.services.clause_set_service import ClauseSetMissing, render_legal_footer, resolve_clause_set
 from django_communicator.enums import MessageStatus
-from django_communicator.models import Message, Thread
+from django_communicator.models import Message, Reply, Thread
+from django_communicator.services import compose_service
 from django_communicator.services.communicate_service import LegalFooterRequiredError, RecipientData, communicate
 from django_utils.toolbox import ToolboxDisabledError
 
@@ -24,6 +26,10 @@ CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", 
 
 def subject_ref(company: Company) -> str:
     return f"leads.Company:{company.pk}"
+
+
+class NoLegalBasis(Exception):
+    """No legal footer for the contact: no clause set of its legal basis and language, or an empty footer."""
 
 
 @dataclass(frozen=True)
@@ -48,7 +54,7 @@ def request_draft(
             if reason:
                 return _blocked(company, contact, reason, actor)
             message = _communicate(company, contact, template_key, thread)
-            _record_draft(company, contact, message, template_key, actor)
+            _record_draft(company, contact, message, actor, template_key=template_key)
     except (ClauseSetMissing, AgreementsChannel.DoesNotExist):
         return _skipped(company, contact, "skipped: no clause set", actor)
     except LegalFooterRequiredError:
@@ -72,24 +78,56 @@ def _blocked(company: Company, contact: Contact, reason: str, actor: str) -> Blo
     return Blocked(reason)
 
 
+def compose_message(
+    company: Company, contact: Contact, *, subject: str, body: str, actor: AbstractBaseUser, reply: Reply | None = None
+) -> Message | Blocked:
+    """A hand-written message from the owner's mailbox: the locks and the gate of `request_draft` (a refusal →
+    Activity `blocked`), the legal footer of the contact's basis and language, then communicator's `compose`.
+    Raises `NoLegalBasis`, and communicator's `Channel.DoesNotExist`, `ComposeError` and `ThreadMismatchError`."""
+    username = actor.get_username()
+    try:
+        with transaction.atomic():
+            company, contact = _lock(company, contact)
+            if reason := recipient_service.block_reason(contact):
+                return _blocked(company, contact, reason, username)
+            message = compose_service.compose(
+                channel_idx=company.channel.idx, recipient=_recipient(company, contact), subject=subject,
+                body_text=body, subject_ref=subject_ref(company), author=actor, mailbox_user_id=company.owner_id,
+                in_reply_to=reply,
+            )  # fmt: skip
+            _record_draft(company, contact, message, username, text="written by hand")
+    except (ClauseSetMissing, AgreementsChannel.DoesNotExist, LegalFooterRequiredError):
+        raise NoLegalBasis from None
+    return message
+
+
+def reply_of(company: Company, reply_id: int) -> Reply | None:
+    """The reply when it belongs to a thread of the company, else None."""
+    return Reply.objects.select_related("thread").filter(pk=reply_id, thread__subject_ref=subject_ref(company)).first()
+
+
 def _communicate(company: Company, contact: Contact, template_key: str, thread: Thread | None) -> Message:
-    language = _language_code(company, contact)
     return communicate(
         channel_idx=company.channel.idx,
         template_key=template_key,
-        recipient=RecipientData(
-            email=contact.email,
-            first_name=contact.first_name,
-            last_name=contact.last_name,
-            language=language,
-            legal_footer=_legal_footer(company, contact, language),
-        ),
+        recipient=_recipient(company, contact),
         context=_context(company, contact),
         subject_ref=subject_ref(company),
         requires_review=True,
         thread=thread,
         audience=company.lead_type,  # the template's lead-type variant, else its any-audience default
         mailbox_user_id=company.owner_id,  # the owner's mailbox, else the channel default
+    )
+
+
+def _recipient(company: Company, contact: Contact) -> RecipientData:
+    language = _language_code(company, contact)
+    return RecipientData(
+        email=contact.email,
+        first_name=contact.first_name,
+        last_name=contact.last_name,
+        language=language,
+        legal_footer=_legal_footer(company, contact, language),
     )
 
 
@@ -141,11 +179,14 @@ def _text(value: object) -> str:
     return ", ".join(value) if isinstance(value, list) else str(value)
 
 
-def _record_draft(company: Company, contact: Contact, message: Message, template_key: str, actor: str) -> None:
+def _record_draft(
+    company: Company, contact: Contact, message: Message, actor: str, *, template_key: str = "", text: str = ""
+) -> None:
+    """Activity `draft` (`draft <status>`, or the given text) with the message id; a suppressed message also
+    `blocked`."""
     data = {"message_id": message.pk, "status": message.status, "template_key": template_key}
-    activity_service.record(
-        company, ActivityKind.DRAFT, f"draft {message.status}", contact=contact, data=data, actor=actor
-    )
+    text = text or f"draft {message.status}"
+    activity_service.record(company, ActivityKind.DRAFT, text, contact=contact, data=data, actor=actor)
     if message.status == MessageStatus.SUPPRESSED:
         activity_service.record(
             company, ActivityKind.BLOCKED, "suppressed by communicator", contact=contact, actor=actor

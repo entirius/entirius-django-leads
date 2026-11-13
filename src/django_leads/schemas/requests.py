@@ -438,6 +438,47 @@ class DevAnonymiseRequest(BaseModel):
     )
 
 
+class ComposeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contact_id: int = Field(description="Contact of the company.", examples=[102])
+    subject: str = Field(min_length=1, max_length=255, description="Subject.", examples=["Our call on Tuesday"])
+    body: str = Field(
+        min_length=1, description="Plain-text body; the legal footer is added.", examples=["Hello Ola, …"]
+    )
+    reply_id: int | None = Field(
+        default=None, description="A reply of a thread of this company the message answers.", examples=[31]
+    )
+
+    @field_validator("subject", "body")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class ResumeDays(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    not_now: int | None = Field(
+        default=None, ge=1, le=365, description='Days until "Come back" after not now; null = 30.', examples=[30]
+    )
+    out_of_office: int | None = Field(
+        default=None, ge=1, le=365, description="Days until \"Try again\" after an absence without a return date; "
+        "null = 7.", examples=[7],
+    )  # fmt: skip
+
+
+class ChannelSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resume_days: ResumeDays | None = Field(
+        default=None,
+        description="Replaces the channel's values; a key left out or null uses the default, null resets all.",
+    )
+
+
 class GdprRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

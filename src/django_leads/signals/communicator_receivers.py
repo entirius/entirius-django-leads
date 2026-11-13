@@ -22,6 +22,7 @@ from django_leads.services import (
     alert_service,
     company_service,
     contact_service,
+    follow_up_service,
     recipient_service,
     stage_event_service,
 )
@@ -95,7 +96,8 @@ def record_retry_blocked(company, contact, message, reason: str) -> None:
 
 
 def record_reply(thread, reply) -> None:
-    """Timeline with the reply's class, the wrong-person flag, the map, and an alert of the plan's severity."""
+    """Timeline with the reply's class, the wrong-person flag, the map, an alert of the plan's severity, and the
+    owner's next step as a task."""
     company = company_from_ref(thread.subject_ref)
     if company is None:
         return
@@ -111,6 +113,7 @@ def record_reply(thread, reply) -> None:
     if severity != NO_ALERT:
         body = (reply.body_text or "")[:REPLY_EXCERPT]
         alert_service.alert(company, severity=severity, title=f"Reply from {company.name}", body=body)
+    follow_up_service.on_reply(company, contact, reply)
 
 
 def block_company(subject_ref: str) -> None:

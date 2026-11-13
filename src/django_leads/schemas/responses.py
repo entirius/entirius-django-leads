@@ -294,6 +294,15 @@ class DraftResponse(BaseModel):
     status: str = Field(description="Message status.", examples=["review_required"])
 
 
+class ChannelSettingsResponse(BaseModel):
+    idx: str = Field(description="Channel idx.", examples=["default-europe"])
+    name: str = Field(description="Channel name.", examples=["Default Europe"])
+    resume_days: dict[str, int] = Field(
+        description="Effective days until a follow-up task per reply class (not_now, out_of_office).",
+        examples=[{"not_now": 30, "out_of_office": 7}],
+    )
+
+
 class AuditRequestedResponse(BaseModel):
     audit_id: str = Field(description="siteintel audit id.", examples=["6f1c..."])
     status: str = Field(description="Audit status.", examples=["pending"])
