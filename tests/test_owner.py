@@ -102,6 +102,13 @@ def test_manual_create_defaults_to_the_requesting_user(admin_api, channel):
     assert owner_notes(Company.objects.get(pk=body["id"])) == ["owner: operator"]
 
 
+def test_manual_create_by_a_caller_who_cannot_own_has_no_owner(company):
+    service = staff("access-app-1")
+    with mock.patch.object(owner_service, "_people", return_value=get_user_model().objects.none()):
+        assert owner_service.default_owner(service) is None
+    assert owner_service.default_owner(staff("anna")).username == "anna"
+
+
 def test_manual_create_with_null_owner_has_none(admin_api, channel):
     body = admin_api.post(api_url("companies/"), {"domain": "own.test", "owner_id": None}, format="json").json()
     assert body["owner"] is None and owner_notes(Company.objects.get(pk=body["id"])) == []
@@ -165,6 +172,11 @@ def test_bulk_assign_refuses_a_company_of_another_channel(admin_api, channel, co
     assert admin_api.post(api_url("companies/assign/"), body, format="json").status_code == 400
 
 
+def test_an_out_of_range_owner_id_is_400(admin_api, company):
+    body = {"company_ids": [company.pk], "owner_id": 2**40}
+    assert admin_api.post(api_url("companies/assign/"), body, format="json").status_code == 400
+
+
 def test_bulk_assign_refuses_a_non_staff_owner(admin_api, company):
     body = {"company_ids": [company.pk], "owner_id": staff("someone", is_staff=False).pk}
     assert admin_api.post(api_url("companies/assign/"), body, format="json").status_code == 400
@@ -186,13 +198,15 @@ def test_list_filters_by_owner(admin_api, channel):
     assert listed(admin_api, owner="none") == ["free.test"]
     assert listed(admin_api, owner=str(anna.pk)) == ["anna.test"]
     assert admin_api.get(api_url("companies/"), {"owner": "someone"}).status_code == 400
+    assert admin_api.get(api_url("companies/"), {"owner": "9" * 12}).status_code == 400
 
 
 def test_list_sorts_by_owner_and_shows_the_owner(admin_api, channel):
     new_company(channel, "z.test", staff("adam", first_name="Adam"))
     new_company(channel, "a.test", staff("zenon"))
-    assert listed(admin_api, sort="owner__username") == ["z.test", "a.test"]
-    assert listed(admin_api, sort="-owner__username") == ["a.test", "z.test"]
+    new_company(channel, "free.test")
+    assert listed(admin_api, sort="owner__username") == ["z.test", "a.test", "free.test"]
+    assert listed(admin_api, sort="-owner__username") == ["a.test", "z.test", "free.test"]
     row = admin_api.get(api_url("companies/"), {"sort": "owner__username"}).json()["results"][0]
     assert row["owner"]["username"] == "adam" and set(row["owner"]) == {"id", "username", "name"}
 
@@ -281,6 +295,12 @@ def test_reply_without_an_owner_goes_to_the_role(shop, notifications, django_cap
     send_reply(shop, django_capture_on_commit_callbacks)
     rows = list(Notification.objects.values_list("recipient_user_id", "recipient_role"))
     assert rows == [(None, alert_service.LEADS_NOTIFY_ROLE)]
+
+
+def test_a_deactivated_owner_leaves_the_alert_to_the_role(shop, notifications, django_capture_on_commit_callbacks):
+    owner_service.set_owner(shop, staff("anna", is_active=False), actor="test")
+    send_reply(shop, django_capture_on_commit_callbacks)
+    assert list(Notification.objects.values_list("recipient_user_id", flat=True)) == [None]
 
 
 def test_without_notifications_the_alert_is_a_no_op(shop, django_capture_on_commit_callbacks):

@@ -37,10 +37,11 @@ from agreements, website facts from siteintel, human attention from notification
 
 - **Who can own**: active staff users, without the service users of access applications (`access_application`, when
   `django_access` is installed). A deactivated owner keeps their companies; the picker no longer offers them.
-- **How a company gets one**: manual create (default: the requesting user), company patch, bulk assign (≤ 200), an
+- **How a company gets one**: manual create (default: the requesting user, when they can own), company patch, bulk assign (≤ 200), an
   import with `owner_id` (created companies, and matched ones without an owner). The contact form and an import
   without `owner_id` leave the company unowned.
-- **What follows it**: alerts (`alert_service`) go to the owner (`recipient_user_id`), else to `LEADS_NOTIFY_ROLE`;
+- **What follows it**: alerts (`alert_service`) go to the owner (`recipient_user_id`) while their account is active,
+  else to `LEADS_NOTIFY_ROLE`;
   drafts (`outreach_service`, so rules and rotation too) ask communicator for the owner's mailbox
   (`mailbox_user_id`), which falls back to the channel default.
 - **Visibility**: everyone with the area `leads.companies` sees every company; the owner is a filter (`owner=me`),

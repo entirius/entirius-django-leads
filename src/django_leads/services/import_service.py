@@ -448,8 +448,8 @@ class _ChunkWriter:
     def apply(self, line: int, company_row: dict, contact_row: dict | None) -> None:
         company, created = self._company(company_row)
         filled = [] if created else self._fill(company, company_row, company_service.FILL_FIELDS)
-        if owner_service.adopt(company, self.batch.owner_id) and not created:
-            self._mark_dirty(company)
+        if owner_service.adopt(company, self.batch.owner_id):
+            self._mark_dirty(company)  # a created company is in `new`, never dirty
         contact = self._contact(company, contact_row, filled) if contact_row else None
         message = "import created" if created else "import matched"
         data = {"row": line, "filled": filled}

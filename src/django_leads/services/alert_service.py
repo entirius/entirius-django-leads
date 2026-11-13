@@ -8,6 +8,7 @@ import functools
 import logging
 
 from django_leads.models import Company
+from django_leads.services import owner_service
 from django_leads.settings import LEADS_NOTIFY_ROLE
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ def alert(company: Company, *, severity: str, title: str, body: str = "") -> Non
             subject_ref=f"leads.Company:{company.pk}",
             title=title,
             body=body,
-            recipient_user_id=company.owner_id,
+            recipient_user_id=owner_service.alert_recipient_id(company),
         )
     except Exception:
         logger.exception("leads: notification for company %s failed", company.pk)

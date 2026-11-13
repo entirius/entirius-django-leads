@@ -56,6 +56,18 @@ def resolve_owner(owner_id: int | None) -> AbstractBaseUser | None:
     return owner
 
 
+def default_owner(user: AbstractBaseUser) -> AbstractBaseUser | None:
+    """Manual create without `owner_id`: the requesting user when they can own companies, else no owner."""
+    return user if _people().filter(pk=user.pk).exists() else None
+
+
+def alert_recipient_id(company: Company) -> int | None:
+    """The owner while their account is active; a deactivated owner's alerts go to the role instead."""
+    if company.owner_id is None:
+        return None
+    return company.owner_id if company.owner.is_active else None
+
+
 def set_owner(company: Company, owner: AbstractBaseUser | None, *, actor: str) -> bool:
     """Writes the owner and the Activity `owner: <username | none>`; the current owner changes nothing."""
     owner_id = owner.pk if owner else None

@@ -118,17 +118,17 @@ class CompanyListView(AdminView):
         tags=_TAGS,
         summary="Create a company by hand",
         description="The domain is stored registrable; an existing domain in the channel is a 409. Without "
-        "`owner_id` the requesting user owns the company.",
+        "`owner_id` the requesting user owns the company when they can own companies.",
         request=CompanyCreateRequest,
         responses={201: CompanyDetailResponse, **ERROR_RESPONSES, 409: None},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
         body = parse(CompanyCreateRequest, request.data)
-        owner_id = body.owner_id if "owner_id" in body.model_fields_set else request.user.pk
+        named = "owner_id" in body.model_fields_set
+        owner = owner_or_400(body.owner_id) if named else owner_service.default_owner(request.user)
         row = {**body.model_dump(mode="json", exclude={"owner_id"}), "source": LeadSource.MANUAL}
         actor = request.user.username
         try:
-            owner = owner_or_400(owner_id)
             with unknown_lead_type_as_400(), transaction.atomic():
                 company = company_service.create_company(self.channel(channel_idx), row, actor=actor)
                 owner_service.set_owner(company, owner, actor=actor)

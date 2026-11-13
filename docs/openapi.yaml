@@ -541,7 +541,7 @@ paths:
     post:
       operationId: api_leads_v2_admin_companies_create
       description: The domain is stored registrable; an existing domain in the channel is a 409. Without `owner_id` the requesting
-        user owns the company.
+        user owns the company when they can own companies.
       summary: Create a company by hand
       parameters:
       - in: path
@@ -3241,7 +3241,9 @@ components:
           type: object
         owner_id:
           anyOf:
-          - type: integer
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
           - type: 'null'
           default: null
           description: Owner (an assignable user); absent = the requesting user, null = no owner.
@@ -4839,7 +4841,9 @@ components:
           type: array
         owner_id:
           anyOf:
-          - type: integer
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
           - type: 'null'
           description: Owner (an assignable user); null clears the owner.
           examples:
@@ -5087,7 +5091,9 @@ components:
           title: Attributes
         owner_id:
           anyOf:
-          - type: integer
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
           - type: 'null'
           default: null
           description: Owner (an assignable user); null clears the owner.

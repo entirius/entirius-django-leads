@@ -25,6 +25,7 @@ FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin")
 # `do_not_contact` has its own writer: `set_do_not_contact`.
 EDITABLE_FIELDS = frozenset({"name", "website", "lead_type", "industry", "description", "external_ref", "origin"})
 SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at", "score_points", "owner__username"})
+NULLS_LAST_SORTS = frozenset({"score_points", "owner__username"})
 # `attributes` is never set from a dict: create / patch go through `attribute_service`.
 ATTRIBUTES = "attributes"
 LIST_FILTER_KINDS = frozenset({AttributeKind.SELECT, AttributeKind.BOOL, AttributeKind.TEXT})
@@ -150,7 +151,7 @@ def list_companies(
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
     active lead type of the channel (`UnknownLeadType`); `attributes` keys must be list filters (`filter_attributes`);
     `owner` is `me` (= `user_id`), `none` or a user id (`owner_service.filter_by_owner`).
-    Never-scored companies sort last on `score_points` either way."""
+    Never-scored and unowned companies sort last on `score_points` / `owner__username` either way."""
     if sort.lstrip("-") not in SORT_FIELDS:
         raise ValueError(f"unknown sort {sort!r}")
     companies = Company.objects.filter(channel=channel).select_related("stage")
@@ -172,9 +173,10 @@ def list_companies(
 
 
 def _ordering(sort: str) -> str | OrderBy:
-    if sort.lstrip("-") != "score_points":
+    """Nullable sorts (`NULLS_LAST_SORTS`) keep the empty values last either way."""
+    if sort.lstrip("-") not in NULLS_LAST_SORTS:
         return sort
-    column = F("score_points")
+    column = F(sort.lstrip("-"))
     return column.desc(nulls_last=True) if sort.startswith("-") else column.asc(nulls_last=True)
 
 
