@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from django.contrib.auth.models import AbstractBaseUser
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import DatabaseError, DataError, IntegrityError, OperationalError, transaction
@@ -44,6 +45,7 @@ from django_leads.services import (
     contact_service,
     erased_address_service,
     lead_type_service,
+    owner_service,
     stage_service,
 )
 from django_leads.signals import stage_entered
@@ -72,10 +74,22 @@ class Lookups:
 
 
 def create_batch(
-    channel: Channel, filename: str, size_bytes: int, created_by: str, *, run_rules: bool = False
+    channel: Channel,
+    filename: str,
+    size_bytes: int,
+    created_by: str,
+    *,
+    run_rules: bool = False,
+    owner: AbstractBaseUser | None = None,
 ) -> ImportBatch:
+    """`owner` (an assignable user, `owner_service.resolve_owner`) goes to created and to unowned matched companies."""
     return ImportBatch.objects.create(
-        channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by, run_rules=run_rules
+        channel=channel,
+        filename=filename,
+        size_bytes=size_bytes,
+        created_by=created_by,
+        run_rules=run_rules,
+        owner=owner,
     )
 
 
@@ -349,6 +363,8 @@ def _apply_alone(batch: ImportBatch, line: int, company_row: dict, contact_row: 
 
 def _upsert_row(batch: ImportBatch, line: int, company_row: dict, contact_row: dict | None) -> tuple[int, str, str]:
     company, created = company_service.upsert_company(batch.channel, company_row)
+    if owner_service.adopt(company, batch.owner_id):
+        company.save(update_fields=[owner_service.OWNER, "modified_at"])
     if created:
         announce_created(batch, [company])
     contact = contact_service.upsert_contact(company, contact_row)[0] if contact_row else None
@@ -432,6 +448,8 @@ class _ChunkWriter:
     def apply(self, line: int, company_row: dict, contact_row: dict | None) -> None:
         company, created = self._company(company_row)
         filled = [] if created else self._fill(company, company_row, company_service.FILL_FIELDS)
+        if owner_service.adopt(company, self.batch.owner_id) and not created:
+            self._mark_dirty(company)
         contact = self._contact(company, contact_row, filled) if contact_row else None
         message = "import created" if created else "import matched"
         data = {"row": line, "filled": filled}
@@ -445,7 +463,7 @@ class _ChunkWriter:
         self.outcomes.append((line, "created" if created else "matched", ""))
 
     def flush(self) -> None:
-        self._write(Company, (*company_service.FILL_FIELDS, "attributes"))
+        self._write(Company, (*company_service.FILL_FIELDS, "attributes", owner_service.OWNER))
         self._write(Contact, (*contact_service.FILL_FIELDS, "legal_basis", "attributes"))
         activity_service.record_many(self.activities)
         announce_created(self.batch, [instance for instance in self.new if isinstance(instance, Company)])
@@ -479,9 +497,13 @@ class _ChunkWriter:
 
     def _fill(self, instance: Any, row: dict, fields: tuple[str, ...]) -> list[str]:
         filled = company_service.fill_empty(instance, row, fields)
-        if filled and instance.pk and instance not in self.dirty:
-            self.dirty.append(instance)
+        if filled:
+            self._mark_dirty(instance)
         return filled
+
+    def _mark_dirty(self, instance: Any) -> None:
+        if instance.pk and instance not in self.dirty:
+            self.dirty.append(instance)
 
     def _write(self, model: type, fields: tuple[str, ...]) -> None:
         created = [instance for instance in self.new if isinstance(instance, model)]

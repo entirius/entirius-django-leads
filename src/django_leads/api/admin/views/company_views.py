@@ -13,9 +13,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView, Conflict, parse
+from django_leads.api.admin.views.owner_views import owner_or_400
 from django_leads.enums import LeadSource
 from django_leads.models import Company, Stage
 from django_leads.schemas.requests import (
+    OWNER_FILTER_DESCRIPTION,
     CompanyCreateRequest,
     CompanyListQuery,
     CompanyUpdateRequest,
@@ -33,6 +35,7 @@ from django_leads.services import (
     company_service,
     customer_link_service,
     lead_type_service,
+    owner_service,
     stage_service,
 )
 
@@ -79,12 +82,18 @@ class CompanyListView(AdminView):
         parameters=[
             OpenApiParameter("stage", str, description="Stage key."),
             OpenApiParameter("search", str, description="Substring of name or domain."),
-            OpenApiParameter("sort", str, description="name, domain, stage_entered_at, last_activity_at; `-` prefix."),
+            OpenApiParameter(
+                "sort",
+                str,
+                description="name, domain, stage_entered_at, last_activity_at, score_points, owner__username; "
+                "`-` prefix.",
+            ),
             OpenApiParameter("lead_type", str, description="Lead type code of the channel, or UNKNOWN."),
             OpenApiParameter("do_not_contact", bool, description="do_not_contact flag."),
             OpenApiParameter("has_reply", bool, description="At least one reply activity (true) or none (false)."),
             OpenApiParameter("origin", str, description="Exact origin."),
             OpenApiParameter("segment", str, description="Score segment S1 … S4."),
+            OpenApiParameter("owner", str, description=OWNER_FILTER_DESCRIPTION),
             OpenApiParameter(
                 "attr.<key>",
                 str,
@@ -98,23 +107,31 @@ class CompanyListView(AdminView):
         query = parse(CompanyListQuery, request.query_params.dict())
         with unknown_lead_type_as_400():
             companies = company_service.list_companies(
-                self.channel(channel_idx), **query.model_dump(), attributes=attribute_filters(request)
+                self.channel(channel_idx),
+                **query.model_dump(),
+                attributes=attribute_filters(request),
+                user_id=request.user.pk,
             )
         return self.paginated(request, companies, CompanyResponse.of)
 
     @extend_schema(
         tags=_TAGS,
         summary="Create a company by hand",
-        description="The domain is stored registrable; an existing domain in the channel is a 409.",
+        description="The domain is stored registrable; an existing domain in the channel is a 409. Without "
+        "`owner_id` the requesting user owns the company.",
         request=CompanyCreateRequest,
         responses={201: CompanyDetailResponse, **ERROR_RESPONSES, 409: None},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
         body = parse(CompanyCreateRequest, request.data)
-        row = {**body.model_dump(mode="json"), "source": LeadSource.MANUAL}
+        owner_id = body.owner_id if "owner_id" in body.model_fields_set else request.user.pk
+        row = {**body.model_dump(mode="json", exclude={"owner_id"}), "source": LeadSource.MANUAL}
+        actor = request.user.username
         try:
-            with unknown_lead_type_as_400():
-                company = company_service.create_company(self.channel(channel_idx), row, actor=request.user.username)
+            owner = owner_or_400(owner_id)
+            with unknown_lead_type_as_400(), transaction.atomic():
+                company = company_service.create_company(self.channel(channel_idx), row, actor=actor)
+                owner_service.set_owner(company, owner, actor=actor)
         except company_service.CompanyExists as error:
             raise Conflict(str(error), code="domain_exists") from None
         except stage_service.NoStages as error:
@@ -126,7 +143,7 @@ class CompanyDetailView(AdminView):
     access_area = "leads.companies"
 
     def company(self, channel_idx: str, pk: int) -> Company:
-        companies = Company.objects.filter(channel=self.channel(channel_idx)).select_related("stage")
+        companies = Company.objects.filter(channel=self.channel(channel_idx)).select_related("stage", "owner")
         return self.get_in(companies, pk, "Company")
 
     @extend_schema(
@@ -141,20 +158,25 @@ class CompanyDetailView(AdminView):
         tags=_TAGS,
         summary="Update editable company fields",
         description="Stage, domain, hooks, score and customer link are not editable here; `attributes` is merged "
-        "(null removes a key). Turning do_not_contact on suppresses the company's domain in communicator; turning it off removes that suppression.",
+        "(null removes a key); `owner_id` sets the owner (null clears it). Turning do_not_contact on suppresses the company's domain in communicator; turning it off removes that suppression.",
         request=CompanyUpdateRequest,
         responses={200: CompanyDetailResponse, **ERROR_RESPONSES},
     )
     def patch(self, request: Request, channel_idx: str, pk: int) -> Response:
         updates = parse(CompanyUpdateRequest, request.data).model_dump(mode="json", exclude_unset=True)
         updates = {field: "" if value is None and field == "website" else value for field, value in updates.items()}
+        owner_given, owner_id = "owner_id" in updates, updates.pop("owner_id", None)
         if None in updates.values():  # `attributes: null` included — remove keys inside the patch instead
-            raise ValidationError({"detail": ["null is only allowed for website"]})
+            raise ValidationError({"detail": ["null is only allowed for website and owner_id"]})
         do_not_contact = updates.pop("do_not_contact", None)
+        actor = request.user.username
+        owner = owner_or_400(owner_id)
         with unknown_lead_type_as_400(), transaction.atomic():
             company = company_service.update_company(self.company(channel_idx, pk), updates)
+            if owner_given:
+                owner_service.set_owner(company, owner, actor=actor)
             if do_not_contact is not None:
-                company_service.set_do_not_contact(company, do_not_contact, actor=request.user.username)
+                company_service.set_do_not_contact(company, do_not_contact, actor=actor)
         return Response(detail(company))
 
 
@@ -170,7 +192,7 @@ class CompanyTransitionView(AdminView):
     def post(self, request: Request, channel_idx: str, pk: int) -> Response:
         body = parse(TransitionRequest, request.data)
         channel = self.channel(channel_idx)
-        company = self.get_in(Company.objects.filter(channel=channel).select_related("stage"), pk, "Company")
+        company = self.get_in(Company.objects.filter(channel=channel).select_related("stage", "owner"), pk, "Company")
         stage = Stage.objects.filter(channel=channel, key=body.stage_key).first()
         if stage is None:
             raise NotFound("Stage not found.")

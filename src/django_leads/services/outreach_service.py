@@ -89,6 +89,7 @@ def _communicate(company: Company, contact: Contact, template_key: str, thread: 
         requires_review=True,
         thread=thread,
         audience=company.lead_type,  # the template's lead-type variant, else its any-audience default
+        mailbox_user_id=company.owner_id,  # the owner's mailbox, else the channel default
     )
 
 

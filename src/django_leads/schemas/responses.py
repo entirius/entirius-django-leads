@@ -86,6 +86,26 @@ class ActivityResponse(BaseModel):
     created_at: datetime = Field(description="Created.", examples=["2026-09-13T12:00:00Z"])
 
 
+class OwnerResponse(BaseModel):
+    """A staff user as leads shows one — no e-mail, no roles."""
+
+    id: int = Field(description="User id.", examples=[7])
+    username: str = Field(description="Username.", examples=["anna"])
+    name: str = Field(description="Full name; empty when the user has none.", examples=["Anna Nowak"])
+
+    @classmethod
+    def of(cls, user) -> "OwnerResponse":
+        return cls(id=user.pk, username=user.get_username(), name=user.get_full_name())
+
+
+class OwnerListResponse(BaseModel):
+    results: list[OwnerResponse] = Field(description="Active staff users by name, at most 50.")
+
+
+class OwnerAssignResponse(BaseModel):
+    updated: int = Field(description="Companies whose owner changed.", examples=[3])
+
+
 class CompanyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -111,12 +131,15 @@ class CompanyResponse(BaseModel):
     score_points: int | None = Field(description="Points of the last scoring; null = never scored.", examples=[45])
     score_segment: str = Field(description="S1 (best) … S4 of the last scoring; empty = never scored.", examples=["S2"])
     scored_at: datetime | None = Field(description="Last scored.", examples=[None])
+    owner: OwnerResponse | None = Field(description="Owner; null = none.", examples=[None])
 
     @classmethod
     def of(cls, company) -> "CompanyResponse":
-        fields = {name: getattr(company, name) for name in cls.model_fields if name not in ("stage", "customer_uid")}
+        related = ("stage", "customer_uid", "owner")
+        fields = {name: getattr(company, name) for name in cls.model_fields if name not in related}
         uid = str(company.customer_uid) if company.customer_uid else None
-        return cls.model_validate({**fields, "stage": company.stage, "customer_uid": uid})
+        owner = OwnerResponse.of(company.owner) if company.owner_id else None
+        return cls.model_validate({**fields, "stage": company.stage, "customer_uid": uid, "owner": owner})
 
 
 class CompanyDetailResponse(CompanyResponse):
@@ -142,6 +165,7 @@ class ImportBatchResponse(BaseModel):
     created_by: str = Field(description="Uploader.", examples=["admin"])
     created_at: datetime = Field(description="Uploaded.", examples=["2026-09-13T12:00:00Z"])
     run_rules: bool = Field(description="Created companies enter their first stage with its rules.", examples=[False])
+    owner_id: int | None = Field(description="Owner given to created and unowned matched companies.", examples=[None])
     rules_queued: int = Field(
         default=0, description="Rule evaluations queued: one per created company with run_rules.", examples=[0]
     )

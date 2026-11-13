@@ -16,6 +16,7 @@ from django_leads.services import (
     activity_service,
     attribute_service,
     lead_type_service,
+    owner_service,
     stage_service,
     suppression_service,
 )
@@ -23,7 +24,7 @@ from django_leads.services import (
 FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin")
 # `do_not_contact` has its own writer: `set_do_not_contact`.
 EDITABLE_FIELDS = frozenset({"name", "website", "lead_type", "industry", "description", "external_ref", "origin"})
-SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at", "score_points"})
+SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at", "score_points", "owner__username"})
 # `attributes` is never set from a dict: create / patch go through `attribute_service`.
 ATTRIBUTES = "attributes"
 LIST_FILTER_KINDS = frozenset({AttributeKind.SELECT, AttributeKind.BOOL, AttributeKind.TEXT})
@@ -143,9 +144,12 @@ def list_companies(
     origin: str = "",
     segment: str = "",
     attributes: dict[str, str] | None = None,
+    owner: str = "",
+    user_id: int | None = None,
 ) -> QuerySet[Company]:
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
-    active lead type of the channel (`UnknownLeadType`); `attributes` keys must be list filters (`filter_attributes`).
+    active lead type of the channel (`UnknownLeadType`); `attributes` keys must be list filters (`filter_attributes`);
+    `owner` is `me` (= `user_id`), `none` or a user id (`owner_service.filter_by_owner`).
     Never-scored companies sort last on `score_points` either way."""
     if sort.lstrip("-") not in SORT_FIELDS:
         raise ValueError(f"unknown sort {sort!r}")
@@ -163,6 +167,7 @@ def list_companies(
     if attributes:
         companies = filter_attributes(channel, companies, attributes)
     companies = filter_flags(companies, lead_type, do_not_contact, has_reply)
+    companies = owner_service.filter_by_owner(companies, owner, user_id)
     return companies.order_by(_ordering(sort), "id")
 
 

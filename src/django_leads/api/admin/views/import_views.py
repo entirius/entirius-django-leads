@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView, parse
+from django_leads.api.admin.views.owner_views import owner_or_400
 from django_leads.models import ImportBatch
 from django_leads.schemas.requests import UploadOptions
 from django_leads.schemas.responses import ImportBatchDetailResponse, ImportBatchListResponse, ImportBatchResponse
@@ -28,6 +29,10 @@ UPLOAD_SCHEMA = {
                 "type": "boolean",
                 "default": False,
                 "description": "Created companies enter their first stage with its rules (one evaluation each).",
+            },
+            "owner_id": {
+                "type": "integer",
+                "description": "Owner of created companies and of matched ones without an owner; absent = none.",
             },
         },
         "required": ["file"],
@@ -71,8 +76,14 @@ class ImportListView(AdminView):
     def post(self, request: Request, channel_idx: str) -> Response:
         options = parse(UploadOptions, request.data.dict())
         filename, content, size_bytes = read_upload(request)
+        owner = owner_or_400(options.owner_id)
         batch = import_service.create_batch(
-            self.channel(channel_idx), filename, size_bytes, request.user.username, run_rules=options.run_rules
+            self.channel(channel_idx),
+            filename,
+            size_bytes,
+            request.user.username,
+            run_rules=options.run_rules,
+            owner=owner,
         )
         import_service.store_upload(batch.pk, content)
         transaction.on_commit(lambda: enqueue_import(batch.pk))

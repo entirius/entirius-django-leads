@@ -28,6 +28,8 @@ from django_leads.utils.domains import registrable_domain
 # Format only — whether a code is an active lead type of the channel is the service's call (`lead_type_service`).
 LEAD_TYPE_PATTERN = r"^[A-Z0-9_]+$"
 ATTRIBUTE_KEY_PATTERN = r"^[a-z][a-z0-9_]*$"
+OWNER_FILTER_PATTERN = r"^(me|none|[0-9]{1,18})?$"
+OWNER_FILTER_DESCRIPTION = "me = the caller's companies, none = without an owner, a user id; blank = any."
 ATTRIBUTES_DESCRIPTION = (
     "Custom attribute values by key (active definitions of the channel); on update a partial patch, null removes a key."
 )
@@ -40,7 +42,8 @@ class CompanyListQuery(BaseModel):
     search: str = Field(default="", max_length=253, description="Substring of name or domain.", examples=["shop"])
     sort: str = Field(
         default="name",
-        description="name, domain, stage_entered_at, last_activity_at or score_points; `-` for descending.",
+        description="name, domain, stage_entered_at, last_activity_at, score_points or owner__username; `-` for "
+        "descending.",
     )
     lead_type: str = Field(
         default="",
@@ -53,6 +56,7 @@ class CompanyListQuery(BaseModel):
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
     origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.", examples=["fair"])
     segment: ScoreSegment | None = Field(default=None, description="Score segment filter (S1 best … S4).")
+    owner: str = Field(default="", pattern=OWNER_FILTER_PATTERN, description=OWNER_FILTER_DESCRIPTION, examples=["me"])
 
     @field_validator("sort")
     @classmethod
@@ -73,6 +77,9 @@ class CompanyCreateRequest(BaseModel):
     )
     industry: str = Field(default="", max_length=128, description="Industry.")
     attributes: dict[str, Any] = Field(default_factory=dict, description=ATTRIBUTES_DESCRIPTION)
+    owner_id: int | None = Field(
+        default=None, description="Owner (an assignable user); absent = the requesting user, null = no owner."
+    )
 
     @field_validator("domain")
     @classmethod
@@ -92,6 +99,7 @@ class CompanyUpdateRequest(BaseModel):
     external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
     origin: str | None = Field(default=None, max_length=64, description="Where the lead came from.")
     attributes: dict[str, Any] | None = Field(default=None, description=ATTRIBUTES_DESCRIPTION)
+    owner_id: int | None = Field(default=None, description="Owner (an assignable user); null clears the owner.")
 
 
 class TransitionRequest(BaseModel):
@@ -367,6 +375,22 @@ class UploadOptions(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     run_rules: bool = Field(default=False, description="Created companies enter their first stage with its rules.")
+    owner_id: int | None = Field(
+        default=None, description="Owner of created companies and of matched ones without an owner; absent = none."
+    )
+
+
+class AssignableUserQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    search: str = Field(default="", max_length=150, description="Substring of username or name.", examples=["anna"])
+
+
+class OwnerAssignRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_ids: list[int] = Field(min_length=1, description="Companies of the channel, at most 200.", examples=[[1]])
+    owner_id: int | None = Field(description="Owner (an assignable user); null clears the owner.", examples=[7])
 
 
 class FunnelQuery(BaseModel):

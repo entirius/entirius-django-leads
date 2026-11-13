@@ -13,6 +13,7 @@ from django_leads.api.admin.views import company_views as company
 from django_leads.api.admin.views import contact_views as contact
 from django_leads.api.admin.views import import_views as imports
 from django_leads.api.admin.views import lead_type_views as lead_type
+from django_leads.api.admin.views import owner_views as owner
 from django_leads.api.admin.views import profile_views as profile
 from django_leads.api.admin.views import report_views as report
 from django_leads.api.admin.views import rule_views as rule
@@ -23,6 +24,7 @@ from django_leads.api.admin.views import test_views as dev
 
 urlpatterns = [
     path("companies/", company.CompanyListView.as_view(), name="admin-leads-companies"),
+    path("companies/assign/", owner.OwnerAssignView.as_view(), name="admin-leads-companies-assign"),
     path("companies/<int:pk>/", company.CompanyDetailView.as_view(), name="admin-leads-company"),
     path("companies/<int:pk>/transition/", company.CompanyTransitionView.as_view(), name="admin-leads-transition"),
     path("companies/<int:pk>/score/", scoring.CompanyScoreView.as_view(), name="admin-leads-company-score"),
@@ -35,6 +37,7 @@ urlpatterns = [
         action.ContactMailableView.as_view(),
         name="admin-leads-contact-mailable",
     ),
+    path("assignable-users/", owner.AssignableUserListView.as_view(), name="admin-leads-assignable-users"),
     path("contacts/", contact.ContactListView.as_view(), name="admin-leads-contacts"),
     path("contacts/<int:pk>/", contact.ContactDetailView.as_view(), name="admin-leads-contact"),
     path("stages/", stage.StageListView.as_view(), name="admin-leads-stages"),
