@@ -22,10 +22,12 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `score_points` — never-scored companies last either way; `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), `segment` (`S1`–`S4`), `attr.<key>` (exact value of an active company attribute with `show_in_list` of kind `select`, `bool` or `text`; any other key is a 400), paging | 200 `CompanyListResponse` |
-| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry`, `attributes` (every `required` company attribute must be given) | 201 `CompanyDetailResponse`; Activity `note` "company created" |
+| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `score_points` — never-scored companies last either way, `owner__username`; `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), `segment` (`S1`–`S4`), `attr.<key>` (exact value of an active company attribute with `show_in_list` of kind `select`, `bool` or `text`; any other key is a 400), `owner` (`me` = the caller, `none` = unowned, a user id), paging | 200 `CompanyListResponse` |
+| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry`, `attributes` (every `required` company attribute must be given), `owner_id` (absent = the requesting user, null = no owner) | 201 `CompanyDetailResponse`; Activity `note` "company created" (+ "owner: <username>") |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
-| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64), `attributes` (merged: given keys are set, a `null` key is removed; a required key may not be removed) | 200 `CompanyDetailResponse` |
+| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64), `attributes` (merged: given keys are set, a `null` key is removed; a required key may not be removed), `owner_id` (null clears) | 200 `CompanyDetailResponse`; an owner change is an Activity `note` "owner: <username \| none>" |
+| POST | `<channel_idx>/companies/assign/` | `company_ids` (1–200 companies of the channel), `owner_id` (null clears) | 200 `{updated}` (companies whose owner changed); one Activity `note` per change; more than 200 ids or an id of another channel is a 400 on `company_ids` |
+| GET | `<channel_idx>/assignable-users/` | `search` (substring of username, first or last name) | 200 `{results: [{id, username, name}]}` — active staff by name, at most 50; nothing else about a user |
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
 | POST | `<channel_idx>/companies/<id>/score/` | — | 200 `ScoreResponse` `{segment, points, disqualified, reasons, reasons_structured: [{field, kind, points, label}], profile_id}`; stores `score_points`, `score_segment`, `scored_at`; Activity `score` with the reasons |
 | POST | `<channel_idx>/companies/<id>/communicate/` | `template_key`, `contact_id` | 201 `{message_id, status}` — a reviewable communicator draft |
@@ -36,11 +38,12 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 `CompanyResponse`: `id, name, domain, website, lead_type, industry, description, platform, hooks, stage
 {id, key, label, order, kind, is_terminal}, stage_entered_at, source, external_ref, do_not_contact,
 customer_uid, rotation_count, last_activity_at, origin, attributes, score_points (null = never scored), score_segment
-("" = never scored), scored_at`. `CompanyDetailResponse` adds `contacts` (all), `activities`
+("" = never scored), scored_at, owner {id, username, name} | null`. `CompanyDetailResponse` adds `contacts` (all), `activities`
 (last 20, newest first) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
 the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks`, the score fields and `customer_uid`
 are not writable here. A refused attribute (unknown or inactive key, a value its kind refuses, a missing required
-key) is a 400 on `attributes`.
+key) is a 400 on `attributes`. An `owner_id` that is not an active staff user (or is a service user of an access
+application) is a 400 on `owner_id`, here, on `assign/` and on `imports/`.
 
 `communicate/` skips rule conditions and cooldown, not the outreach gate (`concept.md` § Outreach gate).
 `create-customer/` links the Customer owning the primary contact's email through a **verified** allauth
@@ -167,11 +170,11 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 |---|---|---|---|
 | GET | `<channel_idx>/activities/` | `company` (id), paging | 200 `ActivityListResponse` — `id, company_id, contact_id, kind, message, data, actor, created_at`, newest first |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
-| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
+| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |
 
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
-skipped_count, row_count, size_bytes, created_by, created_at, run_rules, rules_queued` (`rules_queued`: one rule
+skipped_count, row_count, size_bytes, created_by, created_at, run_rules, owner_id, rules_queued` (`rules_queued`: one rule
 evaluation per created company when `run_rules` is on, else 0). The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
 

@@ -226,6 +226,41 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/assignable-users/:
+    get:
+      operationId: leads_assignable_users_list
+      description: Active staff users by name, at most 50; id, username and name only.
+      summary: Users who can own a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Substring of username or name.
+      tags:
+      - Leads Companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/attributes/:
     get:
       operationId: leads_attributes_list
@@ -452,6 +487,11 @@ paths:
           type: string
         description: Exact origin.
       - in: query
+        name: owner
+        schema:
+          type: string
+        description: me = the caller's companies, none = without an owner, a user id; blank = any.
+      - in: query
         name: page
         schema:
           type: integer
@@ -473,7 +513,7 @@ paths:
         name: sort
         schema:
           type: string
-        description: name, domain, stage_entered_at, last_activity_at; `-` prefix.
+        description: name, domain, stage_entered_at, last_activity_at, score_points, owner__username; `-` prefix.
       - in: query
         name: stage
         schema:
@@ -500,7 +540,8 @@ paths:
           description: No response body
     post:
       operationId: api_leads_v2_admin_companies_create
-      description: The domain is stored registrable; an existing domain in the channel is a 409.
+      description: The domain is stored registrable; an existing domain in the channel is a 409. Without `owner_id` the requesting
+        user owns the company.
       summary: Create a company by hand
       parameters:
       - in: path
@@ -578,7 +619,8 @@ paths:
     patch:
       operationId: api_leads_v2_admin_companies_partial_update
       description: Stage, domain, hooks, score and customer link are not editable here; `attributes` is merged (null removes
-        a key). Turning do_not_contact on suppresses the company's domain in communicator; turning it off removes that suppression.
+        a key); `owner_id` sets the owner (null clears it). Turning do_not_contact on suppresses the company's domain in communicator;
+        turning it off removes that suppression.
       summary: Update editable company fields
       parameters:
       - in: path
@@ -861,6 +903,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompanyDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/assign/:
+    post:
+      operationId: api_leads_v2_admin_companies_assign_create
+      description: At most 200 companies, every one of the channel; each change is a timeline note.
+      summary: Set or clear the owner of many companies
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerAssignResponse'
           description: ''
         '400':
           description: No response body
@@ -1163,6 +1247,9 @@ paths:
                   type: boolean
                   default: false
                   description: Created companies enter their first stage with its rules (one evaluation each).
+                owner_id:
+                  type: integer
+                  description: Owner of created companies and of matched ones without an owner; absent = none.
               required:
               - file
       security:
@@ -2419,6 +2506,9 @@ paths:
                   type: boolean
                   default: false
                   description: Created companies enter their first stage with its rules (one evaluation each).
+                owner_id:
+                  type: integer
+                  description: Owner of created companies and of matched ones without an owner; absent = none.
               required:
               - file
       security:
@@ -3149,6 +3239,13 @@ components:
             removes a key.
           title: Attributes
           type: object
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); absent = the requesting user, null = no owner.
+          title: Owner Id
       required:
       - domain
       title: CompanyCreateRequest
@@ -3297,6 +3394,13 @@ components:
           examples:
           - null
           title: Scored At
+        owner:
+          anyOf:
+          - $ref: '#/components/schemas/OwnerResponse'
+          - type: 'null'
+          description: Owner; null = none.
+          examples:
+          - null
         contacts:
           description: Contacts of the company.
           items:
@@ -3339,6 +3443,7 @@ components:
       - score_points
       - score_segment
       - scored_at
+      - owner
       - contacts
       - activities
       title: CompanyDetailResponse
@@ -3524,6 +3629,13 @@ components:
           examples:
           - null
           title: Scored At
+        owner:
+          anyOf:
+          - $ref: '#/components/schemas/OwnerResponse'
+          - type: 'null'
+          description: Owner; null = none.
+          examples:
+          - null
       required:
       - id
       - name
@@ -3547,6 +3659,7 @@ components:
       - score_points
       - score_segment
       - scored_at
+      - owner
       title: CompanyResponse
       type: object
     Condition:
@@ -4346,6 +4459,14 @@ components:
           - false
           title: Run Rules
           type: boolean
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Owner given to created and unowned matched companies.
+          examples:
+          - null
+          title: Owner Id
         rules_queued:
           default: 0
           description: 'Rule evaluations queued: one per created company with run_rules.'
@@ -4372,6 +4493,7 @@ components:
       - created_by
       - created_at
       - run_rules
+      - owner_id
       - report
       title: ImportBatchDetailResponse
       type: object
@@ -4487,6 +4609,14 @@ components:
           - false
           title: Run Rules
           type: boolean
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Owner given to created and unowned matched companies.
+          examples:
+          - null
+          title: Owner Id
         rules_queued:
           default: 0
           description: 'Rule evaluations queued: one per created company with run_rules.'
@@ -4507,6 +4637,7 @@ components:
       - created_by
       - created_at
       - run_rules
+      - owner_id
       title: ImportBatchResponse
       type: object
     ImportReportEntry:
@@ -4694,6 +4825,82 @@ components:
       - retention
       title: MailableResponse
       type: object
+    OwnerAssignRequest:
+      additionalProperties: false
+      properties:
+        company_ids:
+          description: Companies of the channel, at most 200.
+          examples:
+          - - 1
+          items:
+            type: integer
+          minItems: 1
+          title: Company Ids
+          type: array
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Owner (an assignable user); null clears the owner.
+          examples:
+          - 7
+          title: Owner Id
+      required:
+      - company_ids
+      - owner_id
+      title: OwnerAssignRequest
+      type: object
+    OwnerAssignResponse:
+      properties:
+        updated:
+          description: Companies whose owner changed.
+          examples:
+          - 3
+          title: Updated
+          type: integer
+      required:
+      - updated
+      title: OwnerAssignResponse
+      type: object
+    OwnerListResponse:
+      properties:
+        results:
+          description: Active staff users by name, at most 50.
+          items:
+            $ref: '#/components/schemas/OwnerResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: OwnerListResponse
+      type: object
+    OwnerResponse:
+      description: A staff user as leads shows one — no e-mail, no roles.
+      properties:
+        id:
+          description: User id.
+          examples:
+          - 7
+          title: Id
+          type: integer
+        username:
+          description: Username.
+          examples:
+          - anna
+          title: Username
+          type: string
+        name:
+          description: Full name; empty when the user has none.
+          examples:
+          - Anna Nowak
+          title: Name
+          type: string
+      required:
+      - id
+      - username
+      - name
+      title: OwnerResponse
+      type: object
     PatchedAnalysisProfileUpdateRequest:
       additionalProperties: false
       properties:
@@ -4878,6 +5085,13 @@ components:
           description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
             removes a key.
           title: Attributes
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); null clears the owner.
+          title: Owner Id
       title: CompanyUpdateRequest
       type: object
     PatchedContactUpdateRequest:
@@ -6156,3 +6370,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY

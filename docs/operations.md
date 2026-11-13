@@ -51,6 +51,13 @@ with `stage_entered` once its chunk commits — one `evaluate_rules` task on `le
 from there the first stage's rules (drafts for review). Matched companies fire nothing. The batch shows `run_rules`
 and `rules_queued` (= created companies); size the queue and the reviewers for it before importing a large file.
 
+### Owner of imported companies (`owner_id`)
+
+`POST imports/` takes the optional multipart field `owner_id` (an active staff user, `GET assignable-users/`); it is
+stored on the batch. Companies the import creates get that owner; matched companies get it only while they have
+none — an owned company never changes hands through an import, and the import writes no `owner:` note. Without the
+field created companies have no owner; assign them later with `POST companies/assign/`.
+
 ### Report codes
 
 Skipped rows (`{row, reason}`, at most `LEADS_IMPORT_REPORT_MAX`):

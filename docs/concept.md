@@ -14,13 +14,13 @@ from agreements, website facts from siteintel, human attention from notification
 | `Channel` | `idx`, languages, `retention_days` | own scoping model (created in Django admin, never from signals); its `idx` is the same channel in communicator, agreements and siteintel |
 | `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal` | new companies enter the lowest `order`; unique `(channel, key)` |
 | `StageEventRule` | `event`, `target_stage` (null = keep the stage), `forward_only` | the event → stage map; unique `(channel, event)` |
-| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at`, `origin` (free text), `attributes`, `score_points`, `score_segment`, `scored_at` | unique `(channel, domain)`; `domain` is always the registrable domain; GIN index on `attributes` |
+| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at`, `origin` (free text), `attributes`, `score_points`, `score_segment`, `scored_at`, `owner` (FK user, null) | unique `(channel, domain)`; `domain` is always the registrable domain; GIN index on `attributes`; index `(channel, owner)` |
 | `LeadType` | `code`, `label`, `order`, `is_active` | configuration per channel, unique `(channel, code)`; `Company.lead_type` holds the code (no FK); `UNKNOWN` is built in, never a row |
 | `Contact` | email, names, job title, phone, language, `is_primary`, `legal_basis`, `opt_out_at`, `anonymised_at`, `wrong_person_at`, `attributes` | unique `(company, email)` for non-empty emails; `legal_basis` null = none recorded |
 | `AttributeDefinition` | `entity` (`company`, `contact`, `deal`), `key`, `label`, `kind`, `options`, `required`, `order`, `show_in_list`, `is_active` | unique `(channel, entity, key)`; the kind is fixed once a value is stored |
 | `ScoringProfile` | `key`, `thresholds {S, M, L}`, `rules`, `disqualifiers`, `is_active` | unique `(channel, key)`; the first active profile by key scores the channel |
 | `Activity` | `kind`, `message`, `data`, `actor` per company (and contact) | written only by `activity_service`, which also moves `Company.last_activity_at` |
-| `ImportBatch` | counters, `row_count`, `last_row_done`, `size_bytes`, capped `report` | never the CSV itself |
+| `ImportBatch` | counters, `row_count`, `last_row_done`, `size_bytes`, capped `report`, `run_rules`, `owner` (FK user, null) | never the CSV itself |
 | `StageRule` | trigger, stage, action, template, contact strategy, conditions, cooldown, order | evaluated by `rule_service` |
 | `RuleRun` | one evaluation: `outcome`, `state`, `event_key`, `detail` | unique `(rule, company, event_key)` for non-empty keys |
 | `Claim` | `key`, `state` (`claimed`, `done`, `retry`, `failed`), `failures` | idempotency of paid calls outside rules |
@@ -28,6 +28,23 @@ from agreements, website facts from siteintel, human attention from notification
 | `ErasedAddress` | token of an erased or anonymised address | never the address |
 
 `LeadSource` of companies and contacts: `csv`, `form`, `manual`, `connector`.
+
+## Owner
+
+`Company.owner` is the salesperson of the company: the first (and so far only) relation from leads to the user model
+(`AUTH_USER_MODEL`, `SET_NULL`, no reverse accessor). Only `owner_service` writes it — it is never in the generic
+`EDITABLE_FIELDS` whitelist — and every change is an Activity `note` "owner: <username | none>".
+
+- **Who can own**: active staff users, without the service users of access applications (`access_application`, when
+  `django_access` is installed). A deactivated owner keeps their companies; the picker no longer offers them.
+- **How a company gets one**: manual create (default: the requesting user), company patch, bulk assign (≤ 200), an
+  import with `owner_id` (created companies, and matched ones without an owner). The contact form and an import
+  without `owner_id` leave the company unowned.
+- **What follows it**: alerts (`alert_service`) go to the owner (`recipient_user_id`), else to `LEADS_NOTIFY_ROLE`;
+  drafts (`outreach_service`, so rules and rotation too) ask communicator for the owner's mailbox
+  (`mailbox_user_id`), which falls back to the channel default.
+- **Visibility**: everyone with the area `leads.companies` sees every company; the owner is a filter (`owner=me`),
+  not a permission. The owner is staff, not a data subject: GDPR export and erasure do not touch it.
 
 ## Attributes and facts
 
@@ -166,11 +183,11 @@ audience (communicator does not keep one per thread).
 
 | Module | leads calls | leads receives |
 |---|---|---|
-| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, notification of the reply plan's severity (`none` = none); `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce". Calls `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `explain` / `scope` |
+| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>, mailbox_user_id=<owner id>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, notification of the reply plan's severity (`none` = none); `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce". Calls `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `explain` / `scope` |
 | agreements | `resolve_clause_set(channel_idx, legal_basis, language)` + `render_legal_footer` (contact language, else channel default); `LegalBasis` enum | — (a missing clause set → Activity `skipped: no clause set`, no draft) |
 | siteintel | `request_audit(domain, channel_idx, requested_by)` | `report_ready(audit, succeeded_sources)` → analysis task |
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |
-| notifications (soft) | `notify(channel_idx, recipient_role=LEADS_NOTIFY_ROLE, severity, subject_ref, title, body)` | — |
+| notifications (soft) | `notify(channel_idx, recipient_role=LEADS_NOTIFY_ROLE, severity, subject_ref, title, body, recipient_user_id=<owner id or null>)` — the owner only when the company has one | — |
 | contact_forms (soft) | reads `Lead`, never writes it | `lead_status_changed` on creation |
 | accounts (soft) | verified `EmailAddress` → `Customer.uid` on `create-customer/` | — |
 

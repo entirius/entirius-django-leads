@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Company owner.** `Company.owner` (FK user, `SET_NULL`, index `(channel, owner)`) and `ImportBatch.owner`
+  (migration `0012`) — the module's first user FK, so it now reads `AUTH_USER_MODEL`. Written only by
+  `owner_service` (never in `EDITABLE_FIELDS`), every change an Activity `note` "owner: <username | none>". API:
+  `GET assignable-users/?search=` (active staff by name, ≤ 50, `{id, username, name}` only; service users of access
+  applications left out), `owner_id` on company create (default: the requesting user) and patch (null clears),
+  `POST companies/assign/` `{company_ids (≤ 200), owner_id | null}` → `{updated}`; company list filter
+  `owner=me|none|<id>`, sort `owner__username`, response `owner {id, username, name} | null` (joined, no N+1).
+  Import: multipart `owner_id` → created companies and matched ones without an owner.
+- **Alerts and drafts follow the owner.** `alert_service.alert` passes `recipient_user_id=company.owner_id` (the
+  owner only; unowned = the role as before) — needs entirius-django-notifications 0.3.0; `request_draft` (rules,
+  rotation, manual) passes `mailbox_user_id=company.owner_id` to `communicate()`. Raise the notifications pin to
+  `>=0.3.0` with the communicator one at release.
+
 - **Custom attributes.** `AttributeDefinition(channel, entity, key, label, kind, options, required, order,
   show_in_list, is_active)`, entity `company | contact | deal`, kind `text | number | bool | date | select |
   multiselect | url`; values in `Company.attributes` / `Contact.attributes` (JSON), validated and normalised only by
