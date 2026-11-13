@@ -6,6 +6,7 @@ groups:
     models:
       - Channel
       - Stage
+      - StageEventRule
       - Company
       - Contact
   - name: timeline

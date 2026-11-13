@@ -22,7 +22,7 @@ column after stripping surrounding whitespace (`" domain "` matches `domain`); v
 same stripped mapping, so a padded header never imports empty values. Columns (all optional, unknown ones ignored):
 `company_name`, `domain`, `website`, `lead_type` (older files: `company_type`, read when `lead_type` is absent),
 `industry`, `first_name`, `last_name`, `email`, `job_title`, `language` (ISO 639-1), `legal_basis` (`consent`,
-`legitimate_interest`, `contract`), `phone`.
+`legitimate_interest`, `contract`), `phone`, `origin` (free text, ≤ 64; fills only an empty origin).
 
 - The company domain is `domain`, else `website`, else the email host; a free-mail host without `domain`/`website`
   is skipped.
@@ -38,6 +38,14 @@ addresses, companies, contacts) and bulk writes per chunk, committed in one tran
 and `last_row_done`. A retry (`OperationalError`, 3 retries with backoff) resumes after the last committed row. A bulk
 write the database rejects is redone row by row in savepoints. The file is deleted once the batch is `done` or
 `failed`, and kept across a retry.
+
+### Running first-stage rules (`run_rules`)
+
+`POST imports/` takes the multipart field `run_rules` (`true` / `false`, default `false`) next to `file`;
+`leads_import_csv --run-rules` does the same. With it, every company the import **creates** enters its first stage
+with `stage_entered` once its chunk commits — one `evaluate_rules` task on `leads_default` per created company, and
+from there the first stage's rules (drafts for review). Matched companies fire nothing. The batch shows `run_rules`
+and `rules_queued` (= created companies); size the queue and the reviewers for it before importing a large file.
 
 ### Report codes
 

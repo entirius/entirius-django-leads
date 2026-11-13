@@ -22,18 +22,19 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), paging | 200 `CompanyListResponse` |
+| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), paging | 200 `CompanyListResponse` |
 | POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry` | 201 `CompanyDetailResponse`; Activity `note` "company created" |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
-| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact`, `external_ref` | 200 `CompanyDetailResponse` |
+| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64) | 200 `CompanyDetailResponse` |
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
 | POST | `<channel_idx>/companies/<id>/communicate/` | `template_key`, `contact_id` | 201 `{message_id, status}` — a reviewable communicator draft |
+| GET | `<channel_idx>/companies/<id>/contacts/<contact_id>/mailable/` | — | 200 `MailableResponse` |
 | POST | `<channel_idx>/companies/<id>/request-audit/` | — | 202 `{audit_id, status}`; Activity `intel` "audit requested" |
 | POST | `<channel_idx>/companies/<id>/create-customer/` | — (routed only with `django_accounts`) | 200 `{customer_uid}` |
 
 `CompanyResponse`: `id, name, domain, website, lead_type, industry, description, platform, hooks, stage
-{id, key, label, order, kind, is_terminal, on_reply}, stage_entered_at, source, external_ref, do_not_contact,
-customer_uid, rotation_count, last_activity_at`. `CompanyDetailResponse` adds `contacts` (all), `activities`
+{id, key, label, order, kind, is_terminal}, stage_entered_at, source, external_ref, do_not_contact,
+customer_uid, rotation_count, last_activity_at, origin`. `CompanyDetailResponse` adds `contacts` (all), `activities`
 (last 20, newest first) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
 the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks` and `customer_uid` are not
 writable here.
@@ -41,6 +42,13 @@ writable here.
 `communicate/` skips rule conditions and cooldown, not the outreach gate (`concept.md` § Outreach gate).
 `create-customer/` links the Customer owning the primary contact's email through a **verified** allauth
 `EmailAddress`; v1 never creates an account.
+
+`MailableResponse` (a read; the gate itself runs only when a draft is requested): `eligible`, `reasons` (every
+refusal in gate order: `do_not_contact`, `no_email`, `opted_out`, `anonymised`, `wrong_person`, `no_legal_basis`,
+then communicator's `suppressed` / `address_invalid`), `legal_basis {value, source, set_at}` (source and time of the
+last `legal_basis` Activity, null when never recorded), `communicator` (null without an email or a communicator
+channel: `{email, refusal, suppressions: [{id, kind, source, reason, scope, created_at}], address_status {status,
+reason, verified_at} | null}`), `retention {days, due_at, exempt_won}` (`due_at` = last activity + days).
 
 ## Contacts
 
@@ -53,7 +61,7 @@ writable here.
 | DELETE | `<channel_idx>/contacts/<id>/` | — | 204 — the contact was never used and is deleted; 200 `ContactResponse` — it was used and is anonymised instead |
 
 `ContactResponse`: `id, company_id, email, first_name, last_name, job_title, phone, language, is_primary, source,
-legal_basis, opt_out_at, anonymised_at`. `email` is set once: a contact without one may get it by PATCH (409
+legal_basis, opt_out_at, anonymised_at, wrong_person_at`. `email` is set once: a contact without one may get it by PATCH (409
 `CONTACT_EXISTS` when the company already has it), a set email never changes (400). `legal_basis` is one of
 `consent`, `legitimate_interest`, `contract`; `consent` requires a non-blank `consent_ref` (≤ 255), recorded in the
 `legal_basis` Activity as `admin:<user>:<consent_ref>`; other bases as `admin:<user>`.
@@ -72,10 +80,24 @@ stays on the timeline. Removing an anonymised contact answers 200 and changes no
 | Method | Path | Body | Success |
 |---|---|---|---|
 | GET | `<channel_idx>/stages/` | — | 200 `{results: [StageResponse]}` in `order` |
-| POST | `<channel_idx>/stages/` | `key` (slug, required), `label` (required), `order` (0–32767), `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal`, `on_reply` | 201 `StageResponse` |
+| POST | `<channel_idx>/stages/` | `key` (slug, required), `label` (required), `order` (0–32767), `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal` | 201 `StageResponse` |
 | GET | `<channel_idx>/stages/<id>/` | — | 200 `StageResponse` |
 | PATCH | `<channel_idx>/stages/<id>/` | any field of POST, no nulls | 200 `StageResponse` |
 | DELETE | `<channel_idx>/stages/<id>/` | — | 204 |
+
+## Stage events
+
+The event → stage map (`concept.md` § Event → stage map); area `leads.settings`. `<event>` is one of `first_sent`,
+`reply`, `reply:interested`, `reply:not_now`, `reply:not_interested`, `reply:out_of_office`, `reply:wrong_person`,
+`reply:unsubscribe`, `reply:unclear`, `sequence_finished`; any other is a 404.
+
+| Method | Path | Body | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/stage-events/` | — | 200 `{results: [StageEventResponse]}`, one per event |
+| PUT | `<channel_idx>/stage-events/<event>/` | `target_stage_key` (required; null = keep the stage), `forward_only` (default true) | 200 `StageEventResponse`; an unknown stage key is a 400 |
+| DELETE | `<channel_idx>/stage-events/<event>/` | — | 204 — the event moves nothing any more |
+
+`StageEventResponse`: `event, target_stage_key, forward_only, configured` (false = no row: the event moves nothing).
 
 ## Lead types
 
@@ -100,12 +122,25 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 |---|---|---|---|
 | GET | `<channel_idx>/activities/` | `company` (id), paging | 200 `ActivityListResponse` — `id, company_id, contact_id, kind, message, data, actor, created_at`, newest first |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
-| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
+| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |
 
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
-skipped_count, row_count, size_bytes, created_by, created_at`. The detail adds `report: [{row, reason}]` — CSV line
+skipped_count, row_count, size_bytes, created_by, created_at, run_rules, rules_queued` (`rules_queued`: one rule
+evaluation per created company when `run_rules` is on, else 0). The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
+
+## Reports
+
+| Method | Path | Params | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/reports/funnel/` | `origin` (exact), `date_from`, `date_to` (`YYYY-MM-DD`, inclusive) | 200 `FunnelResponse` |
+
+`FunnelResponse` (area `leads.companies`), aggregated from `stage` activities in four queries: `transitions:
+[{from_stage, to_stage, count, mean_seconds}]` (moves in the period, mean time in the source stage — from the
+previous move or the company's creation), `stages: [{key, label, current, entered, left, mean_seconds}]` in pipeline
+order (`current` = companies there now, of the origin; `mean_seconds` over the moves out), `origins: [{origin,
+companies}]` (companies created in the period). Dates filter moves and creations by their local day.
 
 ## Rules and prompt profiles
 
@@ -172,6 +207,6 @@ upper-cased; `message` is human-readable; `details` is empty for these (no field
 | `CONTACT_EXISTS` | `POST contacts/`, `PATCH contacts/<id>/` (`email`): the company already has a contact with this email |
 | `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient}-profiles/`: another profile of the channel already has this key |
 | `COMMUNICATOR_CHANNEL_MISSING` | `communicate/`: no communicator channel is configured |
-| `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `no_legal_basis`) |
+| `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `wrong_person`, `no_legal_basis`, `suppressed`, `address_invalid`) |
 | `NO_DRAFT` | `communicate/`: no draft could be built (no clause set) — see the company timeline |
 | `NOT_IMPLEMENTED` | `create-customer/`: no Customer owns the primary contact's email — v1 never creates accounts |

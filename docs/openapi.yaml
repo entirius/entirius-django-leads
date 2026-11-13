@@ -1,3 +1,4 @@
+
 # Generated from the Volkanos service schema (manage.py spectacular), filtered to /api/leads/.
 openapi: 3.1.0
 info:
@@ -252,6 +253,11 @@ paths:
           type: string
         description: Lead type code of the channel, or UNKNOWN.
       - in: query
+        name: origin
+        schema:
+          type: string
+        description: Exact origin.
+      - in: query
         name: page
         schema:
           type: integer
@@ -372,7 +378,8 @@ paths:
           description: No response body
     patch:
       operationId: api_leads_v2_admin_companies_partial_update
-      description: Stage, domain, hooks and customer link are not editable here.
+      description: Stage, domain, hooks and customer link are not editable here. Turning do_not_contact on suppresses the
+        company's domain in communicator; turning it off removes that suppression.
       summary: Update editable company fields
       parameters:
       - in: path
@@ -419,7 +426,8 @@ paths:
     post:
       operationId: api_leads_v2_admin_companies_communicate_create
       description: No rule conditions or cooldown. 409 when the outreach gate refuses the contact (do_not_contact, opted_out,
-        anonymised, no_legal_basis) or no draft can be built (no clause set); 400 for a foreign or email-less contact.
+        anonymised, wrong_person, no_legal_basis, suppressed, address_invalid) or no draft can be built (no clause set); 400
+        for a foreign or email-less contact; 503 `AI_TOOLBOX_DISABLED` for an AI template while the toolbox is off.
       summary: Request a reviewable draft for a contact
       parameters:
       - in: path
@@ -464,6 +472,49 @@ paths:
         '404':
           description: No response body
         '409':
+          description: No response body
+        '503':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/contacts/{contact_id}/mailable/:
+    get:
+      operationId: api_leads_v2_admin_companies_contacts_mailable_retrieve
+      description: 'Every reason of the outreach gate, the legal basis and its source, communicator''s suppression answer
+        and the retention clock. Read only: the gate itself runs when a draft is requested.'
+      summary: Why a contact may (not) be mailed
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: contact_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailableResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
           description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/create-customer/:
     post:
@@ -841,6 +892,12 @@ paths:
                 file:
                   type: string
                   format: binary
+                run_rules:
+                  type: boolean
+                  default: false
+                  description: Created companies enter their first stage with its rules (one evaluation each).
+              required:
+              - file
       security:
       - jwtAuth: []
       responses:
@@ -1255,6 +1312,50 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/reports/funnel/:
+    get:
+      operationId: leads_reports_funnel
+      summary: Stage moves, per-stage counts and companies per origin
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: First day of moves and creations (YYYY-MM-DD).
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: Last day of moves and creations (YYYY-MM-DD).
+      - in: query
+        name: origin
+        schema:
+          type: string
+        description: Only companies of this origin.
+      tags:
+      - Leads Reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/rule-runs/:
     get:
       operationId: leads_rule_runs_list
@@ -1460,6 +1561,111 @@ paths:
         required: true
       tags:
       - Leads Rules
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/stage-events/:
+    get:
+      operationId: leads_stage_events_list
+      summary: Where each event moves a company (one entry per event)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Stage Events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageEventListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/stage-events/{event}/:
+    put:
+      operationId: api_leads_v2_admin_stage_events_update
+      description: A null target_stage_key keeps the stage (and stops reply:<class> falling back to reply).
+      summary: Set where one event moves a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: event
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Stage Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageEventRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageEventRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageEventRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageEventResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_stage_events_destroy
+      summary: 'Remove the event''s row: it moves nothing any more'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: event
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Stage Events
       security:
       - jwtAuth: []
       responses:
@@ -1761,6 +1967,12 @@ paths:
                 file:
                   type: string
                   format: binary
+                run_rules:
+                  type: boolean
+                  default: false
+                  description: Created companies enter their first stage with its rules (one evaluation each).
+              required:
+              - file
       security:
       - jwtAuth: []
       responses:
@@ -2011,6 +2223,35 @@ components:
       - created_at
       title: ActivityResponse
       type: object
+    AddressStatusState:
+      properties:
+        status:
+          description: unknown, valid, risky or invalid.
+          examples:
+          - invalid
+          title: Status
+          type: string
+        reason:
+          description: Why.
+          examples:
+          - hard_bounce
+          title: Reason
+          type: string
+        verified_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Checked.
+          examples:
+          - null
+          title: Verified At
+      required:
+      - status
+      - reason
+      - verified_at
+      title: AddressStatusState
+      type: object
     AnalysisProfileDetailResponse:
       properties:
         id:
@@ -2184,6 +2425,40 @@ components:
       - contact_id
       title: CommunicateRequest
       type: object
+    CommunicatorAnswer:
+      properties:
+        email:
+          description: Normalised address.
+          examples:
+          - jan@example-shop-2.test
+          title: Email
+          type: string
+        refusal:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: suppressed, address_invalid or null.
+          examples:
+          - null
+          title: Refusal
+        suppressions:
+          description: Matching suppression rows.
+          items:
+            $ref: '#/components/schemas/SuppressionRow'
+          title: Suppressions
+          type: array
+        address_status:
+          anyOf:
+          - $ref: '#/components/schemas/AddressStatusState'
+          - type: 'null'
+          description: What communicator knows of the address.
+      required:
+      - email
+      - refusal
+      - suppressions
+      - address_status
+      title: CommunicatorAnswer
+      type: object
     CompanyCreateRequest:
       additionalProperties: false
       properties:
@@ -2334,6 +2609,12 @@ components:
           examples:
           - null
           title: Last Activity At
+        origin:
+          description: Where the lead came from.
+          examples:
+          - fair
+          title: Origin
+          type: string
         contacts:
           description: Contacts of the company.
           items:
@@ -2346,6 +2627,13 @@ components:
             $ref: '#/components/schemas/ActivityResponse'
           title: Activities
           type: array
+        customer_name:
+          default: ''
+          description: Name of the linked customer; empty without accounts.
+          examples:
+          - Jan Kowalski
+          title: Customer Name
+          type: string
       required:
       - id
       - name
@@ -2364,6 +2652,7 @@ components:
       - customer_uid
       - rotation_count
       - last_activity_at
+      - origin
       - contacts
       - activities
       title: CompanyDetailResponse
@@ -2513,6 +2802,12 @@ components:
           examples:
           - null
           title: Last Activity At
+        origin:
+          description: Where the lead came from.
+          examples:
+          - fair
+          title: Origin
+          type: string
       required:
       - id
       - name
@@ -2531,6 +2826,7 @@ components:
       - customer_uid
       - rotation_count
       - last_activity_at
+      - origin
       title: CompanyResponse
       type: object
     ContactCreateRequest:
@@ -2733,6 +3029,15 @@ components:
           examples:
           - null
           title: Anonymised At
+        wrong_person_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Flagged by a wrong-person reply.
+          examples:
+          - null
+          title: Wrong Person At
       required:
       - id
       - company_id
@@ -2747,6 +3052,7 @@ components:
       - legal_basis
       - opt_out_at
       - anonymised_at
+      - wrong_person_at
       title: ContactResponse
       type: object
     ContactStrategy:
@@ -2883,6 +3189,135 @@ components:
       - status
       title: DraftResponse
       type: object
+    FunnelOrigin:
+      properties:
+        origin:
+          description: Origin; empty = none recorded.
+          examples:
+          - fair
+          title: Origin
+          type: string
+        companies:
+          description: Companies created in the period.
+          examples:
+          - 20
+          title: Companies
+          type: integer
+      required:
+      - origin
+      - companies
+      title: FunnelOrigin
+      type: object
+    FunnelResponse:
+      properties:
+        transitions:
+          description: Stage moves in the period, most frequent first.
+          items:
+            $ref: '#/components/schemas/FunnelTransition'
+          title: Transitions
+          type: array
+        stages:
+          description: Every stage in pipeline order.
+          items:
+            $ref: '#/components/schemas/FunnelStage'
+          title: Stages
+          type: array
+        origins:
+          description: Companies per origin, most first.
+          items:
+            $ref: '#/components/schemas/FunnelOrigin'
+          title: Origins
+          type: array
+      required:
+      - transitions
+      - stages
+      - origins
+      title: FunnelResponse
+      type: object
+    FunnelStage:
+      properties:
+        key:
+          description: Stage key.
+          examples:
+          - contacted
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Contacted
+          title: Label
+          type: string
+        current:
+          description: Companies in the stage now.
+          examples:
+          - 4
+          title: Current
+          type: integer
+        entered:
+          description: Moves into the stage in the period.
+          examples:
+          - 12
+          title: Entered
+          type: integer
+        left:
+          description: Moves out of the stage in the period.
+          examples:
+          - 8
+          title: Left
+          type: integer
+        mean_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time in the stage of the moves out.
+          examples:
+          - 3600.0
+          title: Mean Seconds
+      required:
+      - key
+      - label
+      - current
+      - entered
+      - left
+      - mean_seconds
+      title: FunnelStage
+      type: object
+    FunnelTransition:
+      properties:
+        from_stage:
+          description: Stage key left.
+          examples:
+          - new
+          title: From Stage
+          type: string
+        to_stage:
+          description: Stage key entered.
+          examples:
+          - contacted
+          title: To Stage
+          type: string
+        count:
+          description: Moves.
+          examples:
+          - 12
+          title: Count
+          type: integer
+        mean_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time in the source stage.
+          examples:
+          - 86400.0
+          title: Mean Seconds
+      required:
+      - from_stage
+      - to_stage
+      - count
+      - mean_seconds
+      title: FunnelTransition
+      type: object
     GdprEraseResponse:
       properties:
         modules:
@@ -3017,6 +3452,19 @@ components:
           format: date-time
           title: Created At
           type: string
+        run_rules:
+          description: Created companies enter their first stage with its rules.
+          examples:
+          - false
+          title: Run Rules
+          type: boolean
+        rules_queued:
+          default: 0
+          description: 'Rule evaluations queued: one per created company with run_rules.'
+          examples:
+          - 0
+          title: Rules Queued
+          type: integer
         report:
           description: Skipped rows (row number and reason code, no row values), capped at LEADS_IMPORT_REPORT_MAX.
           items:
@@ -3035,6 +3483,7 @@ components:
       - size_bytes
       - created_by
       - created_at
+      - run_rules
       - report
       title: ImportBatchDetailResponse
       type: object
@@ -3144,6 +3593,19 @@ components:
           format: date-time
           title: Created At
           type: string
+        run_rules:
+          description: Created companies enter their first stage with its rules.
+          examples:
+          - false
+          title: Run Rules
+          type: boolean
+        rules_queued:
+          default: 0
+          description: 'Rule evaluations queued: one per created company with run_rules.'
+          examples:
+          - 0
+          title: Rules Queued
+          type: integer
       required:
       - id
       - source
@@ -3156,6 +3618,7 @@ components:
       - size_bytes
       - created_by
       - created_at
+      - run_rules
       title: ImportBatchResponse
       type: object
     ImportReportEntry:
@@ -3274,6 +3737,75 @@ components:
       - contract
       title: LegalBasis
       type: string
+    LegalBasisState:
+      properties:
+        value:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: GDPR legal basis; null when none.
+          examples:
+          - legitimate_interest
+          title: Value
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: admin, import or form; null when never recorded.
+          examples:
+          - import
+          title: Source
+        set_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: When it was recorded.
+          examples:
+          - '2026-11-01T10:00:00Z'
+          title: Set At
+      required:
+      - value
+      - source
+      - set_at
+      title: LegalBasisState
+      type: object
+    MailableResponse:
+      properties:
+        eligible:
+          description: The outreach gate lets a draft go to the contact.
+          examples:
+          - false
+          title: Eligible
+          type: boolean
+        reasons:
+          description: Every refusal, in gate order.
+          examples:
+          - - opted_out
+            - suppressed
+          items:
+            type: string
+          title: Reasons
+          type: array
+        legal_basis:
+          $ref: '#/components/schemas/LegalBasisState'
+          description: Legal basis and where it came from.
+        communicator:
+          anyOf:
+          - $ref: '#/components/schemas/CommunicatorAnswer'
+          - type: 'null'
+          description: Suppression answer; null without an email.
+        retention:
+          $ref: '#/components/schemas/RetentionState'
+          description: Retention clock of the company.
+      required:
+      - eligible
+      - reasons
+      - legal_basis
+      - communicator
+      - retention
+      title: MailableResponse
+      type: object
     PatchedAnalysisProfileUpdateRequest:
       additionalProperties: false
       properties:
@@ -3381,6 +3913,14 @@ components:
           default: null
           description: Reference in an external system.
           title: External Ref
+        origin:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          default: null
+          description: Where the lead came from.
+          title: Origin
       title: CompanyUpdateRequest
       type: object
     PatchedContactUpdateRequest:
@@ -3651,13 +4191,6 @@ components:
           default: null
           description: No further stages after this one.
           title: Is Terminal
-        on_reply:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          default: null
-          description: Companies move here when a contact replies.
-          title: On Reply
       title: StageUpdateRequest
       type: object
     ProfileDetailResponse:
@@ -3748,31 +4281,82 @@ components:
       title: ProfileRequest
       type: object
     ProfileResponse:
-      description: List shape — the prompt is never listed.
+      description: '`GET/PUT profile/?channel=` — one scope''s own data (blank channel = the instance).'
       properties:
-        id:
-          description: Profile id.
+        channel:
+          description: Blank = the whole instance, else a channel overlay
           examples:
-          - 100
-          title: Id
+          - ''
+          title: Channel
+          type: string
+        data:
+          additionalProperties: true
+          examples:
+          - brand:
+              differentiators:
+              - Made to order
+              text: We build modular sofas.
+          title: Data
+          type: object
+        version:
+          description: 0 = never saved
+          examples:
+          - 3
+          title: Version
           type: integer
-        key:
-          description: Profile key.
+        schema_version:
           examples:
-          - leads.analysis
-          title: Key
-          type: string
-        model:
-          description: Toolbox model.
-          examples:
-          - fake-chat
-          title: Model
-          type: string
+          - 1
+          title: Schema Version
+          type: integer
+        updated_by_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Updated By Id
+        modified_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Modified At
       required:
-      - id
-      - key
-      - model
+      - channel
+      - data
+      - version
+      - schema_version
+      - updated_by_id
+      - modified_at
       title: ProfileResponse
+      type: object
+    RetentionState:
+      properties:
+        days:
+          description: Idle days before anonymisation.
+          examples:
+          - 180
+          title: Days
+          type: integer
+        due_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Anonymised after, unless active again.
+          examples:
+          - null
+          title: Due At
+        exempt_won:
+          description: 'The company sits in a won stage: never anonymised.'
+          examples:
+          - false
+          title: Exempt Won
+          type: boolean
+      required:
+      - days
+      - due_at
+      - exempt_won
+      title: RetentionState
       type: object
     RuleAction:
       enum:
@@ -4031,6 +4615,75 @@ components:
       - intel_ready
       title: RuleTrigger
       type: string
+    StageEventListResponse:
+      properties:
+        results:
+          description: One entry per event.
+          items:
+            $ref: '#/components/schemas/StageEventResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: StageEventListResponse
+      type: object
+    StageEventRequest:
+      additionalProperties: false
+      properties:
+        target_stage_key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            type: string
+          - type: 'null'
+          description: Stage the event moves to; null keeps the stage.
+          examples:
+          - replied
+          title: Target Stage Key
+        forward_only:
+          default: true
+          description: Move only to a stage of a higher order.
+          title: Forward Only
+          type: boolean
+      required:
+      - target_stage_key
+      title: StageEventRequest
+      type: object
+    StageEventResponse:
+      properties:
+        event:
+          description: first_sent, reply, reply:<class> or sequence_finished.
+          examples:
+          - reply
+          title: Event
+          type: string
+        target_stage_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Stage it moves to; null keeps the stage.
+          examples:
+          - replied
+          title: Target Stage Key
+        forward_only:
+          description: Moves only to a stage of a higher order.
+          examples:
+          - true
+          title: Forward Only
+          type: boolean
+        configured:
+          description: A row exists; false = the event moves nothing.
+          examples:
+          - true
+          title: Configured
+          type: boolean
+      required:
+      - event
+      - target_stage_key
+      - forward_only
+      - configured
+      title: StageEventResponse
+      type: object
     StageKind:
       enum:
       - open
@@ -4087,11 +4740,6 @@ components:
           description: No further stages after this one.
           title: Is Terminal
           type: boolean
-        on_reply:
-          default: false
-          description: Companies move here when a contact replies.
-          title: On Reply
-          type: boolean
       required:
       - key
       - label
@@ -4135,12 +4783,6 @@ components:
           - false
           title: Is Terminal
           type: boolean
-        on_reply:
-          description: Target on a reply.
-          examples:
-          - false
-          title: On Reply
-          type: boolean
       required:
       - id
       - key
@@ -4148,8 +4790,55 @@ components:
       - order
       - kind
       - is_terminal
-      - on_reply
       title: StageResponse
+      type: object
+    SuppressionRow:
+      properties:
+        id:
+          description: Suppression id.
+          examples:
+          - 3
+          title: Id
+          type: integer
+        kind:
+          description: email, domain or email_token.
+          examples:
+          - email
+          title: Kind
+          type: string
+        source:
+          description: Who suppressed it.
+          examples:
+          - manual
+          title: Source
+          type: string
+        reason:
+          description: Free text.
+          examples:
+          - ''
+          title: Reason
+          type: string
+        scope:
+          description: channel or install.
+          examples:
+          - channel
+          title: Scope
+          type: string
+        created_at:
+          description: Created.
+          examples:
+          - '2026-11-01T10:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+      required:
+      - id
+      - kind
+      - source
+      - reason
+      - scope
+      - created_at
+      title: SuppressionRow
       type: object
     TransitionRequest:
       additionalProperties: false

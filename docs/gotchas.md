@@ -62,8 +62,15 @@ item below: the rule, then where it is enforced.
   the rules twice (cooldown still applies to fired runs).
 - **`StageRule.require_legal_basis` has no effect** and is not exposed by the API — the gate is the only legal-basis
   decision.
-- **A company created by an import does not send `stage_entered`.** Its first-stage rules run only after a transition
-  or through `test/evaluate/`.
+- **An import fires first-stage rules only with `run_rules`.** Without it a created company sends no `stage_entered`
+  (rules run after a transition or through `test/evaluate/`). With it every created company costs one
+  `evaluate_rules` task, sent after its chunk commits: a rolled-back chunk or bulk write fires nothing, a matched row
+  never fires, a redelivered event is deduped by `event`.
+- **`opt_out_at` and `do_not_contact` have one writer each** (`contact_service.opt_out`,
+  `company_service.set_do_not_contact`); a direct write skips the communicator suppression. `do_not_contact` is not in
+  `update_company`'s whitelist.
+- **A stage moves on an event only through the map** (`stage_event_service.apply` → `transition_stage`); it never
+  leaves `won` / `lost`. There is no `Stage.on_reply` any more.
 - **Profile prompts and rendered prompts never reach logs, Activity data or API lists.** Company and site values go
   into prompts only wrapped by `utils/prompts.as_data`.
 

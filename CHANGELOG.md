@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- **Release order:** this release needs entirius-django-communicator 0.5.0 (reply classes and `plan_applied`,
+  `message_bounced`, `suppression_service.can_mail` / `explain` / `scope`). Raise the `entirius-django-communicator`
+  pin to `>=0.5.0` when releasing this module, once 0.5.0 is on PyPI — leads imports that API directly.
+- **The event → stage map replaces `Stage.on_reply`** (breaking for API clients). `StageEventRule(channel, event,
+  target_stage, forward_only)`; events `first_sent`, `reply`, `reply:<class>`, `sequence_finished`. `reply:<class>`
+  falls back to `reply`, a null target keeps the stage, no row moves nothing; a move never leaves a `won` / `lost`
+  stage and, with `forward_only` (default), only goes to a higher `order`. Migrations `0008`–`0010`: every
+  `on_reply` stage becomes a `reply` row (`forward_only=false`, the old behaviour) plus a `reply:out_of_office` row
+  that keeps the stage; the reverse restores the flag. `on_reply` is gone from stage requests and responses. API
+  `stage-events/` (list, `PUT`, `DELETE`; area `leads.settings`).
+- Replies: Activity `reply` carries the class (`reply received: <class>`), the alert takes the reply plan's
+  severity (`none` = no alert). A `wrong_person` reply sets `Contact.wrong_person_at` (Activity `note`); the gate,
+  the recipient pick and the rotation skip that contact. A finished sequence may move the stage before the rotation.
+- **Do not contact has one writer each.** `contact_service.opt_out` sets `opt_out_at` and suppresses the address in
+  communicator; `company_service.set_do_not_contact` (also behind `PATCH companies/<id>/` and the reviewer's skip)
+  suppresses the company's domain and removes it when turned off. A confirmed opt-out from communicator opts out
+  the contacts with the address in its channel, or in every channel under the `install` suppression scope. A hard
+  bounce leaves Activity `note` "address invalid: hard bounce".
+- Gate: `recipient_service.block_reasons` lists every refusal (`do_not_contact`, `no_email`, `opted_out`,
+  `anonymised`, `wrong_person`, `no_legal_basis`, then communicator's `suppressed` / `address_invalid`).
+  `GET companies/<id>/contacts/<contact_id>/mailable/` explains it with the legal basis, communicator's answer and
+  the retention clock.
+- **Import `run_rules`** (multipart field, default off; `leads_import_csv --run-rules`): every created company
+  enters its first stage with `stage_entered` after its chunk commits — one `evaluate_rules` task each, shown as
+  `rules_queued` on the batch. `ImportBatch.run_rules`.
+- `Company.origin` (free text, ≤ 64): CSV column `origin` (fills an empty origin), editable, list filter `origin`.
+  `GET reports/funnel/?origin=&date_from=&date_to=`: stage moves with mean time in the source stage, per-stage
+  current / entered / left / mean time, companies per origin — aggregated by the database in four queries.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is
