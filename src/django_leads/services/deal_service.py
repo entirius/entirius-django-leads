@@ -91,7 +91,7 @@ def create(company: Company, fields: dict[str, Any], *, owner: AbstractBaseUser 
     deal.attributes = attribute_service.initial(channel, AttributeEntity.DEAL, values.pop(ATTRIBUTES, None) or {})
     _assign(deal, values)
     deal.save()
-    _record(deal, f"deal opened: {deal.title}", actor)
+    _record(deal, f"deal opened: {deal.title}", actor, event="deal_opened")
     return deal
 
 
@@ -127,7 +127,7 @@ def transition(deal: Deal, stage: DealStage, *, actor: str, lost_reason: str = "
     deal.closed_at = now if deal_stage_service.is_closed(stage) else None
     deal.lost_reason = lost_reason.strip() if lost else ""
     deal.save(update_fields=["stage", "stage_entered_at", "closed_at", "lost_reason", "modified_at"])
-    _record(deal, f"deal {previous.key} -> {stage.key}", actor, **{"from": previous.key, "to": stage.key})
+    _record(deal, f"deal {previous.key} -> {stage.key}", actor, **_move_data(previous, stage, deal.lost_reason))
     transaction.on_commit(lambda: deal_stage_changed.send(sender=Deal, deal=deal, previous=previous, stage=stage))
     return deal
 
@@ -139,7 +139,7 @@ def delete(deal: Deal, *, actor: str) -> None:
     if deal_stage_service.is_closed(deal.stage):
         raise DealClosed(f"deal {deal.pk} is {deal.stage.kind} — only an open deal can be deleted")
     task_bridge.cancel_about(deal.channel.idx, deal_ref(deal), reason=DEAL_DELETED)
-    data = {"deal_id": deal.pk}
+    data = {"deal_id": deal.pk, "event": "deal_deleted", "title": deal.title}
     activity_service.record(deal.company, ActivityKind.DEAL, f"deal deleted: {deal.title}", data=data, actor=actor)
     deal.delete()
 
@@ -228,6 +228,20 @@ def _same(deal: Deal, value: Any) -> Any:
 _RESOLVERS = {"contact_id": _contact_id, "currency": lambda deal, code: resolve_currency(code)}
 
 
+_MOVE_EVENTS = {DealStageKind.WON: "deal_won", DealStageKind.LOST: "deal_lost"}
+
+
+def _move_data(previous: DealStage, stage: DealStage, lost_reason: str) -> dict[str, str]:
+    """`from` / `to` keys (as before), the stage names and the event of the move; `reason` when lost."""
+    data = {"from": previous.key, "to": stage.key, "from_stage": previous.label, "to_stage": stage.label}
+    data["event"] = _MOVE_EVENTS.get(stage.kind, "deal_moved")
+    if stage.kind == DealStageKind.OPEN and deal_stage_service.is_closed(previous):
+        data["event"] = "deal_reopened"
+    if stage.kind == DealStageKind.LOST:
+        data["reason"] = lost_reason
+    return data
+
+
 def _record(deal: Deal, message: str, actor: str, **data: Any) -> None:
-    data = {"deal_id": deal.pk, **data}
+    data = {"deal_id": deal.pk, "title": deal.title, **data}
     activity_service.record(deal.company, ActivityKind.DEAL, message, deal=deal, data=data, actor=actor)

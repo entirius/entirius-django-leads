@@ -23,7 +23,7 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import DatabaseError, DataError, IntegrityError, OperationalError, transaction
-from django.db.models import Model, Q
+from django.db.models import F, Model, Q
 from django_agreements.enums import LegalBasis
 from django_regional.models import Language
 
@@ -98,12 +98,15 @@ def announce_created(batch: ImportBatch, companies: list[Company]) -> None:
     rolled-back chunk or savepoint discards the callback, so nothing fires for rows that were not written."""
     if not batch.run_rules or not companies:
         return
-    transaction.on_commit(lambda: _enter_first_stage(companies))
+    transaction.on_commit(lambda: _enter_first_stage(batch, companies))
 
 
-def _enter_first_stage(companies: list[Company]) -> None:
+def _enter_first_stage(batch: ImportBatch, companies: list[Company]) -> None:
     for company in companies:
         stage_entered.send(sender=Company, company=company, stage=company.stage)
+    started = F("automation_started_count") + len(companies)
+    ImportBatch.objects.filter(pk=batch.pk).update(automation_started_count=started)
+    batch.automation_started_count += len(companies)
 
 
 def build_lookups(channel: Channel) -> Lookups:
@@ -188,17 +191,19 @@ def run_file(batch: ImportBatch, path: Path) -> ImportBatch:
 
 def note_ignored_headers(batch: ImportBatch, header: list[str]) -> None:
     """Every column the import does not read, once per batch: `{row: 1, reason: "ignored_column:<name>"}` (the name
-    capped at 64 characters). Attribute columns count as read only for active definitions of the channel. A retry
+    capped at 64 characters), and the names in `ignored_columns`. Attribute columns count as read only for active definitions of the channel. A retry
     finds the entries of its first attempt (row 1 is the header) and adds none."""
-    if any(entry["row"] == 1 for entry in batch.report):
+    if batch.ignored_columns or any(entry["row"] == 1 for entry in batch.report):
         return
     known = {*CSV_COLUMNS, *COLUMN_ALIASES.values(), *_attribute_headers(batch.channel)}
-    ignored = list(dict.fromkeys(name for name in header if name and name not in known))
-    room = max(leads_settings.LEADS_IMPORT_REPORT_MAX - len(batch.report), 0)
-    if not ignored or not room:
+    names = dict.fromkeys(name[:HEADER_MAX_LENGTH] for name in header if name and name not in known)
+    ignored = list(names)[: leads_settings.LEADS_IMPORT_REPORT_MAX]
+    if not ignored:
         return
-    batch.report.extend({"row": 1, "reason": f"ignored_column:{name[:HEADER_MAX_LENGTH]}"} for name in ignored[:room])
-    batch.save(update_fields=["report", "modified_at"])
+    room = max(leads_settings.LEADS_IMPORT_REPORT_MAX - len(batch.report), 0)
+    batch.ignored_columns = ignored
+    batch.report.extend({"row": 1, "reason": f"ignored_column:{name}"} for name in ignored[:room])
+    batch.save(update_fields=["ignored_columns", "report", "modified_at"])
 
 
 def _attribute_headers(channel: Channel) -> list[str]:

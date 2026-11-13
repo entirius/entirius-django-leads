@@ -77,12 +77,13 @@ def transition_stage(company: Company, stage: Stage, *, actor: str) -> Company:
         raise ValueError("stage belongs to another channel")
     if stage.pk == company.stage_id:
         return company
-    previous = company.stage.key
+    previous = company.stage
     company.stage = stage
     company.stage_entered_at = timezone.now()
     company.save(update_fields=["stage", "stage_entered_at", "modified_at"])
-    data = {"from": previous, "to": stage.key}
-    activity_service.record(company, ActivityKind.STAGE, f"stage {previous} -> {stage.key}", data=data, actor=actor)
+    data = {"from": previous.key, "to": stage.key, "from_label": previous.label, "to_label": stage.label}
+    message = f"stage {previous.key} -> {stage.key}"
+    activity_service.record(company, ActivityKind.STAGE, message, data=data, actor=actor)
     transaction.on_commit(lambda: stage_entered.send(sender=Company, company=company, stage=stage))
     return company
 

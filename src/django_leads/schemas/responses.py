@@ -177,6 +177,12 @@ class ImportBatchResponse(BaseModel):
     rules_queued: int = Field(
         default=0, description="Rule evaluations queued: one per created company with run_rules.", examples=[0]
     )
+    ignored_columns: list[str] = Field(
+        description="Header names of the file that were not imported.", examples=[["fax", "notes_old"]]
+    )
+    automation_started_count: int = Field(
+        description="Companies of the batch whose first-stage rules ran; 0 when run_rules is off.", examples=[0]
+    )
 
     @classmethod
     def of(cls, batch) -> "ImportBatchResponse":

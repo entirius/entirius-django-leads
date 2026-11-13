@@ -75,7 +75,7 @@ def set_owner(company: Company, owner: AbstractBaseUser | None, *, actor: str) -
         return False
     company.owner = owner
     company.save(update_fields=[OWNER, "modified_at"])
-    activity_service.record(company, ActivityKind.NOTE, _note(owner), actor=actor)
+    activity_service.record(company, ActivityKind.NOTE, _note(owner), data=owner_data(owner), actor=actor)
     return True
 
 
@@ -86,7 +86,7 @@ def set_deal_owner(deal: Deal, owner: AbstractBaseUser | None, *, actor: str) ->
         return False
     deal.owner = owner
     deal.save(update_fields=[OWNER, "modified_at"])
-    data = {"deal_id": deal.pk}
+    data = {"deal_id": deal.pk, "title": deal.title, **owner_data(owner)}
     activity_service.record(deal.company, ActivityKind.DEAL, f"deal {_note(owner)}", deal=deal, data=data, actor=actor)
     return True
 
@@ -104,9 +104,9 @@ def assign(channel: Channel, company_ids: list[int], owner: AbstractBaseUser | N
         owner_id = owner.pk if owner else None
         changed = [company for company in companies if company.owner_id != owner_id]
         Company.objects.filter(pk__in=[c.pk for c in changed]).update(owner=owner, modified_at=timezone.now())
-        note = _note(owner)
+        note, data = _note(owner), owner_data(owner)
         activity_service.record_many(
-            [Activity(company=c, kind=ActivityKind.NOTE, message=note, actor=actor) for c in changed]
+            [Activity(company=c, kind=ActivityKind.NOTE, message=note, data=data, actor=actor) for c in changed]
         )
     return len(changed)
 
@@ -132,3 +132,15 @@ def filter_by_owner(companies: QuerySet, value: str, user_id: int | None) -> Que
 
 def _note(owner: AbstractBaseUser | None) -> str:
     return f"owner: {owner.get_username() if owner else FILTER_NONE}"
+
+
+def person_name(user: AbstractBaseUser) -> str:
+    """The full name, else the username."""
+    return user.get_full_name().strip() or user.get_username()
+
+
+def owner_data(owner: AbstractBaseUser | None) -> dict:
+    """Activity data of an owner change: the screen renders it in its own words."""
+    if owner is None:
+        return {"event": "owner_cleared", "owner_name": ""}
+    return {"event": "owner_set", "owner_name": person_name(owner)}
