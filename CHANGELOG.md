@@ -4,6 +4,16 @@
 
 Released as 0.5.0.
 
+- **Words for the screens.** Every `communicate` / `compose` call passes `subject_label=<company name>`, so
+  communicator's approval inbox names the company. The reply alert reads `Reply from <company> — <class words>`
+  (`Reply from <company>` without a class; communicator's `reply_type_label`), and the `reply_received` receiver
+  now runs synchronously and answers `REPLY_ALERTED` when it raised it: communicator raises none, one bell entry per
+  reply. Activities of the CRM features carry their parts in `data` (`event`, ids, titles, stage names, owner name;
+  `concept.md` § Activity data); stored messages are unchanged. New: Activity `task` "reopened: <title>" and Activity
+  `note` "sequence stopped" / "sequence paused [until <date>]" after a reply or a hand-written mail that ended a
+  running sequence. `ImportBatch.ignored_columns` and `automation_started_count` (migration `0015`), both in the
+  import batch response. `__version__` 0.5.0 matches `pyproject.toml`; a test keeps them equal.
+
 - **Deals** (migration `0014`). A second level next to the company stages: one sales pipeline per channel
   (`DealStage`: `key`, `label`, `order`, `kind` `open | won | lost`) and `Deal` on a company — owner, one-off and
   recurring value (`Decimal(14, 2)`, `month` / `year`), currency (FK `django_regional.Currency`), expected close date,

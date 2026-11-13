@@ -216,14 +216,16 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/activities/` | `company` (id), paging | 200 `ActivityListResponse` — `id, company_id, contact_id, deal_id, kind, message, data, actor, created_at`, newest first |
+| GET | `<channel_idx>/activities/` | `company` (id), paging | 200 `ActivityListResponse` — `id, company_id, contact_id, deal_id, kind, message, data, actor, created_at`, newest first; the CRM activities carry their parts in `data` (`concept.md` § Activity data) |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
 | POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |
 
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
-skipped_count, row_count, size_bytes, created_by, created_at, run_rules, owner_id, rules_queued` (`rules_queued`: one rule
-evaluation per created company when `run_rules` is on, else 0). The detail adds `report: [{row, reason}]` — CSV line
+skipped_count, row_count, size_bytes, created_by, created_at, run_rules, owner_id, rules_queued, ignored_columns, automation_started_count`
+(`rules_queued`: one rule evaluation per created company when `run_rules` is on, else 0; `ignored_columns`: header
+names of the file the import did not read; `automation_started_count`: companies of the batch that entered their first
+stage with its rules, 0 when `run_rules` is off). The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
 
 ## Reports

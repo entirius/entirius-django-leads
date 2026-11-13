@@ -244,8 +244,9 @@ person decides. The task is created after the reply commits; a failure is logged
 Manual tasks have no leads endpoint: the CMS uses the todo API with `subject_ref = leads.Company:<id>` or
 `leads.Deal:<id>` (written on the deal's company with `Activity.deal` set). Leads writes
 the timeline: Activity `task` "task: <title>" when a person creates one (tasks with a `leads.` source write none —
-the reply activity says why), "done: <title> — <outcome>" or "cancelled: <title>" when it closes, with
-`data = {task_id, kind, status}` and the task's contact when `contact_ref` resolves to a contact of the company.
+the reply activity says why), "done: <title> — <outcome>" or "cancelled: <title>" when it closes, "reopened: <title>"
+when it is open again, with `data = {event, task_id, title, kind, status}` (plus `outcome` or `reason`) and the task's
+contact when `contact_ref` resolves to a contact of the company.
 
 ## Writing by hand
 
@@ -253,15 +254,34 @@ the reply activity says why), "done: <title> — <outcome>" or "cancelled: <titl
 `request_draft` (a refusal → one Activity `blocked: <reason>`, 409 `not_eligible`), the legal footer of the contact's
 basis and language (none → 409 `no_legal_basis`), then communicator's `compose_service.compose` from the owner's
 mailbox (else the channel default), approved by its author and due now; it stops the thread's sequence. Activity
-`draft` "written by hand" with the message id; the `message_sent` receiver records the send. With `reply_id` the
+`draft` "written by hand" with the message and thread ids, and Activity `note` "sequence stopped" when it stopped a
+running sequence; the `message_sent` receiver records the send. With `reply_id` the
 message answers that reply (`In-Reply-To`, its thread); the reply must belong to a thread of this company and of the
 contact.
+
+## Activity data
+
+The stored `message` of an Activity is English and stays as it is (the fallback, and what BDD reads); every activity
+of the CRM features also carries in `data` every part a screen needs to render the line in its own language:
+
+| Activity | `data` |
+|---|---|
+| reply received | `event: "reply"`, `class`, `reply_id`, `thread_id` |
+| task created / done / cancelled / reopened | `event: "task_created" \| "task_done" \| "task_cancelled" \| "task_reopened"`, `task_id`, `title`, `kind`, `status`, `outcome` or `reason` when there is one |
+| hand-written mail | `event: "composed"`, `message_id`, `thread_id` |
+| sequence stopped or paused by a reply or a hand-written mail (Activity `note`) | `event: "sequence_stopped" \| "sequence_paused"`, `resume_at` (ISO or null) when paused |
+| deal opened / moved / won / lost / reopened / deleted | `event: "deal_opened" \| "deal_moved" \| "deal_won" \| "deal_lost" \| "deal_reopened" \| "deal_deleted"`, `deal_id`, `title`; a move adds `from`, `to` (keys), `from_stage`, `to_stage` (names) and `reason` when lost |
+| owner set or cleared (company, deal) | `event: "owner_set" \| "owner_cleared"`, `owner_name` (full name, else username; `""` when cleared) |
+| stage moved | `from`, `to` (keys), `from_label`, `to_label` |
+
+The sequence note is written only when the thread's sequence stopped at or after the reply or the mail (`replied`,
+`manual` → stopped, `paused` → paused); a sequence that had already ended writes none.
 
 ## Integration
 
 | Module | leads calls | leads receives |
 |---|---|---|
-| communicator | `compose(channel_idx, recipient, subject, body_text, subject_ref, author, mailbox_user_id, in_reply_to)` for a hand-written mail; `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>, mailbox_user_id=<owner id>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, notification of the reply plan's severity (`none` = none); `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce". Calls `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `explain` / `scope` |
+| communicator | `compose(channel_idx, recipient, subject, body_text, subject_ref, author, mailbox_user_id, in_reply_to)` for a hand-written mail; `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>, mailbox_user_id=<owner id>, subject_label=<company name>)` — the only caller from leads (`compose` gets `subject_label` too); leads never writes a `Message` | `reply_received` (synchronous: communicator sends it after its commit) → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, sequence note, follow-up task, then a notification of the reply plan's severity (`none` = none) titled `Reply from <company> — <class words>` (`Reply from <company>` without a class); the receiver answers `REPLY_ALERTED` when it raised it, so communicator raises none — one bell entry per reply; `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce". Calls `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `explain` / `scope` |
 | agreements | `resolve_clause_set(channel_idx, legal_basis, language)` + `render_legal_footer` (contact language, else channel default); `LegalBasis` enum | — (a missing clause set → Activity `skipped: no clause set`, no draft) |
 | siteintel | `request_audit(domain, channel_idx, requested_by)` | `report_ready(audit, succeeded_sources)` → analysis task |
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |
@@ -273,8 +293,8 @@ contact.
 Emitted: `stage_entered(company, stage)` (own receiver → `evaluate_rules` task), `deal_stage_changed(deal, previous,
 stage)` (on commit of a real deal stage change; no own receiver) and
 `contact_anonymised(email_hash, anonymised_email, subject_ref)` — communicator suppresses the token on every
-channel and anonymises its threads. All receivers use `dispatch_uid="django_leads.<name>"`, run after commit, never
-raise into the sender, and handle only `subject_ref` `leads.Company:<int>` (and, for tasks, `leads.Deal:<int>`).
+channel and anonymises its threads. All receivers use `dispatch_uid="django_leads.<name>"`, run after commit (the
+`reply_received` one at once: communicator sends it after its commit and reads its answer), never raise into the sender, and handle only `subject_ref` `leads.Company:<int>` (and, for tasks, `leads.Deal:<int>`).
 
 ### Intel analysis
 

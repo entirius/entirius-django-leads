@@ -5859,6 +5859,21 @@ components:
           - 0
           title: Rules Queued
           type: integer
+        ignored_columns:
+          description: Header names of the file that were not imported.
+          examples:
+          - - fax
+            - notes_old
+          items:
+            type: string
+          title: Ignored Columns
+          type: array
+        automation_started_count:
+          description: Companies of the batch whose first-stage rules ran; 0 when run_rules is off.
+          examples:
+          - 0
+          title: Automation Started Count
+          type: integer
         report:
           description: Skipped rows (row number and reason code, no row values), capped at LEADS_IMPORT_REPORT_MAX.
           items:
@@ -5879,6 +5894,8 @@ components:
       - created_at
       - run_rules
       - owner_id
+      - ignored_columns
+      - automation_started_count
       - report
       title: ImportBatchDetailResponse
       type: object
@@ -6009,6 +6026,21 @@ components:
           - 0
           title: Rules Queued
           type: integer
+        ignored_columns:
+          description: Header names of the file that were not imported.
+          examples:
+          - - fax
+            - notes_old
+          items:
+            type: string
+          title: Ignored Columns
+          type: array
+        automation_started_count:
+          description: Companies of the batch whose first-stage rules ran; 0 when run_rules is off.
+          examples:
+          - 0
+          title: Automation Started Count
+          type: integer
       required:
       - id
       - source
@@ -6023,6 +6055,8 @@ components:
       - created_at
       - run_rules
       - owner_id
+      - ignored_columns
+      - automation_started_count
       title: ImportBatchResponse
       type: object
     ImportReportEntry:

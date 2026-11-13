@@ -111,7 +111,9 @@ item below: the rule, then where it is enforced.
 
 - **Every receiver defers with `signals/_deferred.after_commit` and never raises into the sender,** with
   `dispatch_uid="django_leads.<name>"`. A receiver that raises would roll back a communicator send or a form
-  submission.
+  submission. The one exception is `reply_received`: communicator sends it after its own commit with `send_robust`
+  and reads the answer, so `handle_reply_received` runs at once, catches and logs every error itself and answers
+  `REPLY_ALERTED` only when its alert went out — answer it before the alert and a failed alert leaves no bell entry.
 - **Only `subject_ref` `leads.Company:<int>` and `leads.Deal:<int>` belong to leads** (`utils/refs`); other modules'
   threads and tasks share the signals. A deal's task is written on the deal's company, only for the deal's channel.
 - **GDPR hooks are discovered at call time** (`gdpr/registry.discover`), never in `ready()`. A `gdpr` module missing
