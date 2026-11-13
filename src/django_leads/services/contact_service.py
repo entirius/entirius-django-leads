@@ -15,10 +15,10 @@ from django.utils import timezone
 from django_agreements.enums import LegalBasis
 from django_communicator.models import Thread
 
-from django_leads.enums import ActivityKind
+from django_leads.enums import ActivityKind, AttributeEntity
 from django_leads.models import Activity, Channel, Company, Contact
-from django_leads.services import activity_service, retention_service, suppression_service
-from django_leads.services.company_service import fill_empty
+from django_leads.services import activity_service, attribute_service, retention_service, suppression_service
+from django_leads.services.company_service import ATTRIBUTES, fill_empty
 from django_leads.services.outreach_service import subject_ref
 from django_leads.utils.emails import normalize_email
 
@@ -44,7 +44,8 @@ class ConsentRefRequired(ValueError):
 
 def build_contact(company: Company, row: dict[str, Any]) -> Contact:
     values = {field: row[field] for field in FILL_FIELDS if row.get(field) not in (None, "")}
-    return Contact(company=company, email=normalize_email(row.get("email", "")), source=row["source"], **values)
+    email, attributes = normalize_email(row.get("email", "")), row.get(ATTRIBUTES) or {}
+    return Contact(company=company, email=email, source=row["source"], attributes=attributes, **values)
 
 
 def find_contact(company: Company, row: dict[str, Any]) -> Contact | None:
@@ -117,7 +118,9 @@ def admin_consent_ref(actor: str, basis: str | None, consent_ref: str | None) ->
 
 
 def create_contact(company: Company, row: dict[str, Any], *, actor: str, consent_ref: str | None = None) -> Contact:
-    contact = build_contact(company, row)
+    """Attributes are cleaned with required keys enforced (`InvalidAttribute`)."""
+    attributes = attribute_service.initial(company.channel, AttributeEntity.CONTACT, row.get(ATTRIBUTES) or {})
+    contact = build_contact(company, {**row, ATTRIBUTES: attributes})
     contact.is_primary = bool(row.get("is_primary"))
     try:
         with transaction.atomic():
@@ -133,16 +136,15 @@ def create_contact(company: Company, row: dict[str, Any], *, actor: str, consent
 
 
 def update_contact(contact: Contact, updates: dict[str, Any], *, actor: str, consent_ref: str | None = None) -> Contact:
+    """`attributes` is a partial patch merged by `attribute_service` (a null key is removed)."""
+    updates = dict(updates)
+    patch = updates.pop(ATTRIBUTES, None)
     invalid = set(updates) - EDITABLE_FIELDS
     if invalid:
         raise ValueError(f"fields not editable: {sorted(invalid)}")
-    if "email" in updates:
-        updates = {**updates, "email": _first_email(contact, updates["email"])}
-    fields = {field: value for field, value in updates.items() if field != "legal_basis"}
-    for field, value in fields.items():
-        setattr(contact, field, value)
     try:
         with transaction.atomic():
+            fields = _set_fields(contact, updates, patch)
             contact.save(update_fields=[*fields, "modified_at"])
             _keep_one_primary(contact)
     except IntegrityError:
@@ -152,6 +154,19 @@ def update_contact(contact: Contact, updates: dict[str, Any], *, actor: str, con
         ref = admin_consent_ref(actor, basis, consent_ref)
         set_legal_basis(contact, basis, source="admin", consent_ref=ref, actor=actor)
     return contact
+
+
+def _set_fields(contact: Contact, updates: dict[str, Any], patch: dict[str, Any] | None) -> list[str]:
+    """Sets everything but the legal basis on the instance; returns the fields to save."""
+    if "email" in updates:
+        updates = {**updates, "email": _first_email(contact, updates["email"])}
+    fields = {field: value for field, value in updates.items() if field != "legal_basis"}
+    for field, value in fields.items():
+        setattr(contact, field, value)
+    if patch is not None:
+        channel = contact.company.channel
+        fields[ATTRIBUTES] = attribute_service.apply_locked(contact, channel, AttributeEntity.CONTACT, patch)
+    return list(fields)
 
 
 def _first_email(contact: Contact, email: str) -> str:

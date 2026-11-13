@@ -28,18 +28,33 @@ from django_leads.schemas.responses import (
     CompanyResponse,
     ContactResponse,
 )
-from django_leads.services import company_service, customer_link_service, lead_type_service, stage_service
+from django_leads.services import (
+    attribute_service,
+    company_service,
+    customer_link_service,
+    lead_type_service,
+    stage_service,
+)
 
 _TAGS = ["Leads Companies"]
 RECENT_ACTIVITIES = 20
+ATTRIBUTE_PARAM = "attr."
 
 
 @contextmanager
 def unknown_lead_type_as_400() -> Iterator[None]:
+    """Also a refused attribute value or filter: 400 on `attributes`."""
     try:
         yield
     except lead_type_service.UnknownLeadType as error:
         raise ValidationError({"lead_type": [str(error)]}) from None
+    except attribute_service.InvalidAttribute as error:
+        raise ValidationError({"attributes": [str(error)]}) from None
+
+
+def attribute_filters(request: Request) -> dict[str, str]:
+    params = request.query_params
+    return {name.removeprefix(ATTRIBUTE_PARAM): params[name] for name in params if name.startswith(ATTRIBUTE_PARAM)}
 
 
 def detail(company: Company) -> dict:
@@ -69,6 +84,12 @@ class CompanyListView(AdminView):
             OpenApiParameter("do_not_contact", bool, description="do_not_contact flag."),
             OpenApiParameter("has_reply", bool, description="At least one reply activity (true) or none (false)."),
             OpenApiParameter("origin", str, description="Exact origin."),
+            OpenApiParameter("segment", str, description="Score segment S1 … S4."),
+            OpenApiParameter(
+                "attr.<key>",
+                str,
+                description="Exact value of an active company attribute with show_in_list (select, bool or text).",
+            ),
             *PAGE_PARAMETERS,
         ],
         responses={200: CompanyListResponse, **ERROR_RESPONSES},
@@ -76,7 +97,9 @@ class CompanyListView(AdminView):
     def get(self, request: Request, channel_idx: str) -> Response:
         query = parse(CompanyListQuery, request.query_params.dict())
         with unknown_lead_type_as_400():
-            companies = company_service.list_companies(self.channel(channel_idx), **query.model_dump())
+            companies = company_service.list_companies(
+                self.channel(channel_idx), **query.model_dump(), attributes=attribute_filters(request)
+            )
         return self.paginated(request, companies, CompanyResponse.of)
 
     @extend_schema(
@@ -117,15 +140,15 @@ class CompanyDetailView(AdminView):
     @extend_schema(
         tags=_TAGS,
         summary="Update editable company fields",
-        description="Stage, domain, hooks and customer link are not editable here. Turning do_not_contact on "
-        "suppresses the company's domain in communicator; turning it off removes that suppression.",
+        description="Stage, domain, hooks, score and customer link are not editable here; `attributes` is merged "
+        "(null removes a key). Turning do_not_contact on suppresses the company's domain in communicator; turning it off removes that suppression.",
         request=CompanyUpdateRequest,
         responses={200: CompanyDetailResponse, **ERROR_RESPONSES},
     )
     def patch(self, request: Request, channel_idx: str, pk: int) -> Response:
         updates = parse(CompanyUpdateRequest, request.data).model_dump(mode="json", exclude_unset=True)
         updates = {field: "" if value is None and field == "website" else value for field, value in updates.items()}
-        if None in updates.values():
+        if None in updates.values():  # `attributes: null` included — remove keys inside the patch instead
             raise ValidationError({"detail": ["null is only allowed for website"]})
         do_not_contact = updates.pop("do_not_contact", None)
         with unknown_lead_type_as_400(), transaction.atomic():

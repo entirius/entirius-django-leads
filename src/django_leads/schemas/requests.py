@@ -4,18 +4,33 @@
 """Request schemas of the leads admin API v2."""
 
 from datetime import date
+from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
 from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 
-from django_leads.enums import UNKNOWN_LEAD_TYPE, ContactStrategy, RuleAction, RuleTrigger, StageKind
+from django_leads.enums import (
+    UNKNOWN_LEAD_TYPE,
+    AttributeEntity,
+    AttributeKind,
+    ConditionOp,
+    ContactStrategy,
+    RuleAction,
+    RuleTrigger,
+    ScoreSegment,
+    StageKind,
+)
 from django_leads.services.company_service import SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
 # Format only — whether a code is an active lead type of the channel is the service's call (`lead_type_service`).
 LEAD_TYPE_PATTERN = r"^[A-Z0-9_]+$"
+ATTRIBUTE_KEY_PATTERN = r"^[a-z][a-z0-9_]*$"
+ATTRIBUTES_DESCRIPTION = (
+    "Custom attribute values by key (active definitions of the channel); on update a partial patch, null removes a key."
+)
 
 
 class CompanyListQuery(BaseModel):
@@ -24,7 +39,8 @@ class CompanyListQuery(BaseModel):
     stage: str = Field(default="", max_length=64, description="Stage key filter.", examples=["new"])
     search: str = Field(default="", max_length=253, description="Substring of name or domain.", examples=["shop"])
     sort: str = Field(
-        default="name", description="name, domain, stage_entered_at or last_activity_at; `-` for descending."
+        default="name",
+        description="name, domain, stage_entered_at, last_activity_at or score_points; `-` for descending.",
     )
     lead_type: str = Field(
         default="",
@@ -36,6 +52,7 @@ class CompanyListQuery(BaseModel):
     do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
     origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.", examples=["fair"])
+    segment: ScoreSegment | None = Field(default=None, description="Score segment filter (S1 best … S4).")
 
     @field_validator("sort")
     @classmethod
@@ -55,6 +72,7 @@ class CompanyCreateRequest(BaseModel):
         default=UNKNOWN_LEAD_TYPE, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code."
     )
     industry: str = Field(default="", max_length=128, description="Industry.")
+    attributes: dict[str, Any] = Field(default_factory=dict, description=ATTRIBUTES_DESCRIPTION)
 
     @field_validator("domain")
     @classmethod
@@ -73,6 +91,7 @@ class CompanyUpdateRequest(BaseModel):
     do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
     external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
     origin: str | None = Field(default=None, max_length=64, description="Where the lead came from.")
+    attributes: dict[str, Any] | None = Field(default=None, description=ATTRIBUTES_DESCRIPTION)
 
 
 class TransitionRequest(BaseModel):
@@ -110,6 +129,7 @@ class ContactCreateRequest(BaseModel):
     is_primary: bool = Field(default=False, description="Primary contact of the company.")
     legal_basis: LegalBasis | None = Field(default=None, description="GDPR legal basis.")
     consent_ref: str | None = Field(default=None, max_length=255, description=CONSENT_REF_DESCRIPTION)
+    attributes: dict[str, Any] | None = Field(default=None, description=ATTRIBUTES_DESCRIPTION)
 
     _consent_needs_ref = model_validator(mode="after")(require_consent_ref)
 
@@ -126,6 +146,7 @@ class ContactUpdateRequest(BaseModel):
     is_primary: bool | None = Field(default=None, description="Primary contact of the company.")
     legal_basis: LegalBasis | None = Field(default=None, description="GDPR legal basis.")
     consent_ref: str | None = Field(default=None, max_length=255, description=CONSENT_REF_DESCRIPTION)
+    attributes: dict[str, Any] | None = Field(default=None, description=ATTRIBUTES_DESCRIPTION)
 
     _consent_needs_ref = model_validator(mode="after")(require_consent_ref)
 
@@ -186,12 +207,102 @@ class ActivityListQuery(BaseModel):
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
 
 
+class AttributeOption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: str = Field(min_length=1, max_length=64, description="Stored value.", examples=["micro"])
+    label: str = Field(min_length=1, max_length=128, description="Label.", examples=["Micro (1-9)"])
+
+
+class AttributeDefinitionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity: AttributeEntity = Field(description="company, contact or deal.", examples=["company"])
+    key: str = Field(min_length=1, max_length=48, pattern=ATTRIBUTE_KEY_PATTERN, description="Slug.", examples=["size"])
+    label: str = Field(min_length=1, max_length=128, description="Label.", examples=["Company size"])
+    kind: AttributeKind = Field(description="text, number, bool, date, select, multiselect or url.")
+    options: list[AttributeOption] = Field(default_factory=list, description="Choices; required for the select kinds.")
+    required: bool = Field(default=False, description="A value is required on create and may not be removed.")
+    order: int = Field(default=0, ge=0, le=32767, description="Display order.")
+    show_in_list: bool = Field(default=False, description="Shown and filterable in the company list.")
+    is_active: bool = Field(default=True, description="Accepted in values, conditions, imports and templates.")
+
+
+class AttributeDefinitionUpdateRequest(BaseModel):
+    """Entity and key are fixed after create; the kind only while no value is stored."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str | None = Field(default=None, min_length=1, max_length=128, description="Label.")
+    kind: AttributeKind | None = Field(default=None, description="Refused (409) once a value is stored.")
+    options: list[AttributeOption] | None = Field(default=None, description="Choices of the select kinds.")
+    required: bool | None = Field(default=None, description="Required on create and on a patch touching the key.")
+    order: int | None = Field(default=None, ge=0, le=32767, description="Display order.")
+    show_in_list: bool | None = Field(default=None, description="Shown and filterable in the company list.")
+    is_active: bool | None = Field(default=None, description="Accepted in values, conditions, imports and templates.")
+
+
+class AttributeListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    entity: AttributeEntity | None = Field(default=None, description="Only definitions of this entity.")
+
+
+class Condition(BaseModel):
+    """Shape only — whether the field exists and takes the op is the service's call (`condition_service`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str = Field(min_length=1, max_length=64, description="A fact name from `fields/`.", examples=["attr.size"])
+    op: ConditionOp = Field(description="eq, ne, in, contains, gte, lte or empty.", examples=["eq"])
+    value: Any = Field(default=None, description="Compared value; a list for in, a bool for empty (default true).")
+
+
+class ScoringRule(Condition):
+    points: int = Field(ge=-1000, le=1000, description="Added when the condition holds.", examples=[30])
+    label: str = Field(default="", max_length=128, description="Reason shown in the timeline.", examples=["Retailer"])
+
+
+class Disqualifier(Condition):
+    label: str = Field(default="", max_length=128, description="Reason shown in the timeline.", examples=["Too small"])
+
+
+class Thresholds(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    S: int = Field(description="Points from which a company is S3.", examples=[20])
+    M: int = Field(description="Points from which a company is S2.", examples=[40])
+    L: int = Field(description="Points from which a company is S1.", examples=[70])
+
+
+class ScoringProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(
+        default="leads.scoring", min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$", description="Profile key."
+    )
+    thresholds: Thresholds = Field(description="S <= M <= L.")
+    rules: list[ScoringRule] = Field(default_factory=list, description="Points per matching condition.")
+    disqualifiers: list[Disqualifier] = Field(default_factory=list, description="A match forces S4.")
+    is_active: bool = Field(default=True, description="The first active profile by key is used.")
+
+
+class ScoringProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[-a-zA-Z0-9_.]+$")
+    thresholds: Thresholds | None = Field(default=None, description="S <= M <= L.")
+    rules: list[ScoringRule] | None = Field(default=None, description="Points per matching condition.")
+    disqualifiers: list[Disqualifier] | None = Field(default=None, description="A match forces S4.")
+    is_active: bool | None = Field(default=None, description="The first active profile by key is used.")
+
+
 class RuleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     trigger: RuleTrigger = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
     stage_id: int | None = Field(default=None, description="Stage; required for stage_entered.", examples=[102])
-    action: RuleAction = Field(default=RuleAction.COMMUNICATE, description="request_audit or communicate.")
+    action: RuleAction = Field(default=RuleAction.COMMUNICATE, description="request_audit, communicate or score.")
     template_key: str = Field(default="", max_length=128, description="Communicator template; for communicate.")
     contact_strategy: ContactStrategy = Field(default=ContactStrategy.PRIMARY, description="primary or ai_pick.")
     require_hooks: bool = Field(default=True, description="Skip companies without hooks.")
@@ -199,6 +310,7 @@ class RuleRequest(BaseModel):
     cooldown_hours: int = Field(default=24, ge=0, le=8760, description="No re-run for the company within.")
     is_active: bool = Field(default=True, description="Evaluated at all.")
     order: int = Field(default=0, ge=0, le=32767, description="Evaluation order.")
+    conditions: list[Condition] = Field(default_factory=list, description="All must hold, else the run is skipped.")
 
 
 class RuleUpdateRequest(BaseModel):
@@ -206,7 +318,7 @@ class RuleUpdateRequest(BaseModel):
 
     trigger: RuleTrigger | None = Field(default=None, description="stage_entered or intel_ready.")
     stage_id: int | None = Field(default=None, description="Stage; null clears it.", examples=[102])
-    action: RuleAction | None = Field(default=None, description="request_audit or communicate.")
+    action: RuleAction | None = Field(default=None, description="request_audit, communicate or score.")
     template_key: str | None = Field(default=None, max_length=128, description="Communicator template.")
     contact_strategy: ContactStrategy | None = Field(default=None, description="primary or ai_pick.")
     require_hooks: bool | None = Field(default=None, description="Skip companies without hooks.")
@@ -214,6 +326,7 @@ class RuleUpdateRequest(BaseModel):
     cooldown_hours: int | None = Field(default=None, ge=0, le=8760, description="No re-run within.")
     is_active: bool | None = Field(default=None, description="Evaluated at all.")
     order: int | None = Field(default=None, ge=0, le=32767, description="Evaluation order.")
+    conditions: list[Condition] | None = Field(default=None, description="All must hold, else the run is skipped.")
 
 
 class RuleRunListQuery(BaseModel):

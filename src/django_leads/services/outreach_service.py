@@ -16,7 +16,7 @@ from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
-from django_leads.services import activity_service, recipient_service
+from django_leads.services import activity_service, fact_service, recipient_service
 
 SKIPPED_TOOLBOX_DISABLED = "skipped: AI toolbox disabled"
 CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", "hooks")
@@ -105,10 +105,39 @@ def _legal_footer(company: Company, contact: Contact, language: str) -> str:
     return render_legal_footer(clause_set, recipient_email=contact.email)
 
 
+class BlankMissing(dict):
+    """`{attr[key]}` of a key without a value renders empty instead of failing the render."""
+
+    def __missing__(self, key: str) -> str:
+        return ""
+
+
 def _context(company: Company, contact: Contact) -> dict:
     fields = {field: getattr(company, field) for field in CONTEXT_FIELDS}
     people = {"job_title": contact.job_title, "first_name": contact.first_name, "last_name": contact.last_name}
-    return {"company_name": company.name, "website": company.website or company.domain, **fields, **people}
+    facts = fact_service.facts(company, contact)
+    attributes = {
+        "attr": _renderable(fact_service.attributes_of(facts, fact_service.ATTR_PREFIX)),
+        "contact_attr": _renderable(fact_service.attributes_of(facts, fact_service.CONTACT_ATTR_PREFIX)),
+    }
+    return {
+        "company_name": company.name,
+        "website": company.website or company.domain,
+        **fields,
+        **people,
+        **attributes,
+    }
+
+
+def _renderable(values: dict) -> BlankMissing:
+    """Every active key is present (empty without a value); a multiselect renders as a comma-separated list."""
+    return BlankMissing({key: _text(value) for key, value in values.items()})
+
+
+def _text(value: object) -> str:
+    if value is None:
+        return ""
+    return ", ".join(value) if isinstance(value, list) else str(value)
 
 
 def _record_draft(company: Company, contact: Contact, message: Message, template_key: str, actor: str) -> None:

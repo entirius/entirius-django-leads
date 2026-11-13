@@ -4,6 +4,7 @@
 
 from django_leads.models.activity import Activity
 from django_leads.models.analysis_profile import AnalysisProfile
+from django_leads.models.attribute_definition import AttributeDefinition
 from django_leads.models.channel import Channel
 from django_leads.models.claim import Claim
 from django_leads.models.company import Company
@@ -13,6 +14,7 @@ from django_leads.models.import_batch import ImportBatch
 from django_leads.models.lead_type import LeadType
 from django_leads.models.recipient_pick_profile import RecipientPickProfile
 from django_leads.models.rule_run import RuleRun
+from django_leads.models.scoring_profile import ScoringProfile
 from django_leads.models.stage import Stage
 from django_leads.models.stage_event_rule import StageEventRule
 from django_leads.models.stage_rule import StageRule
@@ -20,6 +22,7 @@ from django_leads.models.stage_rule import StageRule
 __all__ = [
     "Activity",
     "AnalysisProfile",
+    "AttributeDefinition",
     "Channel",
     "Claim",
     "Company",
@@ -29,6 +32,7 @@ __all__ = [
     "LeadType",
     "RecipientPickProfile",
     "RuleRun",
+    "ScoringProfile",
     "Stage",
     "StageEventRule",
     "StageRule",

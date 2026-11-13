@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django_utils.models.base_model import BaseModel
 
@@ -31,12 +32,22 @@ class Company(BaseModel):
     last_activity_at = models.DateTimeField(null=True, blank=True)
     # Where the lead came from (free text: a fair, a list, a campaign); the funnel report groups by it.
     origin = models.CharField(max_length=64, blank=True, default="")
+    # Values of the channel's company `AttributeDefinition`s — written only through `attribute_service`.
+    attributes = models.JSONField(default=dict, blank=True)
+    # The last `scoring_service.score_and_record` result; null / empty = never scored.
+    score_points = models.IntegerField(null=True, blank=True)
+    score_segment = models.CharField(max_length=2, blank=True, default="")
+    scored_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "companies"
         ordering = ["name"]
         constraints = [models.UniqueConstraint(fields=["channel", "domain"], name="leads_company_channel_domain_uniq")]
-        indexes = [models.Index(fields=["channel", "stage"], name="leads_company_channel_stage")]
+        indexes = [
+            models.Index(fields=["channel", "stage"], name="leads_company_channel_stage"),
+            # The list filter `attr.<key>=<value>` is a containment (`@>`) lookup, which this index serves.
+            GinIndex(fields=["attributes"], name="leads_company_attributes_gin"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.domain})"

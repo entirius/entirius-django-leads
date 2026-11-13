@@ -5,7 +5,7 @@
 """The seam between leads and external lead sources (CSV now, a CRM such as Twenty later)."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from django_leads.models import Channel, Company
@@ -17,7 +17,8 @@ class ImportFailed(ValueError):
 
 @dataclass(frozen=True)
 class CandidateRow:
-    """One company + contact candidate — the CSV columns of the import, all str, "" when absent."""
+    """One company + contact candidate — the CSV columns of the import, all str, "" when absent. `attributes` and
+    `contact_attributes` hold the raw `attr.<key>` / `contact.attr.<key>` cells; the import decides which keys count."""
 
     company_name: str
     domain: str
@@ -33,6 +34,8 @@ class CandidateRow:
     phone: str
     origin: str = ""
     external_ref: str = ""
+    attributes: dict[str, str] = field(default_factory=dict)
+    contact_attributes: dict[str, str] = field(default_factory=dict)
 
 
 class Connector(Protocol):

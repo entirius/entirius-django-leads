@@ -45,6 +45,7 @@ class ActivityKind(models.TextChoices):
     LEGAL_BASIS_CONFLICT = "legal_basis_conflict", "Legal basis conflict"
     INTEL = "intel", "Intel"
     INTEL_EMPTY = "intel_empty", "Intel empty"
+    SCORE = "score", "Score"
 
 
 class ImportStatus(models.TextChoices):
@@ -62,6 +63,7 @@ class RuleTrigger(models.TextChoices):
 class RuleAction(models.TextChoices):
     REQUEST_AUDIT = "request_audit", "Request audit"
     COMMUNICATE = "communicate", "Communicate"
+    SCORE = "score", "Score"
 
 
 class ContactStrategy(models.TextChoices):
@@ -98,3 +100,42 @@ class ClaimState(models.TextChoices):
     DONE = "done", "Done"
     RETRY = "retry", "Retry"
     FAILED = "failed", "Failed"
+
+
+class AttributeEntity(models.TextChoices):
+    """What a custom attribute describes; `deal` is accepted ahead of the deals model."""
+
+    COMPANY = "company", "Company"
+    CONTACT = "contact", "Contact"
+    DEAL = "deal", "Deal"
+
+
+class AttributeKind(models.TextChoices):
+    TEXT = "text", "Text"
+    NUMBER = "number", "Number"
+    BOOL = "bool", "Yes / no"
+    DATE = "date", "Date"
+    SELECT = "select", "Select"
+    MULTISELECT = "multiselect", "Multi-select"
+    URL = "url", "URL"
+
+
+class ConditionOp(models.TextChoices):
+    """Operators of rule conditions and scoring rules; which apply to which kind is `condition_service.OPS_BY_KIND`."""
+
+    EQ = "eq", "Equals"
+    NE = "ne", "Not equal"
+    IN = "in", "One of"
+    CONTAINS = "contains", "Contains"
+    GTE = "gte", "At least"
+    LTE = "lte", "At most"
+    EMPTY = "empty", "Empty"
+
+
+class ScoreSegment(models.TextChoices):
+    """S1 is the best segment, S4 the worst (and every disqualified company)."""
+
+    S1 = "S1", "S1"
+    S2 = "S2", "S2"
+    S3 = "S3", "S3"
+    S4 = "S4", "S4"

@@ -36,7 +36,7 @@ def select_inactive_contacts(channel: Channel, *, as_of: datetime) -> QuerySet[C
 
 
 def anonymise_contact(contact: Contact, *, actor: str = "retention") -> Contact:
-    """Email → token (remembered in `ErasedAddress`), name, job title and phone cleared; Activity `anonymised` with the
+    """Email → token (remembered in `ErasedAddress`), name, job title, phone and attributes cleared; Activity `anonymised` with the
     hash; `contact_anonymised` on commit. The row is re-read under a lock: a contact already anonymised (by a
     concurrent erase or retention run) is returned unchanged, so the Activity and the signal happen once."""
     with transaction.atomic():
@@ -52,8 +52,9 @@ def _pseudonymise(contact: Contact, actor: str) -> None:
     contact.email = anonymised_address(original) if original else ""
     for name in PERSONAL_FIELDS:
         setattr(contact, name, "")
+    contact.attributes = {}
     contact.anonymised_at = timezone.now()
-    contact.save(update_fields=["email", *PERSONAL_FIELDS, "anonymised_at", "modified_at"])
+    contact.save(update_fields=["email", *PERSONAL_FIELDS, "attributes", "anonymised_at", "modified_at"])
     erased_address_service.remember(original)
     activity_service.record(
         contact.company, ActivityKind.ANONYMISED, "contact anonymised", contact=contact,

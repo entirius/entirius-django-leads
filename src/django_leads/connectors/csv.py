@@ -12,7 +12,13 @@ from pathlib import Path
 from django_leads.connectors.base import CandidateRow, ImportFailed
 from django_leads.models import Channel, Company
 
-CSV_COLUMNS = tuple(field.name for field in fields(CandidateRow) if field.name != "external_ref")
+CSV_COLUMNS = tuple(
+    field.name
+    for field in fields(CandidateRow)
+    if field.name not in ("external_ref", "attributes", "contact_attributes")
+)
+# `attr.<key>` → company attribute, `contact.attr.<key>` → contact attribute (`CandidateRow` dict fields).
+ATTRIBUTE_PREFIXES = {"attr.": "attributes", "contact.attr.": "contact_attributes"}
 # Older files name a column the way it used to be called; read when the current name is absent from the header.
 COLUMN_ALIASES = {"lead_type": "company_type"}
 
@@ -29,7 +35,22 @@ def parse_rows(file: Iterable[str]) -> Iterator[dict[str, str]]:
     if not set(CSV_COLUMNS) & set(raw_names):
         raise ImportFailed("missing_header")
     for raw in reader:
-        yield {column: (raw.get(raw_names.get(column, column)) or "").strip() for column in CSV_COLUMNS}
+        row = {column: (raw.get(raw_names.get(column, column)) or "").strip() for column in CSV_COLUMNS}
+        yield {**row, **_attribute_cells(raw, raw_names)}
+
+
+def _attribute_cells(raw: dict[str, str], raw_names: dict[str, str]) -> dict[str, dict[str, str]]:
+    cells: dict[str, dict[str, str]] = {target: {} for target in ATTRIBUTE_PREFIXES.values()}
+    for name, raw_name in raw_names.items():
+        prefix = next((prefix for prefix in ATTRIBUTE_PREFIXES if name.startswith(prefix)), None)
+        if prefix is not None:
+            cells[ATTRIBUTE_PREFIXES[prefix]][name.removeprefix(prefix)] = (raw.get(raw_name) or "").strip()
+    return cells
+
+
+def read_header(file: Iterable[str]) -> list[str]:
+    """The header names, stripped — what the import reports as ignored columns."""
+    return [name.strip() for name in next(csv.reader(file), [])]
 
 
 class CsvConnector:
@@ -43,6 +64,10 @@ class CsvConnector:
         with self.path.open(encoding="utf-8", newline="") as file:
             for row in parse_rows(file):
                 yield CandidateRow(**row)
+
+    def header(self) -> list[str]:
+        with self.path.open(encoding="utf-8", newline="") as file:
+            return read_header(file)
 
     def push_status(self, company: Company) -> None:
         """A file has nothing to update."""

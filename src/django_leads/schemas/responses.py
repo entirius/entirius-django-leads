@@ -65,6 +65,7 @@ class ContactResponse(BaseModel):
     opt_out_at: datetime | None = Field(description="Opted out.", examples=[None])
     anonymised_at: datetime | None = Field(description="Anonymised.", examples=[None])
     wrong_person_at: datetime | None = Field(description="Flagged by a wrong-person reply.", examples=[None])
+    attributes: dict[str, Any] = Field(description="Contact attribute values by key.", examples=[{"role": "buyer"}])
 
     @classmethod
     def of(cls, contact) -> "ContactResponse":
@@ -106,6 +107,10 @@ class CompanyResponse(BaseModel):
     rotation_count: int = Field(description="Contact rotations.", examples=[0])
     last_activity_at: datetime | None = Field(description="Last timeline entry.", examples=[None])
     origin: str = Field(description="Where the lead came from.", examples=["fair"])
+    attributes: dict[str, Any] = Field(description="Company attribute values by key.", examples=[{"size": "micro"}])
+    score_points: int | None = Field(description="Points of the last scoring; null = never scored.", examples=[45])
+    score_segment: str = Field(description="S1 (best) … S4 of the last scoring; empty = never scored.", examples=["S2"])
+    scored_at: datetime | None = Field(description="Last scored.", examples=[None])
 
     @classmethod
     def of(cls, company) -> "CompanyResponse":
@@ -197,7 +202,7 @@ class RuleResponse(BaseModel):
     id: int = Field(description="Rule id.", examples=[100])
     trigger: str = Field(description="stage_entered or intel_ready.", examples=["stage_entered"])
     stage_id: int | None = Field(description="Stage id.", examples=[102])
-    action: str = Field(description="request_audit or communicate.", examples=["communicate"])
+    action: str = Field(description="request_audit, communicate or score.", examples=["communicate"])
     template_key: str = Field(description="Communicator template.", examples=["lead.cold.b2b"])
     contact_strategy: str = Field(description="primary or ai_pick.", examples=["primary"])
     require_hooks: bool = Field(description="Skip companies without hooks.", examples=[True])
@@ -205,6 +210,9 @@ class RuleResponse(BaseModel):
     cooldown_hours: int = Field(description="No re-run within.", examples=[24])
     is_active: bool = Field(description="Evaluated at all.", examples=[True])
     order: int = Field(description="Evaluation order.", examples=[0])
+    conditions: list[dict[str, Any]] = Field(
+        description="All must hold: {field, op, value}.", examples=[[{"field": "attr.size", "op": "eq", "value": "s"}]]
+    )
 
 
 class RuleListResponse(BaseModel):
@@ -372,3 +380,66 @@ class GdprEraseResponse(BaseModel):
     modules: dict[str, dict[str, int]] = Field(
         description="App name → rows touched per kind.", examples=[{"django_leads": {"contacts": 1, "activities": 4}}]
     )
+
+
+class AttributeDefinitionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Definition id.", examples=[100])
+    entity: str = Field(description="company, contact or deal.", examples=["company"])
+    key: str = Field(description="Slug; the key in `attributes`, `attr.<key>` as a fact.", examples=["size"])
+    label: str = Field(description="Label.", examples=["Company size"])
+    kind: str = Field(description="text, number, bool, date, select, multiselect or url.", examples=["select"])
+    options: list[dict[str, str]] = Field(
+        description="Choices {value, label}.", examples=[[{"value": "s", "label": "S"}]]
+    )
+    required: bool = Field(description="Required on create and on a patch touching the key.", examples=[False])
+    order: int = Field(description="Display order.", examples=[0])
+    show_in_list: bool = Field(description="Shown and filterable in the company list.", examples=[True])
+    is_active: bool = Field(description="Accepted in values, conditions, imports and templates.", examples=[True])
+
+
+class AttributeDefinitionListResponse(BaseModel):
+    results: list[AttributeDefinitionResponse] = Field(description="Definitions by entity, then display order.")
+
+
+class FieldResponse(BaseModel):
+    name: str = Field(description="Fact name: a built-in or attr.<key>.", examples=["attr.size"])
+    kind: str = Field(description="Kind; decides the ops a condition may use.", examples=["select"])
+    label: str = Field(description="Label.", examples=["Company size"])
+    options: list[dict[str, str]] = Field(description="Choices {value, label} of select facts.", examples=[[]])
+
+
+class FieldListResponse(BaseModel):
+    results: list[FieldResponse] = Field(description="Built-in facts, then active company attributes.")
+
+
+class ScoringProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Profile id.", examples=[100])
+    key: str = Field(description="Profile key.", examples=["leads.scoring"])
+    thresholds: dict[str, int] = Field(description="S <= M <= L.", examples=[{"S": 20, "M": 40, "L": 70}])
+    rules: list[dict[str, Any]] = Field(description="{field, op, value, points, label}.", examples=[[]])
+    disqualifiers: list[dict[str, Any]] = Field(description="{field, op, value, label}.", examples=[[]])
+    is_active: bool = Field(description="The first active profile by key is used.", examples=[True])
+
+
+class ScoringProfileListResponse(BaseModel):
+    results: list[ScoringProfileResponse] = Field(description="Profiles by key.")
+
+
+class ScoreReason(BaseModel):
+    field: str = Field(description="Fact the rule named.", examples=["lead_type"])
+    kind: str = Field(description="rule or disqualifier.", examples=["rule"])
+    points: int = Field(description="Points it added (0 for a disqualifier).", examples=[30])
+    label: str = Field(description="Label of the rule.", examples=["Retailer"])
+
+
+class ScoreResponse(BaseModel):
+    segment: str = Field(description="S1 (best) … S4.", examples=["S2"])
+    points: int = Field(description="Sum of the matching rules.", examples=[45])
+    disqualified: bool = Field(description="A disqualifier matched (S4).", examples=[False])
+    reasons: list[str] = Field(description="Reasons as text.", examples=[["Retailer: +30"]])
+    reasons_structured: list[ScoreReason] = Field(description="Reasons as data.")
+    profile_id: int | None = Field(description="Profile used.", examples=[100])

@@ -14,7 +14,7 @@ from django_leads.enums import LeadSource
 from django_leads.models import Company, Contact
 from django_leads.schemas.requests import ContactCreateRequest, ContactListQuery, ContactUpdateRequest
 from django_leads.schemas.responses import ContactListResponse, ContactResponse
-from django_leads.services import contact_service
+from django_leads.services import attribute_service, contact_service
 
 _TAGS = ["Leads Contacts"]
 TEXT_FIELDS = ("first_name", "last_name", "job_title", "phone")
@@ -62,6 +62,8 @@ class ContactListView(AdminView):
             contact = contact_service.create_contact(company, row, actor=request.user.username, consent_ref=consent_ref)
         except contact_service.ContactExists as error:
             raise Conflict(str(error), code="contact_exists") from None
+        except attribute_service.InvalidAttribute as error:
+            raise ValidationError({"attributes": [str(error)]}) from None
         return Response(ContactResponse.of(contact).model_dump(mode="json"), status=201)
 
 
@@ -85,7 +87,7 @@ class ContactDetailView(AdminView):
     )
     def patch(self, request: Request, channel_idx: str, pk: int) -> Response:
         updates = parse(ContactUpdateRequest, request.data).model_dump(mode="json", exclude_unset=True)
-        if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "email", "is_primary")):
+        if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "email", "is_primary", "attributes")):
             raise ValidationError({"detail": ["null is only allowed for language and legal_basis"]})
         consent_ref = updates.pop("consent_ref", None)
         try:
@@ -97,6 +99,8 @@ class ContactDetailView(AdminView):
             )
         except contact_service.EmailImmutable as error:
             raise ValidationError({"email": [str(error)]}) from None
+        except attribute_service.InvalidAttribute as error:
+            raise ValidationError({"attributes": [str(error)]}) from None
         except contact_service.ContactExists as error:
             raise Conflict(str(error), code="contact_exists") from None
         return Response(ContactResponse.of(contact).model_dump(mode="json"))

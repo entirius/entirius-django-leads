@@ -19,7 +19,7 @@ from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads.enums import ActivityKind, ClaimState, RuleAction, RuleOutcome, RuleTrigger
 from django_leads.models import Company, RuleRun, Stage, StageRule
-from django_leads.services import activity_service, claim_service
+from django_leads.services import activity_service, claim_service, condition_service, fact_service, scoring_service
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +80,17 @@ def _complete(run: RuleRun, outcome: str, detail: str, *, state: str = ClaimStat
 
 
 def _check(rule: StageRule, company: Company) -> tuple[str | None, str]:
-    """Conditions on the locked row; `None` outcome = outreach follows outside the lock."""
+    """Checks in a fixed order on the locked row (do not contact, cooldown, conditions, action); `None` outcome = outreach follows outside the lock."""
     from django_leads.services import intel_service, recipient_service
 
     if company.do_not_contact:
         return _stop(company, rule, RuleOutcome.BLOCKED, ActivityKind.BLOCKED, "blocked: do_not_contact")
     if _in_cooldown(rule, company):
         return _stop(company, rule, RuleOutcome.COOLDOWN, ActivityKind.RULE, "rule cooldown")
+    if failed := _failing_condition(rule, company):
+        return _stop(company, rule, RuleOutcome.SKIPPED, ActivityKind.SKIPPED, f"skipped: condition {failed['field']}")
+    if rule.action == RuleAction.SCORE:
+        return _score(rule, company)
     if rule.action == RuleAction.REQUEST_AUDIT:
         intel_service.request_audit_for(company, actor=f"rule:{rule.pk}")
         return RuleOutcome.FIRED, "audit requested"
@@ -95,6 +99,22 @@ def _check(rule: StageRule, company: Company) -> tuple[str | None, str]:
     if rule.require_email and not recipient_service.candidates(company):
         return _stop(company, rule, RuleOutcome.SKIPPED, ActivityKind.SKIPPED, "skipped: no email")
     return None, "claimed"
+
+
+def _failing_condition(rule: StageRule, company: Company) -> dict | None:
+    """All conditions must hold; a failing one skips the rule (no cooldown starts)."""
+    if not rule.conditions:
+        return None
+    fields = fact_service.field_map(company.channel)
+    return condition_service.first_failing(rule.conditions, fact_service.facts(company), fields)
+
+
+def _score(rule: StageRule, company: Company) -> tuple[str, str]:
+    try:
+        result = scoring_service.score_and_record(company, actor=f"rule:{rule.pk}")
+    except scoring_service.NoScoringProfile:
+        return _stop(company, rule, RuleOutcome.SKIPPED, ActivityKind.SKIPPED, "skipped: no scoring profile")
+    return RuleOutcome.FIRED, f"score {result.segment} ({result.points} points)"
 
 
 def _outreach(rule: StageRule, company: Company) -> tuple[str, str]:

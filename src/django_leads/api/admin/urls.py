@@ -7,6 +7,7 @@ from django.apps import apps
 from django.urls import path
 
 from django_leads.api.admin.views import activity_views as activity
+from django_leads.api.admin.views import attribute_views as attribute
 from django_leads.api.admin.views import company_action_views as action
 from django_leads.api.admin.views import company_views as company
 from django_leads.api.admin.views import contact_views as contact
@@ -15,6 +16,7 @@ from django_leads.api.admin.views import lead_type_views as lead_type
 from django_leads.api.admin.views import profile_views as profile
 from django_leads.api.admin.views import report_views as report
 from django_leads.api.admin.views import rule_views as rule
+from django_leads.api.admin.views import scoring_views as scoring
 from django_leads.api.admin.views import stage_event_views as stage_event
 from django_leads.api.admin.views import stage_views as stage
 from django_leads.api.admin.views import test_views as dev
@@ -23,6 +25,7 @@ urlpatterns = [
     path("companies/", company.CompanyListView.as_view(), name="admin-leads-companies"),
     path("companies/<int:pk>/", company.CompanyDetailView.as_view(), name="admin-leads-company"),
     path("companies/<int:pk>/transition/", company.CompanyTransitionView.as_view(), name="admin-leads-transition"),
+    path("companies/<int:pk>/score/", scoring.CompanyScoreView.as_view(), name="admin-leads-company-score"),
     path("companies/<int:pk>/communicate/", action.CompanyCommunicateView.as_view(), name="admin-leads-communicate"),
     path(
         "companies/<int:pk>/request-audit/", action.CompanyRequestAuditView.as_view(), name="admin-leads-request-audit"
@@ -40,6 +43,15 @@ urlpatterns = [
     path("stage-events/<str:event>/", stage_event.StageEventDetailView.as_view(), name="admin-leads-stage-event"),
     path("lead-types/", lead_type.LeadTypeListView.as_view(), name="admin-leads-lead-types"),
     path("lead-types/<int:pk>/", lead_type.LeadTypeDetailView.as_view(), name="admin-leads-lead-type"),
+    path("attributes/", attribute.AttributeListView.as_view(), name="admin-leads-attributes"),
+    path("attributes/<int:pk>/", attribute.AttributeDetailView.as_view(), name="admin-leads-attribute"),
+    path("fields/", attribute.FieldListView.as_view(), name="admin-leads-fields"),
+    path("scoring-profiles/", scoring.ScoringProfileListView.as_view(), name="admin-leads-scoring-profiles"),
+    path(
+        "scoring-profiles/<int:pk>/",
+        scoring.ScoringProfileDetailView.as_view(),
+        name="admin-leads-scoring-profile",
+    ),
     path("activities/", activity.ActivityListView.as_view(), name="admin-leads-activities"),
     path("imports/", imports.ImportListView.as_view(), name="admin-leads-imports"),
     path("imports/<int:pk>/", imports.ImportDetailView.as_view(), name="admin-leads-import"),
