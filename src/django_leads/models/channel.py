@@ -25,6 +25,8 @@ class Channel(BaseModel):
     )
     languages = models.ManyToManyField("django_regional.Language", blank=True, related_name="leads_channels")
     retention_days = models.PositiveIntegerField(null=True, blank=True)
+    # Days until a "come back" task per reply class (`not_now`, `out_of_office`); a missing key = the default.
+    resume_days = models.JSONField(default=dict, blank=True)
 
     objects = ChannelManager()
 

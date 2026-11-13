@@ -46,6 +46,7 @@ class ActivityKind(models.TextChoices):
     INTEL = "intel", "Intel"
     INTEL_EMPTY = "intel_empty", "Intel empty"
     SCORE = "score", "Score"
+    TASK = "task", "Task"
 
 
 class ImportStatus(models.TextChoices):
