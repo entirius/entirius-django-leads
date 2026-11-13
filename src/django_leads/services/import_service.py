@@ -39,6 +39,7 @@ from django_leads.services import (
     lead_type_service,
     stage_service,
 )
+from django_leads.signals import stage_entered
 from django_leads.utils.domains import email_domain, registrable_domain
 from django_leads.utils.emails import normalize_email
 
@@ -60,8 +61,25 @@ class Lookups:
     lead_types: frozenset[str]
 
 
-def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: str) -> ImportBatch:
-    return ImportBatch.objects.create(channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by)
+def create_batch(
+    channel: Channel, filename: str, size_bytes: int, created_by: str, *, run_rules: bool = False
+) -> ImportBatch:
+    return ImportBatch.objects.create(
+        channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by, run_rules=run_rules
+    )
+
+
+def announce_created(batch: ImportBatch, companies: list[Company]) -> None:
+    """With `run_rules`, every created company enters its first stage: `stage_entered` once the chunk commits. A
+    rolled-back chunk or savepoint discards the callback, so nothing fires for rows that were not written."""
+    if not batch.run_rules or not companies:
+        return
+    transaction.on_commit(lambda: _enter_first_stage(companies))
+
+
+def _enter_first_stage(companies: list[Company]) -> None:
+    for company in companies:
+        stage_entered.send(sender=Company, company=company, stage=company.stage)
 
 
 def build_lookups(channel: Channel) -> Lookups:
@@ -200,6 +218,7 @@ def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any]
         "website": raw["website"],
         "lead_type": _row_lead_type(raw, lookups.lead_types),
         "industry": raw["industry"],
+        "origin": raw["origin"],
         "source": LeadSource.CSV,
     }
     _check_lengths(Company, company)
@@ -271,6 +290,8 @@ def _apply_alone(batch: ImportBatch, line: int, company_row: dict, contact_row: 
 
 def _upsert_row(batch: ImportBatch, line: int, company_row: dict, contact_row: dict | None) -> tuple[int, str, str]:
     company, created = company_service.upsert_company(batch.channel, company_row)
+    if created:
+        announce_created(batch, [company])
     contact = contact_service.upsert_contact(company, contact_row)[0] if contact_row else None
     message, data = "import created" if created else "import matched", {"row": line}
     activities = [
@@ -366,6 +387,7 @@ class _ChunkWriter:
         self._write(Company, company_service.FILL_FIELDS)
         self._write(Contact, (*contact_service.FILL_FIELDS, "legal_basis"))
         activity_service.record_many(self.activities)
+        announce_created(self.batch, [instance for instance in self.new if isinstance(instance, Company)])
 
     def _company(self, row: dict) -> tuple[Company, bool]:
         company = self.companies.get(row["domain"])

@@ -17,6 +17,11 @@ class Command(BaseCommand):
         parser.add_argument("--channel", required=True, help="Leads channel idx")
         parser.add_argument("--file", required=True, help="Path to the CSV file (header row required)")
         parser.add_argument("--sync", action="store_true", help="Run in this process instead of the Celery queue")
+        parser.add_argument(
+            "--run-rules",
+            action="store_true",
+            help="Created companies enter their first stage with its rules (one rule evaluation per company)",
+        )
 
     def handle(self, *args, **options) -> None:
         channel = Channel.objects.filter(idx=options["channel"]).first()
@@ -24,7 +29,9 @@ class Command(BaseCommand):
             raise CommandError(f"leads channel {options['channel']!r} not found")
         path = Path(options["file"])
         content = path.read_text(encoding="utf-8-sig")
-        batch = import_service.create_batch(channel, path.name, len(content.encode()), "manage.py")
+        batch = import_service.create_batch(
+            channel, path.name, len(content.encode()), "manage.py", run_rules=options["run_rules"]
+        )
         if not options["sync"]:
             import_service.store_upload(batch.pk, content)
             enqueue_import(batch.pk)
@@ -32,4 +39,6 @@ class Command(BaseCommand):
             return
         batch = import_service.run_content(batch, content)
         counts = f"created={batch.created_count} matched={batch.matched_count} skipped={batch.skipped_count}"
+        if batch.run_rules:
+            counts += f" rules_queued={batch.created_count}"
         self.stdout.write(f"batch {batch.pk} {batch.status}: {counts}")

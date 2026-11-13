@@ -101,7 +101,7 @@ class DevImportNowView(DevelopmentView):
         filename, content, size_bytes = read_upload(request)
         batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
         batch = import_service.run_content(batch, content)
-        return Response(ImportBatchDetailResponse.model_validate(batch).model_dump(mode="json"))
+        return Response(ImportBatchDetailResponse.of(batch).model_dump(mode="json"))
 
 
 class DevAnonymiseNowView(DevelopmentView):

@@ -31,6 +31,7 @@ class CandidateRow:
     language: str
     legal_basis: str
     phone: str
+    origin: str = ""
     external_ref: str = ""
 
 
