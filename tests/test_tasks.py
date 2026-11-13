@@ -112,6 +112,7 @@ def test_an_interested_reply_goes_to_the_owner_due_now(shop, piotr, django_captu
     send_reply(shop, reply(intent="interested"), django_capture_on_commit_callbacks)
     [task] = tasks()
     assert task.owner_id == owner.pk and task.due_at <= timezone.now()
+    assert task.note == "Open a deal on this company"
 
 
 @needs_todo
