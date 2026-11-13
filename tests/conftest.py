@@ -10,8 +10,8 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from django_leads import settings as leads_settings
-from django_leads.enums import LeadSource, RuleTrigger, StageKind
-from django_leads.models import Channel, Company, Contact, LeadType, Stage, StageRule
+from django_leads.enums import LeadSource, RuleTrigger, StageEvent, StageKind
+from django_leads.models import Channel, Company, Contact, LeadType, Stage, StageEventRule, StageRule
 from django_leads.services import company_service
 
 CHANNEL_IDX = "default-europe"
@@ -46,7 +46,8 @@ def channel(polish) -> Channel:
     Stage.objects.create(channel=channel, key="new", label="New", order=0)
     Stage.objects.create(channel=channel, key="contacted", label="Contacted", order=10)
     Stage.objects.create(channel=channel, key="won", label="Won", order=20, kind=StageKind.WON, is_terminal=True)
-    Stage.objects.create(channel=channel, key="replied", label="Replied", order=30, on_reply=True)
+    replied = Stage.objects.create(channel=channel, key="replied", label="Replied", order=30)
+    StageEventRule.objects.create(channel=channel, event=StageEvent.REPLY, target_stage=replied, forward_only=False)
     Stage.objects.create(
         channel=channel, key="unresponsive", label="Unresponsive", order=40, kind=StageKind.UNRESPONSIVE
     )

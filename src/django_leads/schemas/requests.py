@@ -3,6 +3,8 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Request schemas of the leads admin API v2."""
 
+from datetime import date
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
@@ -33,6 +35,7 @@ class CompanyListQuery(BaseModel):
     )
     do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
+    origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.", examples=["fair"])
 
     @field_validator("sort")
     @classmethod
@@ -69,6 +72,7 @@ class CompanyUpdateRequest(BaseModel):
     description: str | None = Field(default=None, description="Free-text description.")
     do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
     external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
+    origin: str | None = Field(default=None, max_length=64, description="Where the lead came from.")
 
 
 class TransitionRequest(BaseModel):
@@ -134,7 +138,6 @@ class StageRequest(BaseModel):
     order: int = Field(default=0, ge=0, le=32767, description="Position in the pipeline.")
     kind: StageKind = Field(default=StageKind.OPEN, description="open, won, lost or unresponsive.")
     is_terminal: bool = Field(default=False, description="No further stages after this one.")
-    on_reply: bool = Field(default=False, description="Companies move here when a contact replies.")
 
 
 class StageUpdateRequest(BaseModel):
@@ -145,7 +148,15 @@ class StageUpdateRequest(BaseModel):
     order: int | None = Field(default=None, ge=0, le=32767, description="Position in the pipeline.")
     kind: StageKind | None = Field(default=None, description="open, won, lost or unresponsive.")
     is_terminal: bool | None = Field(default=None, description="No further stages after this one.")
-    on_reply: bool | None = Field(default=None, description="Companies move here when a contact replies.")
+
+
+class StageEventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_stage_key: str | None = Field(
+        min_length=1, max_length=64, description="Stage the event moves to; null keeps the stage.", examples=["replied"]
+    )
+    forward_only: bool = Field(default=True, description="Move only to a stage of a higher order.")
 
 
 class LeadTypeRequest(BaseModel):
@@ -235,6 +246,22 @@ class AnalysisProfileRequest(ProfileRequest):
 
 class AnalysisProfileUpdateRequest(ProfileUpdateRequest):
     is_active: bool | None = Field(default=None, description="Used by the analysis.")
+
+
+class UploadOptions(BaseModel):
+    """Multipart fields next to `file`."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    run_rules: bool = Field(default=False, description="Created companies enter their first stage with its rules.")
+
+
+class FunnelQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    origin: str = Field(default="", max_length=64, description="Only companies of this origin; blank = all.")
+    date_from: date | None = Field(default=None, description="First day (inclusive).", examples=["2026-11-01"])
+    date_to: date | None = Field(default=None, description="Last day (inclusive).", examples=["2026-11-30"])
 
 
 class CommunicateRequest(BaseModel):

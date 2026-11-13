@@ -18,7 +18,24 @@ class StageResponse(BaseModel):
     order: int = Field(description="Position in the pipeline.", examples=[0])
     kind: str = Field(description="open, won, lost or unresponsive.", examples=["open"])
     is_terminal: bool = Field(description="No further stages.", examples=[False])
-    on_reply: bool = Field(description="Target on a reply.", examples=[False])
+
+
+class StageEventResponse(BaseModel):
+    event: str = Field(description="first_sent, reply, reply:<class> or sequence_finished.", examples=["reply"])
+    target_stage_key: str | None = Field(description="Stage it moves to; null keeps the stage.", examples=["replied"])
+    forward_only: bool = Field(description="Moves only to a stage of a higher order.", examples=[True])
+    configured: bool = Field(description="A row exists; false = the event moves nothing.", examples=[True])
+
+    @classmethod
+    def of(cls, entry) -> "StageEventResponse":
+        key = entry.target_stage.key if entry.target_stage else None
+        return cls(
+            event=entry.event, target_stage_key=key, forward_only=entry.forward_only, configured=entry.configured
+        )
+
+
+class StageEventListResponse(BaseModel):
+    results: list[StageEventResponse] = Field(description="One entry per event.")
 
 
 class LeadTypeResponse(BaseModel):
@@ -47,6 +64,7 @@ class ContactResponse(BaseModel):
     legal_basis: str | None = Field(description="GDPR legal basis; null when none.", examples=["consent"])
     opt_out_at: datetime | None = Field(description="Opted out.", examples=[None])
     anonymised_at: datetime | None = Field(description="Anonymised.", examples=[None])
+    wrong_person_at: datetime | None = Field(description="Flagged by a wrong-person reply.", examples=[None])
 
     @classmethod
     def of(cls, contact) -> "ContactResponse":
@@ -87,6 +105,7 @@ class CompanyResponse(BaseModel):
     customer_uid: str | None = Field(description="Linked customer uid (read-only).", examples=[None])
     rotation_count: int = Field(description="Contact rotations.", examples=[0])
     last_activity_at: datetime | None = Field(description="Last timeline entry.", examples=[None])
+    origin: str = Field(description="Where the lead came from.", examples=["fair"])
 
     @classmethod
     def of(cls, company) -> "CompanyResponse":
@@ -117,6 +136,16 @@ class ImportBatchResponse(BaseModel):
     size_bytes: int = Field(description="Uploaded file size.", examples=[1024])
     created_by: str = Field(description="Uploader.", examples=["admin"])
     created_at: datetime = Field(description="Uploaded.", examples=["2026-09-13T12:00:00Z"])
+    run_rules: bool = Field(description="Created companies enter their first stage with its rules.", examples=[False])
+    rules_queued: int = Field(
+        default=0, description="Rule evaluations queued: one per created company with run_rules.", examples=[0]
+    )
+
+    @classmethod
+    def of(cls, batch) -> "ImportBatchResponse":
+        response = cls.model_validate(batch)
+        response.rules_queued = batch.created_count if batch.run_rules else 0
+        return response
 
 
 class ImportReportEntry(BaseModel):
@@ -259,6 +288,75 @@ class DevAnonymiseResponse(BaseModel):
     anonymised: dict[str, int] = Field(
         description="Anonymised contacts per channel idx.", examples=[{"default-europe": 1}]
     )
+
+
+class LegalBasisState(BaseModel):
+    value: str | None = Field(description="GDPR legal basis; null when none.", examples=["legitimate_interest"])
+    source: str | None = Field(description="admin, import or form; null when never recorded.", examples=["import"])
+    set_at: datetime | None = Field(description="When it was recorded.", examples=["2026-11-01T10:00:00Z"])
+
+
+class SuppressionRow(BaseModel):
+    id: int = Field(description="Suppression id.", examples=[3])
+    kind: str = Field(description="email, domain or email_token.", examples=["email"])
+    source: str = Field(description="Who suppressed it.", examples=["manual"])
+    reason: str = Field(description="Free text.", examples=[""])
+    scope: str = Field(description="channel or install.", examples=["channel"])
+    created_at: datetime = Field(description="Created.", examples=["2026-11-01T10:00:00Z"])
+
+
+class AddressStatusState(BaseModel):
+    status: str = Field(description="unknown, valid, risky or invalid.", examples=["invalid"])
+    reason: str = Field(description="Why.", examples=["hard_bounce"])
+    verified_at: datetime | None = Field(description="Checked.", examples=[None])
+
+
+class CommunicatorAnswer(BaseModel):
+    email: str = Field(description="Normalised address.", examples=["jan@example-shop-2.test"])
+    refusal: str | None = Field(description="suppressed, address_invalid or null.", examples=[None])
+    suppressions: list[SuppressionRow] = Field(description="Matching suppression rows.")
+    address_status: AddressStatusState | None = Field(description="What communicator knows of the address.")
+
+
+class RetentionState(BaseModel):
+    days: int = Field(description="Idle days before anonymisation.", examples=[180])
+    due_at: datetime | None = Field(description="Anonymised after, unless active again.", examples=[None])
+    exempt_won: bool = Field(description="The company sits in a won stage: never anonymised.", examples=[False])
+
+
+class MailableResponse(BaseModel):
+    eligible: bool = Field(description="The outreach gate lets a draft go to the contact.", examples=[False])
+    reasons: list[str] = Field(description="Every refusal, in gate order.", examples=[["opted_out", "suppressed"]])
+    legal_basis: LegalBasisState = Field(description="Legal basis and where it came from.")
+    communicator: CommunicatorAnswer | None = Field(description="Suppression answer; null without an email.")
+    retention: RetentionState = Field(description="Retention clock of the company.")
+
+
+class FunnelTransition(BaseModel):
+    from_stage: str = Field(description="Stage key left.", examples=["new"])
+    to_stage: str = Field(description="Stage key entered.", examples=["contacted"])
+    count: int = Field(description="Moves.", examples=[12])
+    mean_seconds: float | None = Field(description="Mean time in the source stage.", examples=[86400.0])
+
+
+class FunnelStage(BaseModel):
+    key: str = Field(description="Stage key.", examples=["contacted"])
+    label: str = Field(description="Label.", examples=["Contacted"])
+    current: int = Field(description="Companies in the stage now.", examples=[4])
+    entered: int = Field(description="Moves into the stage in the period.", examples=[12])
+    left: int = Field(description="Moves out of the stage in the period.", examples=[8])
+    mean_seconds: float | None = Field(description="Mean time in the stage of the moves out.", examples=[3600.0])
+
+
+class FunnelOrigin(BaseModel):
+    origin: str = Field(description="Origin; empty = none recorded.", examples=["fair"])
+    companies: int = Field(description="Companies created in the period.", examples=[20])
+
+
+class FunnelResponse(BaseModel):
+    transitions: list[FunnelTransition] = Field(description="Stage moves in the period, most frequent first.")
+    stages: list[FunnelStage] = Field(description="Every stage in pipeline order.")
+    origins: list[FunnelOrigin] = Field(description="Companies per origin, most first.")
 
 
 class GdprExportResponse(BaseModel):

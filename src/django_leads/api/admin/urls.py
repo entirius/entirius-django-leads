@@ -13,7 +13,9 @@ from django_leads.api.admin.views import contact_views as contact
 from django_leads.api.admin.views import import_views as imports
 from django_leads.api.admin.views import lead_type_views as lead_type
 from django_leads.api.admin.views import profile_views as profile
+from django_leads.api.admin.views import report_views as report
 from django_leads.api.admin.views import rule_views as rule
+from django_leads.api.admin.views import stage_event_views as stage_event
 from django_leads.api.admin.views import stage_views as stage
 from django_leads.api.admin.views import test_views as dev
 
@@ -25,15 +27,23 @@ urlpatterns = [
     path(
         "companies/<int:pk>/request-audit/", action.CompanyRequestAuditView.as_view(), name="admin-leads-request-audit"
     ),
+    path(
+        "companies/<int:pk>/contacts/<int:contact_id>/mailable/",
+        action.ContactMailableView.as_view(),
+        name="admin-leads-contact-mailable",
+    ),
     path("contacts/", contact.ContactListView.as_view(), name="admin-leads-contacts"),
     path("contacts/<int:pk>/", contact.ContactDetailView.as_view(), name="admin-leads-contact"),
     path("stages/", stage.StageListView.as_view(), name="admin-leads-stages"),
     path("stages/<int:pk>/", stage.StageDetailView.as_view(), name="admin-leads-stage"),
+    path("stage-events/", stage_event.StageEventListView.as_view(), name="admin-leads-stage-events"),
+    path("stage-events/<str:event>/", stage_event.StageEventDetailView.as_view(), name="admin-leads-stage-event"),
     path("lead-types/", lead_type.LeadTypeListView.as_view(), name="admin-leads-lead-types"),
     path("lead-types/<int:pk>/", lead_type.LeadTypeDetailView.as_view(), name="admin-leads-lead-type"),
     path("activities/", activity.ActivityListView.as_view(), name="admin-leads-activities"),
     path("imports/", imports.ImportListView.as_view(), name="admin-leads-imports"),
     path("imports/<int:pk>/", imports.ImportDetailView.as_view(), name="admin-leads-import"),
+    path("reports/funnel/", report.FunnelView.as_view(), name="admin-leads-report-funnel"),
     path("rules/", rule.RuleListView.as_view(), name="admin-leads-rules"),
     path("rules/<int:pk>/", rule.RuleDetailView.as_view(), name="admin-leads-rule"),
     path("rule-runs/", rule.RuleRunListView.as_view(), name="admin-leads-rule-runs"),
