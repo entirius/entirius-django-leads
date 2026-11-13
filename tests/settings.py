@@ -32,6 +32,9 @@ INSTALLED_APPS = [
 # django_access when importable (zeno): tests/test_access_ownership.py proves the access declarations.
 if find_spec("django_access"):
     INSTALLED_APPS.append("django_access")
+# django_todo when importable (zeno): the task tests; without it they are skipped and the bridge is a no-op.
+if find_spec("django_todo"):
+    INSTALLED_APPS.append("django_todo")
 MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
