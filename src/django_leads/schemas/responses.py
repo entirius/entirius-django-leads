@@ -3,7 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Response schemas of the leads admin API v2."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -79,6 +79,7 @@ class ActivityResponse(BaseModel):
     id: int = Field(description="Activity id.", examples=[1])
     company_id: int = Field(description="Company id.", examples=[100])
     contact_id: int | None = Field(description="Contact id.", examples=[None])
+    deal_id: int | None = Field(description="Deal the entry is about; null = none or deleted.", examples=[None])
     kind: str = Field(description="Activity kind.", examples=["import"])
     message: str = Field(description="Short description.", examples=["import matched"])
     data: dict[str, Any] = Field(description="Structured details.", examples=[{}])
@@ -142,7 +143,14 @@ class CompanyResponse(BaseModel):
         return cls.model_validate({**fields, "stage": company.stage, "customer_uid": uid, "owner": owner})
 
 
+class DealCounts(BaseModel):
+    open: int = Field(description="Open deals.", examples=[1])
+    won: int = Field(description="Won deals.", examples=[0])
+    lost: int = Field(description="Lost deals.", examples=[0])
+
+
 class CompanyDetailResponse(CompanyResponse):
+    deals: DealCounts = Field(description="Deals of the company per stage kind.")
     contacts: list[ContactResponse] = Field(description="Contacts of the company.")
     activities: list[ActivityResponse] = Field(description="Last 20 timeline entries, newest first.")
     customer_name: str = Field(
@@ -297,6 +305,7 @@ class DraftResponse(BaseModel):
 class ChannelSettingsResponse(BaseModel):
     idx: str = Field(description="Channel idx.", examples=["default-europe"])
     name: str = Field(description="Channel name.", examples=["Default Europe"])
+    default_currency: str | None = Field(description="ISO 4217 of new deals; null = none.", examples=["PLN"])
     resume_days: dict[str, int] = Field(
         description="Effective days until a follow-up task per reply class (not_now, out_of_office).",
         examples=[{"not_now": 30, "out_of_office": 7}],
@@ -444,7 +453,9 @@ class FieldResponse(BaseModel):
 
 
 class FieldListResponse(BaseModel):
-    results: list[FieldResponse] = Field(description="Built-in facts, then active company attributes.")
+    results: list[FieldResponse] = Field(
+        description="Built-in facts, then active company attributes; with entity=deal the active deal attributes."
+    )
 
 
 class ScoringProfileResponse(BaseModel):
@@ -476,3 +487,110 @@ class ScoreResponse(BaseModel):
     reasons: list[str] = Field(description="Reasons as text.", examples=[["Retailer: +30"]])
     reasons_structured: list[ScoreReason] = Field(description="Reasons as data.")
     profile_id: int | None = Field(description="Profile used.", examples=[100])
+
+
+class DealStageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Deal stage id.", examples=[10])
+    key: str = Field(description="Slug.", examples=["offer"])
+    label: str = Field(description="Label.", examples=["Offer sent"])
+    order: int = Field(description="Position in the pipeline.", examples=[10])
+    kind: str = Field(description="open, won or lost.", examples=["open"])
+
+
+class DealStageListResponse(BaseModel):
+    results: list[DealStageResponse] = Field(description="Deal stages in pipeline order.")
+
+
+class DealStageSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str = Field(description="Slug.", examples=["offer"])
+    label: str = Field(description="Label.", examples=["Offer sent"])
+    kind: str = Field(description="open, won or lost.", examples=["open"])
+
+
+class DealCompany(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="Company id.", examples=[100])
+    name: str = Field(description="Name.", examples=["Example Shop"])
+    domain: str = Field(description="Registrable domain.", examples=["example-shop-2.test"])
+
+
+class DealContact(BaseModel):
+    id: int = Field(description="Contact id.", examples=[100])
+    name: str = Field(description="Full name; the email when the contact has no name.", examples=["Jan Kowalski"])
+
+
+def _money(value) -> str | None:
+    return None if value is None else format(value, "f")
+
+
+class DealResponse(BaseModel):
+    id: int = Field(description="Deal id.", examples=[7])
+    title: str = Field(description="What is sold.", examples=["Shop audit"])
+    company: DealCompany = Field(description="The company.")
+    contact: DealContact | None = Field(description="Contact; null = none.", examples=[None])
+    owner: OwnerResponse | None = Field(description="Owner; null = none.", examples=[None])
+    stage: DealStageSummary = Field(description="Current deal stage.")
+    stage_entered_at: datetime = Field(description="Entered the current stage.", examples=["2026-11-13T12:00:00Z"])
+    value_one_off: str | None = Field(description="One-off value, decimal string.", examples=["12000.00"])
+    value_recurring: str | None = Field(description="Recurring value per period, decimal string.", examples=["500.00"])
+    recurring_period: str = Field(description="month or year.", examples=["month"])
+    currency: str | None = Field(description="ISO 4217; null = none.", examples=["PLN"])
+    expected_close_date: date | None = Field(description="Expected close date.", examples=["2026-12-31"])
+    closed_at: datetime | None = Field(description="Entered a won or lost stage; null = open.", examples=[None])
+    lost_reason: str = Field(description="Why it was lost; empty unless lost.", examples=[""])
+    attributes: dict[str, Any] = Field(description="Deal attribute values by key.", examples=[{}])
+    open_tasks: int = Field(description="Open tasks about the deal; 0 without the todo module.", examples=[1])
+    subject_ref: str = Field(description="Reference for a task about the deal.", examples=["leads.Deal:7"])
+    subject_label: str = Field(description="Label for a task about the deal.", examples=["Example Shop — Shop audit"])
+    created_by: str = Field(description="Who opened it.", examples=["anna"])
+    created_at: datetime = Field(description="Opened.", examples=["2026-11-13T12:00:00Z"])
+    modified_at: datetime = Field(description="Last change.", examples=["2026-11-13T12:00:00Z"])
+
+    @classmethod
+    def of(cls, deal, *, open_tasks: int, subject_ref: str, subject_label: str) -> "DealResponse":
+        """`deal` with company, contact, owner, stage and currency joined."""
+        contact = deal.contact
+        return cls(
+            id=deal.pk, title=deal.title, company=DealCompany.model_validate(deal.company),
+            contact=DealContact(id=contact.pk, name=_contact_name(contact)) if contact else None,
+            owner=OwnerResponse.of(deal.owner) if deal.owner_id else None,
+            stage=DealStageSummary.model_validate(deal.stage), stage_entered_at=deal.stage_entered_at,
+            value_one_off=_money(deal.value_one_off), value_recurring=_money(deal.value_recurring),
+            recurring_period=deal.recurring_period, currency=deal.currency.iso3 if deal.currency_id else None,
+            expected_close_date=deal.expected_close_date, closed_at=deal.closed_at, lost_reason=deal.lost_reason,
+            attributes=deal.attributes, open_tasks=open_tasks, subject_ref=subject_ref, subject_label=subject_label,
+            created_by=deal.created_by, created_at=deal.created_at, modified_at=deal.modified_at,
+        )  # fmt: skip
+
+
+def _contact_name(contact) -> str:
+    return f"{contact.first_name} {contact.last_name}".strip() or contact.email
+
+
+class DealListResponse(_Page):
+    results: list[DealResponse] = Field(description="Deals of the page.")
+
+
+class DealTotal(BaseModel):
+    currency: str = Field(description="ISO 4217.", examples=["PLN"])
+    one_off: str = Field(description="Sum of one-off values, decimal string.", examples=["24000.00"])
+    recurring: str = Field(
+        description="Sum of recurring values per month (a yearly value counts as a twelfth), decimal string.",
+        examples=["1000.00"],
+    )
+
+
+class DealBoardColumn(BaseModel):
+    stage: DealStageResponse = Field(description="The deal stage.")
+    count: int = Field(description="Deals in the stage.", examples=[3])
+    totals: list[DealTotal] = Field(description="Totals per currency; never added across currencies.")
+    deals: list[DealResponse] = Field(description="The first 25 deals, longest in the stage first.")
+
+
+class DealBoardResponse(BaseModel):
+    results: list[DealBoardColumn] = Field(description="One column per deal stage in pipeline order.")

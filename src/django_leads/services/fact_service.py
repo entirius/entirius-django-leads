@@ -56,6 +56,12 @@ def fields(channel: Channel) -> list[dict[str, Any]]:
     return [*builtins, *(_attribute_field(row) for row in definitions)]
 
 
+def deal_fields(channel: Channel) -> list[dict[str, Any]]:
+    """The active deal attributes as `attr.<key>` in display order — deals have no built-in facts."""
+    definitions = attribute_service.active_definitions(channel, AttributeEntity.DEAL).values()
+    return [_attribute_field(row) for row in definitions]
+
+
 def field_map(channel: Channel) -> dict[str, dict[str, Any]]:
     return {field["name"]: field for field in fields(channel)}
 

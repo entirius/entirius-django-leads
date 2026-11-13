@@ -7,7 +7,7 @@
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from django_leads.models import Activity, Company, Contact
+from django_leads.models import Activity, Company, Contact, Deal
 
 
 def record(
@@ -16,11 +16,12 @@ def record(
     message: str,
     *,
     contact: Contact | None = None,
+    deal: Deal | None = None,
     data: dict | None = None,
     actor: str = "system",
 ) -> Activity:
     activity = Activity(
-        company=company, contact=contact, kind=kind, message=message[:255], data=data or {}, actor=actor
+        company=company, contact=contact, deal=deal, kind=kind, message=message[:255], data=data or {}, actor=actor
     )
     return record_many([activity])[0]
 
@@ -41,3 +42,7 @@ def record_many(activities: list[Activity]) -> list[Activity]:
 def list_activities(channel, company_id: int | None = None) -> QuerySet[Activity]:
     activities = Activity.objects.filter(company__channel=channel).select_related("contact")
     return activities.filter(company_id=company_id) if company_id else activities
+
+
+def list_for_deal(deal: Deal) -> QuerySet[Activity]:
+    return Activity.objects.filter(deal=deal).select_related("contact")

@@ -4,14 +4,15 @@
 
 """django_todo → leads timeline (soft: connected only when django_todo is installed).
 
-A task about a company of this module shows in the company's history: created by a person, done with its outcome,
+A task about a company or a deal of this module shows in the company's history: created by a person, done with its outcome,
 cancelled. Tasks leads creates itself write no "created" activity — the reply activity already says why.
 """
 
 from django_leads.enums import ActivityKind
+from django_leads.models import Company, Deal
 from django_leads.services import activity_service, task_bridge
 from django_leads.signals._deferred import after_commit
-from django_leads.utils.refs import company_from_ref, contact_from_ref
+from django_leads.utils.refs import company_from_ref, contact_from_ref, deal_from_ref
 
 
 def connect() -> bool:
@@ -49,10 +50,18 @@ def record_closed(task) -> None:
 
 
 def record_task(task, message: str, actor: str) -> None:
-    """Activity `task` on the referenced company of the task's channel; any other subject is ignored."""
-    company = company_from_ref(task.subject_ref)
+    """Activity `task` on the referenced company of the task's channel — for a deal, its company with the deal set;
+    any other subject is ignored."""
+    company, deal = subject_of(task.subject_ref)
     if company is None or company.channel.idx != task.channel_idx:
         return
     contact = contact_from_ref(company, task.contact_ref)
     data = {"task_id": task.pk, "kind": task.kind, "status": task.status}
-    activity_service.record(company, ActivityKind.TASK, message, contact=contact, data=data, actor=actor or "system")
+    activity_service.record(
+        company, ActivityKind.TASK, message, contact=contact, deal=deal, data=data, actor=actor or "system"
+    )
+
+
+def subject_of(subject_ref: str) -> tuple[Company | None, Deal | None]:
+    deal = deal_from_ref(subject_ref)
+    return (deal.company, deal) if deal else (company_from_ref(subject_ref), None)

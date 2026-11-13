@@ -4,12 +4,23 @@
 """Request schemas of the leads admin API v2."""
 
 from datetime import date
-from typing import Any
+from decimal import Decimal
+from typing import Annotated, Any, Literal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django_agreements.enums import LegalBasis
-from pydantic import AwareDatetime, BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    EmailStr,
+    Field,
+    HttpUrl,
+    field_validator,
+    model_validator,
+)
 
 from django_leads.enums import (
     UNKNOWN_LEAD_TYPE,
@@ -17,12 +28,15 @@ from django_leads.enums import (
     AttributeKind,
     ConditionOp,
     ContactStrategy,
+    DealStageKind,
+    RecurringPeriod,
     RuleAction,
     RuleTrigger,
     ScoreSegment,
     StageKind,
 )
 from django_leads.services.company_service import SORT_FIELDS
+from django_leads.services.deal_service import SORT_FIELDS as DEAL_SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
 # Format only — whether a code is an active lead type of the channel is the service's call (`lead_type_service`).
@@ -257,6 +271,14 @@ class AttributeDefinitionUpdateRequest(BaseModel):
     is_active: bool | None = Field(default=None, description="Accepted in values, conditions, imports and templates.")
 
 
+class FieldListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    entity: Literal["company", "deal"] = Field(
+        default="company", description="company = facts of rules and scoring; deal = the active deal attributes."
+    )
+
+
 class AttributeListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -458,6 +480,131 @@ class ComposeRequest(BaseModel):
         return value
 
 
+def _decimal_string(value: object) -> object:
+    """Amounts travel as decimal strings ("12000.00"); a JSON number would pass through a float."""
+    if value is not None and not isinstance(value, str):
+        raise ValueError('must be a decimal string, e.g. "12000.00"')
+    return value
+
+
+Money = Annotated[Decimal, BeforeValidator(_decimal_string), Field(max_digits=14, decimal_places=2)]
+CURRENCY_PATTERN = r"^[A-Z]{3}$"
+DEAL_STAGE_KEY_PATTERN = r"^[-a-zA-Z0-9_]+$"
+MONEY_DESCRIPTION = "Decimal string with at most 2 decimals; null = none. Needs a currency."
+
+
+class DealStageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(
+        min_length=1, max_length=64, pattern=DEAL_STAGE_KEY_PATTERN, description="Slug.", examples=["offer"]
+    )
+    label: str = Field(min_length=1, max_length=128, description="Label.", examples=["Offer sent"])
+    order: int = Field(default=0, ge=0, le=32767, description="Position in the pipeline.")
+    kind: DealStageKind = Field(default=DealStageKind.OPEN, description="open, won or lost.")
+
+
+class DealStageUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str | None = Field(
+        default=None, min_length=1, max_length=64, pattern=DEAL_STAGE_KEY_PATTERN, description="Slug."
+    )
+    label: str | None = Field(default=None, min_length=1, max_length=128, description="Label.")
+    order: int | None = Field(default=None, ge=0, le=32767, description="Position in the pipeline.")
+    kind: DealStageKind | None = Field(
+        default=None, description="open, won or lost; fixed while the stage holds deals."
+    )
+
+
+class DealListQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    stage: str = Field(default="", max_length=64, description="Deal stage key.", examples=["offer"])
+    kind: DealStageKind | None = Field(default=None, description="open, won or lost.")
+    owner: str = Field(default="", pattern=OWNER_FILTER_PATTERN, description=OWNER_FILTER_DESCRIPTION, examples=["me"])
+    company: int | None = Field(default=None, ge=1, description="Company id.")
+    search: str = Field(
+        default="", max_length=255, description="Substring of the title or the company's name or domain."
+    )
+    close_from: date | None = Field(default=None, description="Expected close date on or after.")
+    close_to: date | None = Field(default=None, description="Expected close date on or before.")
+    sort: str = Field(
+        default="-created",
+        description="expected_close_date, stage_entered_at, value_one_off, value_recurring or created; `-` for "
+        "descending; empty values last.",
+    )
+
+    @field_validator("sort")
+    @classmethod
+    def sort_in_allowlist(cls, value: str) -> str:
+        if value.lstrip("-") not in DEAL_SORT_FIELDS:
+            raise ValueError(f"sort must be one of {sorted(DEAL_SORT_FIELDS)} (optionally prefixed with -)")
+        return value
+
+
+class DealBoardQuery(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    owner: str = Field(default="", pattern=OWNER_FILTER_PATTERN, description=OWNER_FILTER_DESCRIPTION, examples=["me"])
+
+
+class DealCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_id: int = Field(ge=1, description="The company of the channel the deal is on.", examples=[100])
+    title: str = Field(
+        min_length=1, max_length=255, description="What is sold; no personal data.", examples=["Shop audit"]
+    )
+    contact_id: int | None = Field(default=None, ge=1, description="A contact of the company.")
+    owner_id: int | None = Field(
+        ge=1,
+        le=USER_ID_MAX,
+        default=None,
+        description="Owner (an assignable user); absent = the company's owner, else the requesting user; null = none.",
+    )
+    value_one_off: Money | None = Field(default=None, description=MONEY_DESCRIPTION, examples=["12000.00"])
+    value_recurring: Money | None = Field(default=None, description=MONEY_DESCRIPTION, examples=["500.00"])
+    recurring_period: RecurringPeriod = Field(default=RecurringPeriod.MONTH, description="month or year.")
+    currency: str | None = Field(
+        default=None, pattern=CURRENCY_PATTERN, description="ISO 4217; absent = the channel default.", examples=["PLN"]
+    )
+    expected_close_date: date | None = Field(default=None, description="Expected close date.")
+    attributes: dict[str, Any] = Field(default_factory=dict, description=ATTRIBUTES_DESCRIPTION)
+
+
+class DealUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=1, max_length=255, description="What is sold; no personal data.")
+    contact_id: int | None = Field(default=None, ge=1, description="A contact of the company; null clears it.")
+    owner_id: int | None = Field(
+        ge=1, le=USER_ID_MAX, default=None, description="Owner (an assignable user); null clears the owner."
+    )
+    value_one_off: Money | None = Field(default=None, description=MONEY_DESCRIPTION, examples=["12000.00"])
+    value_recurring: Money | None = Field(default=None, description=MONEY_DESCRIPTION, examples=["500.00"])
+    recurring_period: RecurringPeriod | None = Field(default=None, description="month or year.")
+    currency: str | None = Field(default=None, pattern=CURRENCY_PATTERN, description="ISO 4217; null clears it.")
+    expected_close_date: date | None = Field(default=None, description="Expected close date; null clears it.")
+    attributes: dict[str, Any] | None = Field(default=None, description=ATTRIBUTES_DESCRIPTION)
+
+
+class DealTransitionRequest(BaseModel):
+    """Name the target stage by `stage_key`, or by `kind` = its first stage of that kind."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage_key: str | None = Field(default=None, min_length=1, max_length=64, description="Target deal stage key.")
+    kind: DealStageKind | None = Field(default=None, description="open, won or lost: the first stage of the kind.")
+    lost_reason: str = Field(default="", max_length=255, description="Required for a lost stage; no personal data.")
+
+    @model_validator(mode="after")
+    def one_target(self) -> "DealTransitionRequest":
+        if (self.stage_key is None) == (self.kind is None):
+            raise ValueError("give exactly one of stage_key or kind")
+        return self
+
+
 class ResumeDays(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -473,6 +620,9 @@ class ResumeDays(BaseModel):
 class ChannelSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    default_currency: str | None = Field(
+        default=None, pattern=CURRENCY_PATTERN, description="ISO 4217 of new deals; null clears it.", examples=["PLN"]
+    )
     resume_days: ResumeDays | None = Field(
         default=None,
         description="Replaces the channel's values; a key left out or null uses the default, null resets all.",

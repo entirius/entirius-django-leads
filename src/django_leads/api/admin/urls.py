@@ -12,6 +12,8 @@ from django_leads.api.admin.views import channel_views as channel
 from django_leads.api.admin.views import company_action_views as action
 from django_leads.api.admin.views import company_views as company
 from django_leads.api.admin.views import contact_views as contact
+from django_leads.api.admin.views import deal_stage_views as deal_stage
+from django_leads.api.admin.views import deal_views as deal
 from django_leads.api.admin.views import import_views as imports
 from django_leads.api.admin.views import lead_type_views as lead_type
 from django_leads.api.admin.views import owner_views as owner
@@ -39,6 +41,14 @@ urlpatterns = [
         action.ContactMailableView.as_view(),
         name="admin-leads-contact-mailable",
     ),
+    path("companies/<int:pk>/deals/", deal.CompanyDealListView.as_view(), name="admin-leads-company-deals"),
+    path("deals/", deal.DealListView.as_view(), name="admin-leads-deals"),
+    path("deals/board/", deal.DealBoardView.as_view(), name="admin-leads-deals-board"),
+    path("deals/<int:pk>/", deal.DealDetailView.as_view(), name="admin-leads-deal"),
+    path("deals/<int:pk>/transition/", deal.DealTransitionView.as_view(), name="admin-leads-deal-transition"),
+    path("deals/<int:pk>/activities/", deal.DealActivityListView.as_view(), name="admin-leads-deal-activities"),
+    path("deal-stages/", deal_stage.DealStageListView.as_view(), name="admin-leads-deal-stages"),
+    path("deal-stages/<int:pk>/", deal_stage.DealStageDetailView.as_view(), name="admin-leads-deal-stage"),
     path("channel/", channel.ChannelSettingsView.as_view(), name="admin-leads-channel"),
     path("assignable-users/", owner.AssignableUserListView.as_view(), name="admin-leads-assignable-users"),
     path("contacts/", contact.ContactListView.as_view(), name="admin-leads-contacts"),

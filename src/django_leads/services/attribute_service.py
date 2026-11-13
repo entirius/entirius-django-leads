@@ -20,7 +20,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Model, QuerySet
 
 from django_leads.enums import AttributeEntity, AttributeKind
-from django_leads.models import AttributeDefinition, Channel, Company, Contact, ScoringProfile, StageRule
+from django_leads.models import AttributeDefinition, Channel, Company, Contact, Deal, ScoringProfile, StageRule
 
 TEXT_MAX_LENGTH = 2000
 # A decimal string never longer than this: `1e999999999` would otherwise expand to a billion digits.
@@ -31,7 +31,11 @@ CREATE_FIELDS = frozenset(
 )
 # Entity and key are what stored values hang on — fixed after create; `kind` only while no value is stored.
 UPDATE_FIELDS = frozenset({"label", "kind", "options", "required", "order", "show_in_list", "is_active"})
-ENTITY_MODELS: dict[str, type[Model]] = {AttributeEntity.COMPANY: Company, AttributeEntity.CONTACT: Contact}
+ENTITY_MODELS: dict[str, type[Model]] = {
+    AttributeEntity.COMPANY: Company,
+    AttributeEntity.CONTACT: Contact,
+    AttributeEntity.DEAL: Deal,
+}
 TRUE_WORDS, FALSE_WORDS = frozenset({"true", "1", "yes"}), frozenset({"false", "0", "no"})
 _validate_url = URLValidator(schemes=["http", "https"])
 
@@ -114,11 +118,9 @@ def is_referenced(definition: AttributeDefinition) -> bool:
 
 
 def has_values(definition: AttributeDefinition) -> bool:
-    model = ENTITY_MODELS.get(definition.entity)
-    if model is None:  # deals: no model yet, so no stored value
-        return False
+    model = ENTITY_MODELS[definition.entity]
     scope = (
-        {"channel_id": definition.channel_id} if model is Company else {"company__channel_id": definition.channel_id}
+        {"company__channel_id": definition.channel_id} if model is Contact else {"channel_id": definition.channel_id}
     )
     return model.objects.filter(attributes__has_key=definition.key, **scope).exists()
 
@@ -153,7 +155,9 @@ def apply(channel: Channel, entity: str, current: dict[str, Any], patch: dict[st
     return {key: value for key, value in merged.items() if value is not None}
 
 
-def apply_locked(instance: Company | Contact, channel: Channel, entity: str, patch: dict[str, Any]) -> dict[str, Any]:
+def apply_locked(
+    instance: Company | Contact | Deal, channel: Channel, entity: str, patch: dict[str, Any]
+) -> dict[str, Any]:
     """`apply` on the row's stored JSON read under a lock (caller's transaction), set on the instance: two concurrent
     patches of different keys both land."""
     rows = type(instance).objects.select_for_update().filter(pk=instance.pk)

@@ -25,6 +25,8 @@ KIND_MAIL = "mail"
 NEWER_REPLY = "newer reply"
 OPTED_OUT = "opted out"
 ANONYMISED = "anonymised"
+# The interested task asks for a deal; leads never opens one itself.
+OPEN_DEAL_NOTE = "Open a deal on this company"
 
 
 def resume_days(channel: Channel) -> dict[str, int]:
@@ -60,7 +62,7 @@ def task_for(company: Company, contact: Contact | None, reply) -> TaskSpec | Non
         return TaskSpec(KIND_TODO, "Read the reply", now, "leads.reply.review", f"reply:{reply.pk}")
     if reply.intent == ReplyIntent.INTERESTED:
         title = "Interested: answer and open a deal"
-        return TaskSpec(KIND_TODO, title, now, "leads.reply.interested", f"reply:{reply.pk}")
+        return TaskSpec(KIND_TODO, title, now, "leads.reply.interested", f"reply:{reply.pk}", note=OPEN_DEAL_NOTE)
     if contact is None:
         return None
     return _contact_task(company, contact, reply, now)

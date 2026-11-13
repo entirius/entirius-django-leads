@@ -34,6 +34,7 @@ from django_leads.services import (
     attribute_service,
     company_service,
     customer_link_service,
+    deal_service,
     lead_type_service,
     owner_service,
     stage_service,
@@ -67,6 +68,7 @@ def detail(company: Company) -> dict:
         **CompanyResponse.of(company).model_dump(),
         contacts=contacts,
         activities=activities,
+        deals=deal_service.counts(company),
         customer_name=customer_link_service.find_customer_name(company.customer_uid),
     )
     return body.model_dump(mode="json")
@@ -148,7 +150,7 @@ class CompanyDetailView(AdminView):
 
     @extend_schema(
         tags=_TAGS,
-        summary="One company with contacts and its last 20 activities",
+        summary="One company with contacts, its last 20 activities and deal counts",
         responses={200: CompanyDetailResponse, **ERROR_RESPONSES},
     )
     def get(self, request: Request, channel_idx: str, pk: int) -> Response:

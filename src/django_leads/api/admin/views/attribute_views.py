@@ -17,6 +17,7 @@ from django_leads.schemas.requests import (
     AttributeDefinitionRequest,
     AttributeDefinitionUpdateRequest,
     AttributeListQuery,
+    FieldListQuery,
 )
 from django_leads.schemas.responses import (
     AttributeDefinitionListResponse,
@@ -119,8 +120,13 @@ class FieldListView(AdminView):
         tags=_TAGS,
         operation_id="leads_fields_list",
         summary="Facts rule conditions and scoring rules may name",
-        description="Built-in facts, then the active company attributes as attr.<key>, with kinds and options.",
+        description="Built-in facts, then the active company attributes as attr.<key>, with kinds and options; "
+        "entity=deal lists the active deal attributes only.",
+        parameters=[OpenApiParameter("entity", str, description="company (default) or deal.")],
         responses={200: FieldListResponse, **ERROR_RESPONSES},
     )
     def get(self, request: Request, channel_idx: str) -> Response:
-        return Response({"results": fact_service.fields(self.channel(channel_idx))})
+        query = parse(FieldListQuery, request.query_params.dict())
+        channel = self.channel(channel_idx)
+        fields = fact_service.deal_fields(channel) if query.entity == "deal" else fact_service.fields(channel)
+        return Response({"results": fields})

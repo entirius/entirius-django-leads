@@ -13,7 +13,7 @@ from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from django_leads.enums import ActivityKind
-from django_leads.models import Activity, Channel, Company
+from django_leads.models import Activity, Channel, Company, Deal
 from django_leads.services import activity_service
 
 OWNER = "owner"
@@ -79,6 +79,18 @@ def set_owner(company: Company, owner: AbstractBaseUser | None, *, actor: str) -
     return True
 
 
+def set_deal_owner(deal: Deal, owner: AbstractBaseUser | None, *, actor: str) -> bool:
+    """The only writer of `Deal.owner`; Activity `deal` "deal owner: <username | none>" on the company timeline."""
+    owner_id = owner.pk if owner else None
+    if deal.owner_id == owner_id:
+        return False
+    deal.owner = owner
+    deal.save(update_fields=[OWNER, "modified_at"])
+    data = {"deal_id": deal.pk}
+    activity_service.record(deal.company, ActivityKind.DEAL, f"deal {_note(owner)}", deal=deal, data=data, actor=actor)
+    return True
+
+
 def assign(channel: Channel, company_ids: list[int], owner: AbstractBaseUser | None, *, actor: str) -> int:
     """Bulk assign (≤ `ASSIGN_LIMIT` ids, every one a company of the channel, else `ValueError`); returns how many
     companies changed owner. One update and one Activity insert for the batch."""
@@ -107,8 +119,9 @@ def adopt(company: Company, owner_id: int | None) -> bool:
     return True
 
 
-def filter_by_owner(companies: QuerySet[Company], value: str, user_id: int | None) -> QuerySet[Company]:
-    """`me` = the caller, `none` = unowned, digits = that user id, blank = any. Joins the owner for the response."""
+def filter_by_owner(companies: QuerySet, value: str, user_id: int | None) -> QuerySet:
+    """`me` = the caller, `none` = unowned, digits = that user id, blank = any. Joins the owner for the response.
+    Companies and deals alike."""
     companies = companies.select_related(OWNER)
     if value == FILTER_ME:
         return companies.filter(owner_id=user_id)
