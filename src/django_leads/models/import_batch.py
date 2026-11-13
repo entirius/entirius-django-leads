@@ -25,6 +25,8 @@ class ImportBatch(BaseModel):
     last_row_done = models.PositiveIntegerField(default=0)
     report = models.JSONField(default=list, blank=True)
     created_by = models.CharField(max_length=150, blank=True, default="")
+    # Every company the import creates enters its first stage with `stage_entered` (one rule evaluation each).
+    run_rules = models.BooleanField(default=False)
 
     class Meta:
         verbose_name_plural = "import batches"

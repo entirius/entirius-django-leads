@@ -27,6 +27,8 @@ class Contact(BaseModel):
     consent_ref = models.IntegerField(null=True, blank=True)
     opt_out_at = models.DateTimeField(null=True, blank=True)
     anonymised_at = models.DateTimeField(null=True, blank=True)
+    # Set by a `wrong_person` reply; the outreach gate refuses the contact from then on.
+    wrong_person_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-is_primary", "last_name", "first_name"]

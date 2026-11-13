@@ -76,6 +76,21 @@ class RuleOutcome(models.TextChoices):
     COOLDOWN = "cooldown", "Cooldown"
 
 
+class StageEvent(models.TextChoices):
+    """Events of the event → stage map; `reply:<class>` falls back to `reply` (`stage_event_service`)."""
+
+    FIRST_SENT = "first_sent", "First mail sent"
+    REPLY = "reply", "Reply"
+    REPLY_INTERESTED = "reply:interested", "Reply: interested"
+    REPLY_NOT_NOW = "reply:not_now", "Reply: not now"
+    REPLY_NOT_INTERESTED = "reply:not_interested", "Reply: not interested"
+    REPLY_OUT_OF_OFFICE = "reply:out_of_office", "Reply: out of office"
+    REPLY_WRONG_PERSON = "reply:wrong_person", "Reply: wrong person"
+    REPLY_UNSUBSCRIBE = "reply:unsubscribe", "Reply: unsubscribe"
+    REPLY_UNCLEAR = "reply:unclear", "Reply: unclear"
+    SEQUENCE_FINISHED = "sequence_finished", "Sequence finished"
+
+
 class ClaimState(models.TextChoices):
     """Lifecycle of a claim around a paid call: `retry` waits for the next rotation or intel retry, `failed` is final."""
 

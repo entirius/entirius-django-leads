@@ -29,6 +29,8 @@ class Company(BaseModel):
     customer_uid = models.UUIDField(null=True, blank=True)
     rotation_count = models.PositiveSmallIntegerField(default=0)
     last_activity_at = models.DateTimeField(null=True, blank=True)
+    # Where the lead came from (free text: a fair, a list, a campaign); the funnel report groups by it.
+    origin = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         verbose_name_plural = "companies"
