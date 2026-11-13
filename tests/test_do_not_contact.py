@@ -178,7 +178,9 @@ def test_hard_bounce_notes_the_contact(shop, hard, noted, django_capture_on_comm
 
 
 def test_wrong_person_reply_flags_and_blocks_the_contact(shop, piotr, django_capture_on_commit_callbacks):
-    reply = SimpleNamespace(pk=9, body_text="", intent="wrong_person", plan_applied={"notify": "medium"})
+    reply = SimpleNamespace(
+        pk=9, body_text="", intent="wrong_person", plan_applied={"notify": "medium"}, received_at=timezone.now()
+    )
     with mock.patch("django_leads.services.alert_service.alert"), django_capture_on_commit_callbacks(execute=True):
         communicator_signals.reply_received.send(sender=Thread, thread=thread(shop), reply=reply)
     piotr.refresh_from_db()

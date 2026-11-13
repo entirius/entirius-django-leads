@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from django.utils import timezone
 from django_communicator import signals as communicator_signals
 from django_communicator.models import Message, Thread
 
@@ -41,7 +42,7 @@ def thread_of(company: Company, email: str = "ola@example-shop-4.test") -> Simpl
 
 def reply(intent: str = "", notify: str | None = None) -> SimpleNamespace:
     plan = {"notify": notify} if notify else {}
-    return SimpleNamespace(pk=9, body_text="Thanks", intent=intent, plan_applied=plan)
+    return SimpleNamespace(pk=9, body_text="Thanks", intent=intent, plan_applied=plan, received_at=timezone.now())
 
 
 def send_reply(company, intent: str = "", notify: str | None = None, capture=None) -> mock.MagicMock:
@@ -104,7 +105,9 @@ def test_apply_moves_through_transition_stage(channel, company):
     put_rule(channel, StageEvent.FIRST_SENT, "contacted")
     moved = stage_event_service.apply(company, StageEvent.FIRST_SENT)
     assert moved.stage.key == "contacted"
-    assert Activity.objects.get(company=company, kind=ActivityKind.STAGE).data == {"from": "new", "to": "contacted"}
+    assert Activity.objects.get(company=company, kind=ActivityKind.STAGE).data == {
+        "from": "new", "to": "contacted", "from_label": "New", "to_label": "Contacted"
+    }  # fmt: skip
 
 
 # --- receivers: first send ---------------------------------------------------------------------------------------
@@ -151,7 +154,7 @@ def test_interested_reply_moves(channel, shop, django_capture_on_commit_callback
     send_reply(shop, "interested", capture=django_capture_on_commit_callbacks)
     assert shop.stage.key == "won"
     data = Activity.objects.get(company=shop, kind=ActivityKind.REPLY).data
-    assert data == {"thread_id": 5, "reply_id": 9, "class": "interested"}
+    assert data == {"event": "reply", "thread_id": 5, "reply_id": 9, "class": "interested"}
 
 
 def test_reply_class_without_own_row_uses_reply(channel, shop, django_capture_on_commit_callbacks):

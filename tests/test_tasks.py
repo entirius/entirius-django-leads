@@ -37,7 +37,7 @@ def piotr(shop) -> Contact:
 def reply(pk: int = 9, intent: str = "", *, needs_review: bool = False, return_date: date | None = None):
     return SimpleNamespace(
         pk=pk, body_text="", intent=intent, needs_review=needs_review, intent_return_date=return_date,
-        plan_applied={"notify": "none"},
+        plan_applied={"notify": "none"}, received_at=timezone.now(),
     )  # fmt: skip
 
 
@@ -213,7 +213,14 @@ def test_a_person_s_task_shows_when_created_and_closed(shop, piotr, django_captu
         task_service.close(task, outcome="meeting on Friday", actor="seller")
     assert timeline(shop) == ["task: Call back", "done: Call back — meeting on Friday"]
     closed = shop.activities.filter(kind=ActivityKind.TASK).order_by("pk").last()
-    assert closed.data == {"task_id": task.pk, "kind": "phone", "status": "done"}
+    created = shop.activities.filter(kind=ActivityKind.TASK).order_by("pk").first()
+    assert created.data == {
+        "task_id": task.pk, "title": "Call back", "kind": "phone", "status": "open", "event": "task_created",
+    }  # fmt: skip
+    assert closed.data == {
+        "task_id": task.pk, "title": "Call back", "kind": "phone", "status": "done", "event": "task_done",
+        "outcome": "meeting on Friday",
+    }  # fmt: skip
     assert (closed.contact, closed.actor) == (piotr, "seller")
 
 

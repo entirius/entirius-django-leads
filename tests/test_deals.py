@@ -244,10 +244,17 @@ def test_a_deal_goes_open_won_reopened_lost(admin_api, pipeline, company, django
         "deal won -> offer",
         "deal offer -> lost",
     ]
+    events = [activity.data["event"] for activity in Activity.objects.filter(deal_id=deal_id).order_by("pk")]
+    assert events == ["deal_opened", "deal_won", "deal_reopened", "deal_lost"]
     assert Activity.objects.filter(deal_id=deal_id).order_by("pk").last().data == {
         "deal_id": deal_id,
+        "title": "Shop audit",
+        "event": "deal_lost",
         "from": "offer",
         "to": "lost",
+        "from_stage": "Offer",
+        "to_stage": "Lost",
+        "reason": "budget cut",
     }
 
 
@@ -288,7 +295,7 @@ def test_only_an_open_deal_can_be_deleted(admin_api, pipeline, company):
     assert admin_api.delete(api_url(f"deals/{second}/")).status_code == 409
     assert admin_api.delete(api_url(f"deals/{first}/")).status_code == 204
     deleted = Activity.objects.get(message="deal deleted: Shop audit")
-    assert deleted.data == {"deal_id": first}
+    assert deleted.data == {"deal_id": first, "event": "deal_deleted", "title": "Shop audit"}
     assert not Activity.objects.filter(deal_id=first).exists()  # entries stay, the link is cleared
 
 
