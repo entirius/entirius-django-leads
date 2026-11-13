@@ -9,6 +9,8 @@ from django_leads.models.channel import Channel
 from django_leads.models.claim import Claim
 from django_leads.models.company import Company
 from django_leads.models.contact import Contact
+from django_leads.models.deal import Deal
+from django_leads.models.deal_stage import DealStage
 from django_leads.models.erased_address import ErasedAddress
 from django_leads.models.import_batch import ImportBatch
 from django_leads.models.lead_type import LeadType
@@ -27,6 +29,8 @@ __all__ = [
     "Claim",
     "Company",
     "Contact",
+    "Deal",
+    "DealStage",
     "ErasedAddress",
     "ImportBatch",
     "LeadType",

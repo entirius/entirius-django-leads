@@ -14,6 +14,10 @@ class Activity(models.Model):
     contact = models.ForeignKey(
         "django_leads.Contact", on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
     )
+    # The deal the entry is about; the entry stays on the company's timeline when the deal is deleted.
+    deal = models.ForeignKey(
+        "django_leads.Deal", on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    )
     kind = models.CharField(max_length=32, choices=ActivityKind.choices)
     message = models.CharField(max_length=255)
     data = models.JSONField(default=dict, blank=True)

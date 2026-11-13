@@ -47,6 +47,7 @@ class ActivityKind(models.TextChoices):
     INTEL_EMPTY = "intel_empty", "Intel empty"
     SCORE = "score", "Score"
     TASK = "task", "Task"
+    DEAL = "deal", "Deal"
 
 
 class ImportStatus(models.TextChoices):
@@ -103,8 +104,21 @@ class ClaimState(models.TextChoices):
     FAILED = "failed", "Failed"
 
 
+class DealStageKind(models.TextChoices):
+    """A deal is open until it enters a `won` or `lost` stage."""
+
+    OPEN = "open", "Open"
+    WON = "won", "Won"
+    LOST = "lost", "Lost"
+
+
+class RecurringPeriod(models.TextChoices):
+    MONTH = "month", "Month"
+    YEAR = "year", "Year"
+
+
 class AttributeEntity(models.TextChoices):
-    """What a custom attribute describes; `deal` is accepted ahead of the deals model."""
+    """What a custom attribute describes."""
 
     COMPANY = "company", "Company"
     CONTACT = "contact", "Contact"
