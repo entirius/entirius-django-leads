@@ -9,6 +9,14 @@ groups:
       - StageEventRule
       - Company
       - Contact
+  - name: attributes
+    title: "Attributes & Scoring"
+    models:
+      - Channel
+      - AttributeDefinition
+      - Company
+      - Contact
+      - ScoringProfile
   - name: timeline
     title: "Activities & Imports"
     models:

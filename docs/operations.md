@@ -29,6 +29,10 @@ same stripped mapping, so a padded header never imports empty values. Columns (a
 - A row without email and without a name creates or matches only the company.
 - A `lead_type` that is not an active lead type of the channel (case-insensitive) imports as `UNKNOWN`, not a skip.
 - An email whose token is in `ErasedAddress` skips the whole row — no company, no contact.
+- `attr.<key>` columns fill company attributes, `contact.attr.<key>` columns contact attributes — read only when the
+  key is an active definition of the channel for that entity. Values are normalised like an API value (a
+  `multiselect` cell is comma-separated, a `bool` cell `true`/`false`/`yes`/`no`/`1`/`0`); a blank cell sets nothing;
+  `required` is not enforced by the import. A matched company or contact gets only the keys it does not hold yet.
 
 ### How a run works
 
@@ -59,7 +63,12 @@ Skipped rows (`{row, reason}`, at most `LEADS_IMPORT_REPORT_MAX`):
 | `invalid_legal_basis` | value outside the `LegalBasis` choices |
 | `too_long:<field>` | a value longer than its column |
 | `erased_address` | the address was erased or anonymised |
+| `bad_attribute:<key>` | an `attr.<key>` / `contact.attr.<key>` value the attribute's kind refuses |
 | `conflict` / `invalid_value` | the database rejected the row alone (integrity / data error) |
+
+Columns the import does not read (unknown names, attribute columns without an active definition) are listed once
+per batch as `{row: 1, reason: "ignored_column:<header>"}` (the header capped at 64 characters); the rows still
+import.
 
 File-level failures end the batch `failed` with `{row: 0, reason}` and never raise: `missing_header`, `csv_error`,
 `encoding_error`, `no_stages`, `database_error` (after the last retry), `internal_error`, `missing_file` (the worker
@@ -79,6 +88,14 @@ Task `django_leads.fail_stale_import_batches` (beat every 10 minutes) returns `{
    Submissions skipped by design (free-mail, unknown channel, erased address) are re-tried by every sweep inside
    those 24 h at no effect.
 
+## Templates: attribute placeholders
+
+The draft context of a communicator template carries the company attributes as `attr` and the contact attributes as
+`contact_attr` next to the flat keys (`company_name`, `domain`, `lead_type`, `industry`, `hooks`, …, unchanged).
+Communicator renders `str.format` placeholders, so a template writes `{attr[size]}` or `{contact_attr[role]}`. Every
+active key is present: a key without a value renders empty, a multiselect as a comma-separated list, a bool as
+`True` / `False`. A key that is not defined at all also renders empty in a fresh draft, never as a render failure.
+
 ## GDPR
 
 | Request | Command | API |
@@ -89,8 +106,9 @@ Task `django_leads.fail_stale_import_batches` (beat every 10 minutes) returns `{
 Export: `{email, generated_at, modules}` from every installed app with a `gdpr` module (leads: `Contact`,
 `Company`, `Activity`). Erasure is irreversible and runs in one transaction: a `note` "gdpr erase requested" on every
 affected company (actor = user or `manage.py`), then every module's hook. Leads remembers the token even when no
-contact matches (so a later import or form cannot re-create the address), anonymises the contacts and scrubs their
-Activities. After commit `contact_anonymised` makes communicator suppress the token on every channel.
+contact matches (so a later import or form cannot re-create the address), anonymises the contacts (their attributes
+cleared — contact attributes are personal data and are part of the export) and scrubs their Activities. Company
+attributes are company data and stay. After commit `contact_anonymised` makes communicator suppress the token on every channel.
 
 A blank address is refused everywhere — it would match every contact without an email.
 

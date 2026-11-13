@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- **Custom attributes.** `AttributeDefinition(channel, entity, key, label, kind, options, required, order,
+  show_in_list, is_active)`, entity `company | contact | deal`, kind `text | number | bool | date | select |
+  multiselect | url`; values in `Company.attributes` / `Contact.attributes` (JSON), validated and normalised only by
+  `attribute_service`. A key may not shadow a built-in fact; the kind is fixed once a value is stored; a definition
+  in use is deactivated, not deleted. API `attributes/` (CRUD, area `leads.settings`); company and contact create /
+  patch take `attributes` (patch merges, `null` removes a key, `required` enforced on create and on a patch touching
+  the key). Company list filter `attr.<key>=<value>` for `show_in_list` select / bool / text attributes, served by a
+  GIN index on `Company.attributes` (migration `0011`).
+- **One accessor of facts.** `fact_service.facts(company, contact=None)` (built-ins plus `attr.<key>` and
+  `contact.attr.<key>`) feeds rule conditions, scoring and the template context; `GET fields/` describes them with
+  kinds and options.
+- **Rule conditions.** `StageRule.conditions` = `[{field, op, value}]`, ops `eq`, `ne`, `in`, `contains`, `gte`,
+  `lte`, `empty`, all must hold; checked at save against `fields/`. Evaluated after the cooldown and before the
+  action: a failing condition is a `skipped` run with Activity `skipped: condition <field>` and starts no cooldown.
+  `require_hooks` / `require_email` stay.
+- **Scoring.** `ScoringProfile(channel, key, thresholds, rules, disqualifiers, is_active)`; points ≥ L → `S1`, ≥ M →
+  `S2`, ≥ S → `S3`, else `S4`, a disqualifier forces `S4`. The result is stored on the company (`score_points`,
+  `score_segment`, `scored_at`) and written to the timeline (Activity `score`, reasons as text and data). API
+  `scoring-profiles/` (CRUD, area `leads.settings`), `POST companies/<id>/score/` (409 `NO_SCORING_PROFILE`), rule
+  action `score`, company list filter `segment` and sort `score_points` (never-scored last).
+- Templates: the draft context adds `attr` and `contact_attr` (`{attr[key]}`; a key without a value renders empty).
+- Import: `attr.<key>` / `contact.attr.<key>` columns for active definitions (a bad value skips the row with
+  `bad_attribute:<key>`, a matched row gets missing keys only); every column the import does not read is reported
+  once as `{row: 1, reason: "ignored_column:<header>"}`. `CandidateRow` gains `attributes` / `contact_attributes`.
+- GDPR: contact attributes are personal data — exported with the contact, cleared by anonymisation and erasure.
+
 - **Release order:** this release needs entirius-django-communicator 0.5.0 (reply classes and `plan_applied`,
   `message_bounced`, `suppression_service.can_mail` / `explain` / `scope`). Raise the `entirius-django-communicator`
   pin to `>=0.5.0` when releasing this module, once 0.5.0 is on PyPI — leads imports that API directly.

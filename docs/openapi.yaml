@@ -1,4 +1,3 @@
-
 # Generated from the Volkanos service schema (manage.py spectacular), filtered to /api/leads/.
 openapi: 3.1.0
 info:
@@ -227,11 +226,206 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/attributes/:
+    get:
+      operationId: leads_attributes_list
+      summary: Attribute definitions of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: entity
+        schema:
+          type: string
+        description: company, contact or deal.
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_attributes_create
+      description: The key may not be a built-in fact name; options are required for select and multiselect.
+      summary: Define an attribute
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinitionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/attributes/{id}/:
+    get:
+      operationId: api_leads_v2_admin_attributes_retrieve
+      summary: One attribute definition
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_attributes_partial_update
+      description: Entity and key are fixed; changing the kind is a 409 once a value is stored.
+      summary: Update an attribute definition
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinitionUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinitionUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinitionUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_attributes_destroy
+      description: 409 while values are stored — deactivate it instead.
+      summary: Delete an attribute definition
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/:
     get:
       operationId: leads_companies_list
       summary: Companies of the channel
       parameters:
+      - in: query
+        name: attr.<key>
+        schema:
+          type: string
+        description: Exact value of an active company attribute with show_in_list (select, bool or text).
       - in: path
         name: channel_idx
         schema:
@@ -270,6 +464,11 @@ paths:
         schema:
           type: string
         description: Substring of name or domain.
+      - in: query
+        name: segment
+        schema:
+          type: string
+        description: Score segment S1 … S4.
       - in: query
         name: sort
         schema:
@@ -378,8 +577,8 @@ paths:
           description: No response body
     patch:
       operationId: api_leads_v2_admin_companies_partial_update
-      description: Stage, domain, hooks and customer link are not editable here. Turning do_not_contact on suppresses the
-        company's domain in communicator; turning it off removes that suppression.
+      description: Stage, domain, hooks, score and customer link are not editable here; `attributes` is merged (null removes
+        a key). Turning do_not_contact on suppresses the company's domain in communicator; turning it off removes that suppression.
       summary: Update editable company fields
       parameters:
       - in: path
@@ -586,6 +785,44 @@ paths:
         '403':
           description: No response body
         '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/score/:
+    post:
+      operationId: api_leads_v2_admin_companies_score_create
+      description: Stores score_points, score_segment and scored_at and writes the reasons to the timeline; 409 NO_SCORING_PROFILE
+        when the channel has no active profile.
+      summary: Score a company now
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
           description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/transition/:
     post:
@@ -827,6 +1064,36 @@ paths:
           description: ''
         '204':
           description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/fields/:
+    get:
+      operationId: leads_fields_list
+      description: Built-in facts, then the active company attributes as attr.<key>, with kinds and options.
+      summary: Facts rule conditions and scoring rules may name
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldListResponse'
+          description: ''
         '400':
           description: No response body
         '401':
@@ -1561,6 +1828,187 @@ paths:
         required: true
       tags:
       - Leads Rules
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/:
+    get:
+      operationId: leads_scoring_profiles_list
+      summary: Scoring profiles of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_scoring_profiles_create
+      description: Every rule and disqualifier must name a field of `fields/` with an op its kind takes (400).
+      summary: Add a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/{id}/:
+    get:
+      operationId: api_leads_v2_admin_scoring_profiles_retrieve
+      summary: One scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_scoring_profiles_partial_update
+      summary: Update a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_scoring_profiles_destroy
+      summary: Delete a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
       security:
       - jwtAuth: []
       responses:
@@ -2384,6 +2832,204 @@ components:
       - is_active
       title: AnalysisProfileResponse
       type: object
+    AttributeDefinitionListResponse:
+      properties:
+        results:
+          description: Definitions by entity, then display order.
+          items:
+            $ref: '#/components/schemas/AttributeDefinitionResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: AttributeDefinitionListResponse
+      type: object
+    AttributeDefinitionRequest:
+      additionalProperties: false
+      properties:
+        entity:
+          $ref: '#/components/schemas/AttributeEntity'
+          description: company, contact or deal.
+          examples:
+          - company
+        key:
+          description: Slug.
+          examples:
+          - size
+          maxLength: 48
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_]*$
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Company size
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+        kind:
+          $ref: '#/components/schemas/AttributeKind'
+          description: text, number, bool, date, select, multiselect or url.
+        options:
+          description: Choices; required for the select kinds.
+          items:
+            $ref: '#/components/schemas/AttributeOption'
+          title: Options
+          type: array
+        required:
+          default: false
+          description: A value is required on create and may not be removed.
+          title: Required
+          type: boolean
+        order:
+          default: 0
+          description: Display order.
+          maximum: 32767
+          minimum: 0
+          title: Order
+          type: integer
+        show_in_list:
+          default: false
+          description: Shown and filterable in the company list.
+          title: Show In List
+          type: boolean
+        is_active:
+          default: true
+          description: Accepted in values, conditions, imports and templates.
+          title: Is Active
+          type: boolean
+      required:
+      - entity
+      - key
+      - label
+      - kind
+      title: AttributeDefinitionRequest
+      type: object
+    AttributeDefinitionResponse:
+      properties:
+        id:
+          description: Definition id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        entity:
+          description: company, contact or deal.
+          examples:
+          - company
+          title: Entity
+          type: string
+        key:
+          description: Slug; the key in `attributes`, `attr.<key>` as a fact.
+          examples:
+          - size
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Company size
+          title: Label
+          type: string
+        kind:
+          description: text, number, bool, date, select, multiselect or url.
+          examples:
+          - select
+          title: Kind
+          type: string
+        options:
+          description: Choices {value, label}.
+          examples:
+          - - label: S
+              value: s
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          title: Options
+          type: array
+        required:
+          description: Required on create and on a patch touching the key.
+          examples:
+          - false
+          title: Required
+          type: boolean
+        order:
+          description: Display order.
+          examples:
+          - 0
+          title: Order
+          type: integer
+        show_in_list:
+          description: Shown and filterable in the company list.
+          examples:
+          - true
+          title: Show In List
+          type: boolean
+        is_active:
+          description: Accepted in values, conditions, imports and templates.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - entity
+      - key
+      - label
+      - kind
+      - options
+      - required
+      - order
+      - show_in_list
+      - is_active
+      title: AttributeDefinitionResponse
+      type: object
+    AttributeEntity:
+      description: What a custom attribute describes; `deal` is accepted ahead of the deals model.
+      enum:
+      - company
+      - contact
+      - deal
+      title: AttributeEntity
+      type: string
+    AttributeKind:
+      enum:
+      - text
+      - number
+      - bool
+      - date
+      - select
+      - multiselect
+      - url
+      title: AttributeKind
+      type: string
+    AttributeOption:
+      additionalProperties: false
+      properties:
+        value:
+          description: Stored value.
+          examples:
+          - micro
+          maxLength: 64
+          minLength: 1
+          title: Value
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Micro (1-9)
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+      required:
+      - value
+      - label
+      title: AttributeOption
+      type: object
     AuditRequestedResponse:
       properties:
         audit_id:
@@ -2497,6 +3143,12 @@ components:
           maxLength: 128
           title: Industry
           type: string
+        attributes:
+          additionalProperties: true
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
+          type: object
       required:
       - domain
       title: CompanyCreateRequest
@@ -2615,6 +3267,36 @@ components:
           - fair
           title: Origin
           type: string
+        attributes:
+          additionalProperties: true
+          description: Company attribute values by key.
+          examples:
+          - size: micro
+          title: Attributes
+          type: object
+        score_points:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Points of the last scoring; null = never scored.
+          examples:
+          - 45
+          title: Score Points
+        score_segment:
+          description: S1 (best) … S4 of the last scoring; empty = never scored.
+          examples:
+          - S2
+          title: Score Segment
+          type: string
+        scored_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Last scored.
+          examples:
+          - null
+          title: Scored At
         contacts:
           description: Contacts of the company.
           items:
@@ -2653,6 +3335,10 @@ components:
       - rotation_count
       - last_activity_at
       - origin
+      - attributes
+      - score_points
+      - score_segment
+      - scored_at
       - contacts
       - activities
       title: CompanyDetailResponse
@@ -2808,6 +3494,36 @@ components:
           - fair
           title: Origin
           type: string
+        attributes:
+          additionalProperties: true
+          description: Company attribute values by key.
+          examples:
+          - size: micro
+          title: Attributes
+          type: object
+        score_points:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Points of the last scoring; null = never scored.
+          examples:
+          - 45
+          title: Score Points
+        score_segment:
+          description: S1 (best) … S4 of the last scoring; empty = never scored.
+          examples:
+          - S2
+          title: Score Segment
+          type: string
+        scored_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Last scored.
+          examples:
+          - null
+          title: Scored At
       required:
       - id
       - name
@@ -2827,8 +3543,50 @@ components:
       - rotation_count
       - last_activity_at
       - origin
+      - attributes
+      - score_points
+      - score_segment
+      - scored_at
       title: CompanyResponse
       type: object
+    Condition:
+      additionalProperties: false
+      description: Shape only — whether the field exists and takes the op is the service's call (`condition_service`).
+      properties:
+        field:
+          description: A fact name from `fields/`.
+          examples:
+          - attr.size
+          maxLength: 64
+          minLength: 1
+          title: Field
+          type: string
+        op:
+          $ref: '#/components/schemas/ConditionOp'
+          description: eq, ne, in, contains, gte, lte or empty.
+          examples:
+          - eq
+        value:
+          default: null
+          description: Compared value; a list for in, a bool for empty (default true).
+          title: Value
+      required:
+      - field
+      - op
+      title: Condition
+      type: object
+    ConditionOp:
+      description: Operators of rule conditions and scoring rules; which apply to which kind is `condition_service.OPS_BY_KIND`.
+      enum:
+      - eq
+      - ne
+      - in
+      - contains
+      - gte
+      - lte
+      - empty
+      title: ConditionOp
+      type: string
     ContactCreateRequest:
       additionalProperties: false
       properties:
@@ -2898,6 +3656,15 @@ components:
           default: null
           description: Where consent was given (document, call, form); required when legal_basis is consent.
           title: Consent Ref
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
       required:
       - company_id
       title: ContactCreateRequest
@@ -3038,6 +3805,13 @@ components:
           examples:
           - null
           title: Wrong Person At
+        attributes:
+          additionalProperties: true
+          description: Contact attribute values by key.
+          examples:
+          - role: buyer
+          title: Attributes
+          type: object
       required:
       - id
       - company_id
@@ -3053,6 +3827,7 @@ components:
       - opt_out_at
       - anonymised_at
       - wrong_person_at
+      - attributes
       title: ContactResponse
       type: object
     ContactStrategy:
@@ -3170,6 +3945,39 @@ components:
       - rotated
       title: DevRotateResponse
       type: object
+    Disqualifier:
+      additionalProperties: false
+      properties:
+        field:
+          description: A fact name from `fields/`.
+          examples:
+          - attr.size
+          maxLength: 64
+          minLength: 1
+          title: Field
+          type: string
+        op:
+          $ref: '#/components/schemas/ConditionOp'
+          description: eq, ne, in, contains, gte, lte or empty.
+          examples:
+          - eq
+        value:
+          default: null
+          description: Compared value; a list for in, a bool for empty (default true).
+          title: Value
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - Too small
+          maxLength: 128
+          title: Label
+          type: string
+      required:
+      - field
+      - op
+      title: Disqualifier
+      type: object
     DraftResponse:
       properties:
         message_id:
@@ -3188,6 +3996,86 @@ components:
       - message_id
       - status
       title: DraftResponse
+      type: object
+    FieldListResponse:
+      properties:
+        results:
+          description: Built-in facts, then active company attributes.
+          items:
+            $ref: '#/components/schemas/FieldResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: FieldListResponse
+      type: object
+    FieldOptionResponse:
+      properties:
+        value:
+          examples:
+          - red
+          title: Value
+          type: string
+        label:
+          examples:
+          - Red
+          title: Label
+          type: string
+      required:
+      - value
+      - label
+      title: FieldOptionResponse
+      type: object
+    FieldResponse:
+      description: '`GET fields/` item — one writable field of the adapter''s catalog (contract A3 § 2).'
+      properties:
+        key:
+          examples:
+          - meta_title
+          title: Key
+          type: string
+        label:
+          examples:
+          - Meta title
+          title: Label
+          type: string
+        type:
+          description: text | html | select | multiselect
+          examples:
+          - text
+          title: Type
+          type: string
+        max_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          examples:
+          - 60
+          title: Max Length
+        translatable:
+          default: true
+          title: Translatable
+          type: boolean
+        options:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/FieldOptionResponse'
+            type: array
+          - type: 'null'
+          default: null
+          title: Options
+        options_truncated:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          title: Options Truncated
+      required:
+      - key
+      - label
+      - type
+      title: FieldResponse
       type: object
     FunnelOrigin:
       properties:
@@ -3852,6 +4740,66 @@ components:
           title: Is Active
       title: AnalysisProfileUpdateRequest
       type: object
+    PatchedAttributeDefinitionUpdateRequest:
+      additionalProperties: false
+      description: Entity and key are fixed after create; the kind only while no value is stored.
+      properties:
+        label:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Label.
+          title: Label
+        kind:
+          anyOf:
+          - $ref: '#/components/schemas/AttributeKind'
+          - type: 'null'
+          default: null
+          description: Refused (409) once a value is stored.
+        options:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/AttributeOption'
+            type: array
+          - type: 'null'
+          default: null
+          description: Choices of the select kinds.
+          title: Options
+        required:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Required on create and on a patch touching the key.
+          title: Required
+        order:
+          anyOf:
+          - maximum: 32767
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: Display order.
+          title: Order
+        show_in_list:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Shown and filterable in the company list.
+          title: Show In List
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Accepted in values, conditions, imports and templates.
+          title: Is Active
+      title: AttributeDefinitionUpdateRequest
+      type: object
     PatchedCompanyUpdateRequest:
       additionalProperties: false
       properties:
@@ -3921,6 +4869,15 @@ components:
           default: null
           description: Where the lead came from.
           title: Origin
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
       title: CompanyUpdateRequest
       type: object
     PatchedContactUpdateRequest:
@@ -3996,6 +4953,15 @@ components:
           default: null
           description: Where consent was given (document, call, form); required when legal_basis is consent.
           title: Consent Ref
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
       title: ContactUpdateRequest
       type: object
     PatchedLeadTypeUpdateRequest:
@@ -4091,7 +5057,7 @@ components:
           - $ref: '#/components/schemas/RuleAction'
           - type: 'null'
           default: null
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           anyOf:
           - maxLength: 128
@@ -4145,7 +5111,61 @@ components:
           default: null
           description: Evaluation order.
           title: Order
+        conditions:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/Condition'
+            type: array
+          - type: 'null'
+          default: null
+          description: All must hold, else the run is skipped.
+          title: Conditions
       title: RuleUpdateRequest
+      type: object
+    PatchedScoringProfileUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_.]+$
+            type: string
+          - type: 'null'
+          default: null
+          title: Key
+        thresholds:
+          anyOf:
+          - $ref: '#/components/schemas/Thresholds'
+          - type: 'null'
+          default: null
+          description: S <= M <= L.
+        rules:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ScoringRule'
+            type: array
+          - type: 'null'
+          default: null
+          description: Points per matching condition.
+          title: Rules
+        disqualifiers:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/Disqualifier'
+            type: array
+          - type: 'null'
+          default: null
+          description: A match forces S4.
+          title: Disqualifiers
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: The first active profile by key is used.
+          title: Is Active
+      title: ScoringProfileUpdateRequest
       type: object
     PatchedStageUpdateRequest:
       additionalProperties: false
@@ -4362,6 +5382,7 @@ components:
       enum:
       - request_audit
       - communicate
+      - score
       title: RuleAction
       type: string
     RuleListResponse:
@@ -4396,7 +5417,7 @@ components:
         action:
           $ref: '#/components/schemas/RuleAction'
           default: communicate
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           default: ''
           description: Communicator template; for communicate.
@@ -4436,6 +5457,12 @@ components:
           minimum: 0
           title: Order
           type: integer
+        conditions:
+          description: All must hold, else the run is skipped.
+          items:
+            $ref: '#/components/schemas/Condition'
+          title: Conditions
+          type: array
       required:
       - trigger
       title: RuleRequest
@@ -4463,7 +5490,7 @@ components:
           - 102
           title: Stage Id
         action:
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
           examples:
           - communicate
           title: Action
@@ -4510,6 +5537,17 @@ components:
           - 0
           title: Order
           type: integer
+        conditions:
+          description: 'All must hold: {field, op, value}.'
+          examples:
+          - - field: attr.size
+              op: eq
+              value: s
+          items:
+            additionalProperties: true
+            type: object
+          title: Conditions
+          type: array
       required:
       - id
       - trigger
@@ -4522,6 +5560,7 @@ components:
       - cooldown_hours
       - is_active
       - order
+      - conditions
       title: RuleResponse
       type: object
     RuleRunListResponse:
@@ -4615,6 +5654,236 @@ components:
       - intel_ready
       title: RuleTrigger
       type: string
+    ScoreReason:
+      properties:
+        field:
+          description: Fact the rule named.
+          examples:
+          - lead_type
+          title: Field
+          type: string
+        kind:
+          description: rule or disqualifier.
+          examples:
+          - rule
+          title: Kind
+          type: string
+        points:
+          description: Points it added (0 for a disqualifier).
+          examples:
+          - 30
+          title: Points
+          type: integer
+        label:
+          description: Label of the rule.
+          examples:
+          - Retailer
+          title: Label
+          type: string
+      required:
+      - field
+      - kind
+      - points
+      - label
+      title: ScoreReason
+      type: object
+    ScoreResponse:
+      properties:
+        segment:
+          description: S1 (best) … S4.
+          examples:
+          - S2
+          title: Segment
+          type: string
+        points:
+          description: Sum of the matching rules.
+          examples:
+          - 45
+          title: Points
+          type: integer
+        disqualified:
+          description: A disqualifier matched (S4).
+          examples:
+          - false
+          title: Disqualified
+          type: boolean
+        reasons:
+          description: Reasons as text.
+          examples:
+          - - 'Retailer: +30'
+          items:
+            type: string
+          title: Reasons
+          type: array
+        reasons_structured:
+          description: Reasons as data.
+          items:
+            $ref: '#/components/schemas/ScoreReason'
+          title: Reasons Structured
+          type: array
+        profile_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Profile used.
+          examples:
+          - 100
+          title: Profile Id
+      required:
+      - segment
+      - points
+      - disqualified
+      - reasons
+      - reasons_structured
+      - profile_id
+      title: ScoreResponse
+      type: object
+    ScoringProfileListResponse:
+      properties:
+        results:
+          description: Profiles by key.
+          items:
+            $ref: '#/components/schemas/ScoringProfileResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ScoringProfileListResponse
+      type: object
+    ScoringProfileRequest:
+      additionalProperties: false
+      properties:
+        key:
+          default: leads.scoring
+          description: Profile key.
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_.]+$
+          title: Key
+          type: string
+        thresholds:
+          $ref: '#/components/schemas/Thresholds'
+          description: S <= M <= L.
+        rules:
+          description: Points per matching condition.
+          items:
+            $ref: '#/components/schemas/ScoringRule'
+          title: Rules
+          type: array
+        disqualifiers:
+          description: A match forces S4.
+          items:
+            $ref: '#/components/schemas/Disqualifier'
+          title: Disqualifiers
+          type: array
+        is_active:
+          default: true
+          description: The first active profile by key is used.
+          title: Is Active
+          type: boolean
+      required:
+      - thresholds
+      title: ScoringProfileRequest
+      type: object
+    ScoringProfileResponse:
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.scoring
+          title: Key
+          type: string
+        thresholds:
+          additionalProperties:
+            type: integer
+          description: S <= M <= L.
+          examples:
+          - L: 70
+            M: 40
+            S: 20
+          title: Thresholds
+          type: object
+        rules:
+          description: '{field, op, value, points, label}.'
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Rules
+          type: array
+        disqualifiers:
+          description: '{field, op, value, label}.'
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Disqualifiers
+          type: array
+        is_active:
+          description: The first active profile by key is used.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - key
+      - thresholds
+      - rules
+      - disqualifiers
+      - is_active
+      title: ScoringProfileResponse
+      type: object
+    ScoringRule:
+      additionalProperties: false
+      properties:
+        field:
+          description: A fact name from `fields/`.
+          examples:
+          - attr.size
+          maxLength: 64
+          minLength: 1
+          title: Field
+          type: string
+        op:
+          $ref: '#/components/schemas/ConditionOp'
+          description: eq, ne, in, contains, gte, lte or empty.
+          examples:
+          - eq
+        value:
+          default: null
+          description: Compared value; a list for in, a bool for empty (default true).
+          title: Value
+        points:
+          description: Added when the condition holds.
+          examples:
+          - 30
+          maximum: 1000
+          minimum: -1000
+          title: Points
+          type: integer
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - Retailer
+          maxLength: 128
+          title: Label
+          type: string
+      required:
+      - field
+      - op
+      - points
+      title: ScoringRule
+      type: object
     StageEventListResponse:
       properties:
         results:
@@ -4839,6 +6108,33 @@ components:
       - scope
       - created_at
       title: SuppressionRow
+      type: object
+    Thresholds:
+      additionalProperties: false
+      properties:
+        S:
+          description: Points from which a company is S3.
+          examples:
+          - 20
+          title: S
+          type: integer
+        M:
+          description: Points from which a company is S2.
+          examples:
+          - 40
+          title: M
+          type: integer
+        L:
+          description: Points from which a company is S1.
+          examples:
+          - 70
+          title: L
+          type: integer
+      required:
+      - S
+      - M
+      - L
+      title: Thresholds
       type: object
     TransitionRequest:
       additionalProperties: false

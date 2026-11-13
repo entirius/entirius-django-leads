@@ -14,9 +14,11 @@ from agreements, website facts from siteintel, human attention from notification
 | `Channel` | `idx`, languages, `retention_days` | own scoping model (created in Django admin, never from signals); its `idx` is the same channel in communicator, agreements and siteintel |
 | `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal` | new companies enter the lowest `order`; unique `(channel, key)` |
 | `StageEventRule` | `event`, `target_stage` (null = keep the stage), `forward_only` | the event → stage map; unique `(channel, event)` |
-| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at`, `origin` (free text) | unique `(channel, domain)`; `domain` is always the registrable domain |
+| `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at`, `origin` (free text), `attributes`, `score_points`, `score_segment`, `scored_at` | unique `(channel, domain)`; `domain` is always the registrable domain; GIN index on `attributes` |
 | `LeadType` | `code`, `label`, `order`, `is_active` | configuration per channel, unique `(channel, code)`; `Company.lead_type` holds the code (no FK); `UNKNOWN` is built in, never a row |
-| `Contact` | email, names, job title, phone, language, `is_primary`, `legal_basis`, `opt_out_at`, `anonymised_at`, `wrong_person_at` | unique `(company, email)` for non-empty emails; `legal_basis` null = none recorded |
+| `Contact` | email, names, job title, phone, language, `is_primary`, `legal_basis`, `opt_out_at`, `anonymised_at`, `wrong_person_at`, `attributes` | unique `(company, email)` for non-empty emails; `legal_basis` null = none recorded |
+| `AttributeDefinition` | `entity` (`company`, `contact`, `deal`), `key`, `label`, `kind`, `options`, `required`, `order`, `show_in_list`, `is_active` | unique `(channel, entity, key)`; the kind is fixed once a value is stored |
+| `ScoringProfile` | `key`, `thresholds {S, M, L}`, `rules`, `disqualifiers`, `is_active` | unique `(channel, key)`; the first active profile by key scores the channel |
 | `Activity` | `kind`, `message`, `data`, `actor` per company (and contact) | written only by `activity_service`, which also moves `Company.last_activity_at` |
 | `ImportBatch` | counters, `row_count`, `last_row_done`, `size_bytes`, capped `report` | never the CSV itself |
 | `StageRule` | trigger, stage, action, template, contact strategy, conditions, cooldown, order | evaluated by `rule_service` |
@@ -26,6 +28,29 @@ from agreements, website facts from siteintel, human attention from notification
 | `ErasedAddress` | token of an erased or anonymised address | never the address |
 
 `LeadSource` of companies and contacts: `csv`, `form`, `manual`, `connector`.
+
+## Attributes and facts
+
+A channel defines its own fields (`AttributeDefinition`); their values sit in the entity's `attributes` JSON, written
+only through `attribute_service` (create / patch merge, the CSV import, the import's fill-empty rule) — never set from
+a request dict. Built-in fields (`lead_type`, `industry`, `platform`, `hooks`, …) stay columns: the site audit and the
+lead types write them.
+
+Everything that decides reads a company through one accessor, `fact_service.facts(company, contact=None)`: the
+built-ins `lead_type`, `industry`, `platform`, `domain`, `origin`, `stage` (key), `hooks_count`, `emails_count`
+(contacts with an email, not anonymised), `rotation_count`, `score_points`, `score_segment`, plus `attr.<key>` for
+every active company attribute (`None` without a value) and, given a contact, `contact.attr.<key>`.
+`fact_service.fields(channel)` describes the same names (kind, label, options) for validation and the CMS
+(`GET fields/`). Rule conditions, scoring and the template context use it; the list filter uses the database
+(`attributes @> {key: value}`, served by the GIN index).
+
+## Scoring
+
+`scoring_service.score(company)` sums the `points` of the profile's rules whose condition holds on the facts;
+points ≥ L → `S1`, ≥ M → `S2`, ≥ S → `S3`, else `S4`; a matching disqualifier forces `S4`. No toolbox, no network.
+`score_and_record` stores `score_points`, `score_segment`, `scored_at` on the company and writes Activity `score`
+with the reasons as text (`Retailer: +30`, `disqualified: <label>`) and as data (`{field, kind, points, label}`). It
+runs from `POST companies/<id>/score/` and from the rule action `score`.
 
 ## Deduplication
 
@@ -93,7 +118,9 @@ stage) by `order`, each in three phases:
 1. **Claim, under the company row lock** on the re-read row. A run of (rule, company, `event`) already exists →
    returned, nothing runs again (`event` = `stage:<id>:<entered_at>` from `stage_entered`, `audit:<id>` from intel;
    empty = no dedupe). Then in order: `do_not_contact` → `blocked`; a `fired` or in-flight run inside
-   `cooldown_hours` → `cooldown`; action `request_audit` → siteintel audit, `fired`; `require_hooks` without hooks →
+   `cooldown_hours` → `cooldown`; a `conditions` entry that does not hold → `skipped` with Activity `skipped: condition
+<field>` (no cooldown starts); action `score` → `scoring_service.score_and_record`, `fired` (`skipped: no scoring
+profile` without one); action `request_audit` → siteintel audit, `fired`; `require_hooks` without hooks →
    `skipped`; `require_email` without a candidate contact → `skipped`; otherwise the run is written `claimed`.
 2. **Outreach, outside the lock.** Recipient pick among gate-eligible contacts (none → `blocked:
    no_eligible_contact`, no toolbox call), then `outreach_service.request_draft`.
@@ -181,9 +208,10 @@ off → Activity `skipped: AI toolbox disabled`, claim `retry` with no failure c
 ## GDPR and retention
 
 Rows are never deleted. Retention and erasure pseudonymise a contact: email → deterministic token
-`anon-<sha256[:16]>@LEADS_ANONYMISED_DOMAIN`, names, job title and phone cleared, `anonymised_at` set, token kept in
+`anon-<sha256[:16]>@LEADS_ANONYMISED_DOMAIN`, names, job title, phone and contact attributes cleared, `anonymised_at` set, token kept in
 `ErasedAddress`, Activity `anonymised` with `email_hash`, `contact_anonymised` on commit — once, under a row lock.
-Company, stage, hooks, counters and timeline stay. An erased address is never re-imported (`erased_address`) nor
+Company (and its attributes — company data), stage, hooks, counters and timeline stay. The GDPR export lists the
+contact attributes with the contact. An erased address is never re-imported (`erased_address`) nor
 re-created from a form.
 
 GDPR hooks: every installed app's top-level `<app>.gdpr` module with `gdpr_export(email) -> dict` and

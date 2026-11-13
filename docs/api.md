@@ -22,11 +22,12 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), paging | 200 `CompanyListResponse` |
-| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry` | 201 `CompanyDetailResponse`; Activity `note` "company created" |
+| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `score_points` — never-scored companies last either way; `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), `segment` (`S1`–`S4`), `attr.<key>` (exact value of an active company attribute with `show_in_list` of kind `select`, `bool` or `text`; any other key is a 400), paging | 200 `CompanyListResponse` |
+| POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry`, `attributes` (every `required` company attribute must be given) | 201 `CompanyDetailResponse`; Activity `note` "company created" |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
-| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64) | 200 `CompanyDetailResponse` |
+| PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64), `attributes` (merged: given keys are set, a `null` key is removed; a required key may not be removed) | 200 `CompanyDetailResponse` |
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
+| POST | `<channel_idx>/companies/<id>/score/` | — | 200 `ScoreResponse` `{segment, points, disqualified, reasons, reasons_structured: [{field, kind, points, label}], profile_id}`; stores `score_points`, `score_segment`, `scored_at`; Activity `score` with the reasons |
 | POST | `<channel_idx>/companies/<id>/communicate/` | `template_key`, `contact_id` | 201 `{message_id, status}` — a reviewable communicator draft |
 | GET | `<channel_idx>/companies/<id>/contacts/<contact_id>/mailable/` | — | 200 `MailableResponse` |
 | POST | `<channel_idx>/companies/<id>/request-audit/` | — | 202 `{audit_id, status}`; Activity `intel` "audit requested" |
@@ -34,10 +35,12 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 `CompanyResponse`: `id, name, domain, website, lead_type, industry, description, platform, hooks, stage
 {id, key, label, order, kind, is_terminal}, stage_entered_at, source, external_ref, do_not_contact,
-customer_uid, rotation_count, last_activity_at, origin`. `CompanyDetailResponse` adds `contacts` (all), `activities`
+customer_uid, rotation_count, last_activity_at, origin, attributes, score_points (null = never scored), score_segment
+("" = never scored), scored_at`. `CompanyDetailResponse` adds `contacts` (all), `activities`
 (last 20, newest first) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
-the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks` and `customer_uid` are not
-writable here.
+the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks`, the score fields and `customer_uid`
+are not writable here. A refused attribute (unknown or inactive key, a value its kind refuses, a missing required
+key) is a 400 on `attributes`.
 
 `communicate/` skips rule conditions and cooldown, not the outreach gate (`concept.md` § Outreach gate).
 `create-customer/` links the Customer owning the primary contact's email through a **verified** allauth
@@ -55,13 +58,14 @@ reason, verified_at} | null}`), `retention {days, due_at, exempt_won}` (`due_at`
 | Method | Path | Body / params | Success |
 |---|---|---|---|
 | GET | `<channel_idx>/contacts/` | `company` (id), paging | 200 `ContactListResponse` |
-| POST | `<channel_idx>/contacts/` | `company_id` (required), `email`, `first_name`, `last_name`, `job_title`, `phone`, `language` (ISO 639-1), `is_primary`, `legal_basis`, `consent_ref` | 201 `ContactResponse` |
+| POST | `<channel_idx>/contacts/` | `company_id` (required), `email`, `first_name`, `last_name`, `job_title`, `phone`, `language` (ISO 639-1), `is_primary`, `legal_basis`, `consent_ref`, `attributes` (every `required` contact attribute must be given) | 201 `ContactResponse` |
 | GET | `<channel_idx>/contacts/<id>/` | — | 200 `ContactResponse` |
-| PATCH | `<channel_idx>/contacts/<id>/` | any of `email` (only while the contact has none), `first_name`, `last_name`, `job_title`, `phone`, `language` (null clears), `is_primary`, `legal_basis` (null clears), `consent_ref` | 200 `ContactResponse` |
+| PATCH | `<channel_idx>/contacts/<id>/` | any of `email` (only while the contact has none), `first_name`, `last_name`, `job_title`, `phone`, `language` (null clears), `is_primary`, `legal_basis` (null clears), `consent_ref`, `attributes` (merged; a `null` key is removed) | 200 `ContactResponse` |
 | DELETE | `<channel_idx>/contacts/<id>/` | — | 204 — the contact was never used and is deleted; 200 `ContactResponse` — it was used and is anonymised instead |
 
 `ContactResponse`: `id, company_id, email, first_name, last_name, job_title, phone, language, is_primary, source,
-legal_basis, opt_out_at, anonymised_at, wrong_person_at`. `email` is set once: a contact without one may get it by PATCH (409
+legal_basis, opt_out_at, anonymised_at, wrong_person_at, attributes`. Contact attributes are personal data: GDPR
+export includes them, anonymisation and erasure clear them. `email` is set once: a contact without one may get it by PATCH (409
 `CONTACT_EXISTS` when the company already has it), a set email never changes (400). `legal_basis` is one of
 `consent`, `legitimate_interest`, `contract`; `consent` requires a non-blank `consent_ref` (≤ 255), recorded in the
 `legal_basis` Activity as `admin:<user>:<consent_ref>`; other bases as `admin:<user>`.
@@ -98,6 +102,47 @@ The event → stage map (`concept.md` § Event → stage map); area `leads.setti
 | DELETE | `<channel_idx>/stage-events/<event>/` | — | 204 — the event moves nothing any more |
 
 `StageEventResponse`: `event, target_stage_key, forward_only, configured` (false = no row: the event moves nothing).
+
+## Attributes and fields
+
+A channel defines its own fields for companies, contacts and deals (`deal` is accepted ahead of the deals model).
+Values live in the entity's `attributes` and are written only through company / contact create and patch, and the
+CSV import. Values are stored normalised: `number` → decimal string (at most 30 digits), `date` → ISO date, `bool` → bool, `select` → one
+listed value, `multiselect` → a list of listed values, `url` → http(s) URL, `text` → at most 2 000 characters, never
+interpreted as HTML.
+
+| Method | Path | Body / params | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/attributes/` | `entity` (`company`, `contact`, `deal`) | 200 `{results: [AttributeDefinitionResponse]}` by entity, then `order` |
+| POST | `<channel_idx>/attributes/` | `entity`, `key` (`^[a-z][a-z0-9_]*$`, ≤ 48, not a built-in fact name), `label`, `kind` (`text`, `number`, `bool`, `date`, `select`, `multiselect`, `url`), `options` (`[{value, label}]`, required for the select kinds, refused for the others), `required`, `order`, `show_in_list`, `is_active` | 201 `AttributeDefinitionResponse` |
+| GET | `<channel_idx>/attributes/<id>/` | — | 200 `AttributeDefinitionResponse` |
+| PATCH | `<channel_idx>/attributes/<id>/` | any of `label`, `kind` (409 once a value is stored or a condition names it), `options`, `required`, `order`, `show_in_list`, `is_active`, no nulls — entity and key are fixed | 200 `AttributeDefinitionResponse` |
+| DELETE | `<channel_idx>/attributes/<id>/` | — | 204; 409 while values are stored (deactivate instead) |
+| GET | `<channel_idx>/fields/` | — | 200 `{results: [{name, kind, label, options}]}` |
+
+`required` is enforced on create and on a patch that touches the key, never retroactively. An inactive definition
+keeps its stored values but is refused in new values, conditions, imports and list filters.
+
+`fields/` lists every fact a rule condition or a scoring rule may name: the built-ins `lead_type` (select of the
+active lead types and `UNKNOWN`), `industry`, `platform`, `domain`, `origin` (text), `stage` (select of the stage
+keys), `hooks_count`, `emails_count`, `rotation_count`, `score_points` (number), `score_segment` (select `S1`–`S4`),
+then `attr.<key>` for every active company attribute. Area `leads.settings`.
+
+A scoring profile PATCH re-checks only the fields it carries: a profile whose attribute was deactivated can still be
+switched off, while re-saving its rules is refused until they name known fields. A condition whose stored value no
+longer fits the fact never matches (a definition named by a condition keeps its kind).
+
+## Scoring profiles
+
+| Method | Path | Body | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/scoring-profiles/` | — | 200 `{results: [ScoringProfileResponse]}` by key |
+| POST | `<channel_idx>/scoring-profiles/` | `key` (default `leads.scoring`), `thresholds` `{S, M, L}` (integers, S ≤ M ≤ L), `rules` `[{field, op, value, points, label}]`, `disqualifiers` `[{field, op, value, label}]`, `is_active` | 201 `ScoringProfileResponse` |
+| GET / PATCH / DELETE | `<channel_idx>/scoring-profiles/<id>/` | PATCH: any field of POST, no nulls | 200 / 200 / 204 |
+
+The first active profile by key scores the channel. Points ≥ L → `S1`, ≥ M → `S2`, ≥ S → `S3`, else `S4`; a matching
+disqualifier forces `S4`. Rules and disqualifiers are conditions (§ Rules) — an unknown field or an op its kind does
+not take is a 400 at save.
 
 ## Lead types
 
@@ -147,7 +192,7 @@ companies}]` (companies created in the period). Dates filter moves and creations
 | Method | Path | Body / params | Success |
 |---|---|---|---|
 | GET | `<channel_idx>/rules/` | — | 200 `{results: [RuleResponse]}` in evaluation order |
-| POST | `<channel_idx>/rules/` | `trigger` (`stage_entered`, `intel_ready`; required), `stage_id` (required for `stage_entered`), `action` (`communicate` default, `request_audit`), `template_key` (required for `communicate`), `contact_strategy` (`primary`, `ai_pick`), `require_hooks` (true), `require_email` (true), `cooldown_hours` (24, 0–8760), `is_active`, `order` | 201 `RuleResponse` |
+| POST | `<channel_idx>/rules/` | `trigger` (`stage_entered`, `intel_ready`; required), `stage_id` (required for `stage_entered`), `action` (`communicate` default, `request_audit`, `score`), `template_key` (required for `communicate`), `contact_strategy` (`primary`, `ai_pick`), `require_hooks` (true), `require_email` (true), `cooldown_hours` (24, 0–8760), `is_active`, `order`, `conditions` (`[{field, op, value}]`, all must hold) | 201 `RuleResponse` |
 | GET / PATCH / DELETE | `<channel_idx>/rules/<id>/` | PATCH: any field of POST, null only for `stage_id` | 200 / 200 / 204 (runs deleted with the rule) |
 | GET | `<channel_idx>/rule-runs/` | `company` (id), paging | 200 `RuleRunListResponse` — `id, rule_id, company_id, fired_at, outcome (fired|skipped|blocked|cooldown, empty while claimed), detail` |
 | GET | `<channel_idx>/analysis-profiles/` | — | 200 `{results: [{id, key, model, is_active}]}` |
@@ -158,6 +203,21 @@ companies}]` (companies created in the period). Dates filter moves and creations
 | GET / PATCH / DELETE | `<channel_idx>/recipient-profiles/<id>/` | PATCH: any field, no nulls | 200 / 200 / 204 |
 
 Lists never carry `prompt_text`. `require_legal_basis` exists on the model but is not exposed and has no effect.
+
+**Conditions** (`StageRule.conditions`, scoring rules and disqualifiers): `field` is a name from `fields/`, `op` one
+its kind takes, `value` normalised like an attribute value of that kind; checked at save (400), never at run time.
+
+| Kind | Ops |
+|---|---|
+| `text`, `url` | `eq`, `ne`, `in`, `contains` (case-insensitive), `empty` |
+| `number` | `eq`, `ne`, `in`, `gte`, `lte`, `empty` |
+| `date` | `eq`, `ne`, `gte`, `lte`, `empty` |
+| `bool` | `eq`, `ne`, `empty` |
+| `select` | `eq`, `ne`, `in`, `empty` |
+| `multiselect` | `contains` (one listed value), `empty` |
+
+`in` takes a non-empty list; `empty` takes a bool (default true: the fact must be empty; false: it must hold a
+value). A fact without a value satisfies only `ne` and `empty`. Text `eq` / `ne` / `in` compare case-insensitively.
 
 ## GDPR (channel-independent)
 
@@ -187,7 +247,7 @@ Validation and DRF errors go through the host's v2 exception handler:
 
 | Status | Cause |
 |---|---|
-| 400 | schema validation (unknown field, bad enum, `sort` outside the allowlist, `consent` without `consent_ref`, null where not allowed); unknown `language`; missing, oversized or non-UTF-8 upload; `contact_id` not a contact with an email in the company; rule `clean()` (stage required / from another channel, template required) |
+| 400 | schema validation (unknown field, bad enum, `sort` outside the allowlist, `consent` without `consent_ref`, null where not allowed); unknown `language`; missing, oversized or non-UTF-8 upload; `contact_id` not a contact with an email in the company; rule `clean()` (stage required / from another channel, template required); a condition, scoring rule or disqualifier on an unknown field or with an op its kind does not take; thresholds out of order; an attribute definition with a built-in key or bad options; a refused attribute value, filter or missing required attribute (`attributes`) |
 | 401 / 403 | no or invalid JWT / not staff |
 | 404 | unknown channel, row of another channel, unknown `stage_key`, development endpoint outside development |
 | 409 | one of the codes below |
@@ -205,7 +265,10 @@ upper-cased; `message` is human-readable; `details` is empty for these (no field
 | `DOMAIN_EXISTS` | `POST companies/`: another company of the channel already has this registrable domain |
 | `NO_STAGES` | `POST companies/`: the channel has no pipeline yet |
 | `CONTACT_EXISTS` | `POST contacts/`, `PATCH contacts/<id>/` (`email`): the company already has a contact with this email |
-| `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient}-profiles/`: another profile of the channel already has this key |
+| `PROFILE_EXISTS` | `POST`/`PATCH {analysis,recipient,scoring}-profiles/`: another profile of the channel already has this key |
+| `ATTRIBUTE_EXISTS` | `POST attributes/`: the channel already defines this key for the entity |
+| `ATTRIBUTE_IN_USE` | `PATCH attributes/<pk>/` (`kind`), `DELETE attributes/<pk>/`: values are stored, or a rule condition / scoring rule names the attribute — deactivate instead |
+| `NO_SCORING_PROFILE` | `POST companies/<id>/score/`: the channel has no active scoring profile |
 | `COMMUNICATOR_CHANNEL_MISSING` | `communicate/`: no communicator channel is configured |
 | `NOT_ELIGIBLE` | `communicate/`: the outreach gate refused the contact (`do_not_contact`, `opted_out`, `anonymised`, `wrong_person`, `no_legal_basis`, `suppressed`, `address_invalid`) |
 | `NO_DRAFT` | `communicate/`: no draft could be built (no clause set) — see the company timeline |

@@ -43,6 +43,20 @@ item below: the rule, then where it is enforced.
 - **`legal_basis` is never filled by `fill_empty`** — only `propose_legal_basis` (import, form) or `set_legal_basis`
   (operator). `consent` without a `consent_ref` raises `ConsentRefRequired`.
 
+## Attributes, conditions and scoring
+
+- **`attributes` is written only through `attribute_service`** (`initial`, `apply`, `fill_missing`, the import's
+  `clean_value`). It is never in an `EDITABLE_FIELDS` whitelist and never set from a request dict.
+- **Decisions read facts, not columns.** Rule conditions, scoring and the template context go through
+  `fact_service.facts`; a new built-in fact is added there (`BUILTIN_KINDS`), never read ad hoc.
+- **A condition naming an unknown field is refused at save** (`condition_service.check_all`), never at run time. A
+  definition deactivated later reads as an empty fact — the condition then fails (only `ne` / `empty` hold).
+- **`attributes` is merged on the locked row.** A patch re-reads the JSON under `select_for_update`
+  (`attribute_service.apply_locked`), and the import chunk locks the companies and contacts it prefetches (company
+  first) because `bulk_update` writes the JSON back whole.
+- **The list filter is a containment lookup** (`attributes__contains`) so the GIN index serves it; an
+  `attributes__<key>` lookup would scan.
+
 ## Rules, gate and paid calls
 
 - **The outreach gate runs only inside `outreach_service.request_draft`,** on locked company then contact rows. A new
