@@ -31,16 +31,18 @@ src/django_leads/
 │                 scoring_profile
 ├── schemas/      requests.py  responses.py
 ├── api/admin/    urls.py  views/ _base (auth, paging, Conflict)  company  company_action  contact  stage
-│                 stage_event  activity  import  report  rule  profile  gdpr  attribute  scoring
+│                 stage_event  activity  import  report  rule  profile  gdpr  attribute  scoring  channel
 │                 customer_link (accounts only)
 │                 test_views (development)
 ├── services/     activity (only Activity writer)  company  contact  stage (transition_stage)  import  sweep
 │                 form  rule  recipient (outreach gate)  outreach (request_draft)  intel  rotation  claim
 │                 retention  gdpr  erased_address  config  customer_link  alert  stage_event (the map)
 │                 suppression (communicator do-not-contact)  mailable  funnel  attribute (values)
-│                 fact (the one accessor)  condition  scoring
+│                 fact (the one accessor)  condition  scoring  follow_up (tasks after a reply)
+│                 task_bridge (the only django_todo importer)  channel (settings)
 ├── signals/      __init__ (stage_entered, contact_anonymised)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge
+│                 todo_receivers (timeline, soft)
 ├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks   (queue leads_default)
 ├── gdpr/         hooks (leads' own)  protocol (GdprHooks)  registry (discover at call time)
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)

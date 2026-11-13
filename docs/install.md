@@ -104,6 +104,7 @@ CELERY_BEAT_SCHEDULE = {
 |---|---|---|
 | `contact-forms` | `entirius-django-contact-forms` | no form bridge; the sweep skips form retries |
 | `notifications` | `entirius-django-notifications` | replies and failed analyses are logged only (one warning per process) |
+| — (`entirius-django-todo` next to leads; the extra `todo` comes with its first PyPI release) | `django_todo` in `INSTALLED_APPS` | replies create no tasks, closed tasks write no timeline, GDPR exports list no tasks |
 | — (`django_accounts` in the host) | — | `companies/<id>/create-customer/` is not routed and its module never imported |
 
 Connectors are entry points in the group `leads_connectors`; the package registers `csv` and `twenty` (interface

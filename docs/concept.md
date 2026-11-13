@@ -180,16 +180,55 @@ language, lead type) → (default language, any). A type without its own variant
 template at all is communicator's `no_template` failure, as before. Follow-ups of a sequence resolve without an
 audience (communicator does not keep one per thread).
 
+## Tasks
+
+The pipeline tells the owner what to do next through `django_todo` (soft dependency: `services/task_bridge.py` is
+the only service that imports it; without it every call is a no-op and nothing else changes). A task is about the
+company (`subject_ref = leads.Company:<id>`, `subject_label` = its name), names the contact when one is known
+(`contact_ref = leads.Contact:<id>`), belongs to the company's owner (none or deactivated → unowned) and has
+`created_by = "reply"`. One reply creates at most one task — first match:
+
+| Reply | Task | Due | `source` / `dedup_key` |
+|---|---|---|---|
+| `needs_review`, or no class | `todo` "Read the reply" | now | `leads.reply.review` / `reply:<reply id>` |
+| `interested` | `todo` "Interested: answer and open a deal" | now | `leads.reply.interested` / `reply:<reply id>` |
+| `not_now` | `mail` "Come back: <contact>" | the day after `intent_return_date`, else now + `resume_days["not_now"]` | `leads.reply.not_now` / `resume:<contact id>` |
+| `out_of_office` without a return date | `mail` "Try again: <contact>" | now + `resume_days["out_of_office"]` | `leads.reply.out_of_office` / `resume:<contact id>` |
+| `wrong_person` | `todo` "Find the right person" | now | `leads.reply.wrong_person` / `wrong:<contact id>` |
+
+No task for `unsubscribe` (the suspected opt-out path already asks a person), `not_interested`, `unclear`, an
+absence with a return date (communicator resumes the sequence) or a class about a contact the reply cannot be matched
+to. `Channel.resume_days` (JSON, `PATCH channel/`) overrides the defaults 30 (`not_now`) and 7 (`out_of_office`).
+A newer reply of the contact cancels its open `resume:<contact id>` task (outcome "newer reply"), and so do an
+opt-out ("opted out") and an anonymisation ("anonymised"). Nothing is drafted when a "come back" task is due: the
+person decides. The task is created after the reply commits; a failure is logged and the reply stays recorded.
+
+Manual tasks have no leads endpoint: the CMS uses the todo API with `subject_ref = leads.Company:<id>`. Leads writes
+the timeline: Activity `task` "task: <title>" when a person creates one (tasks with a `leads.` source write none —
+the reply activity says why), "done: <title> — <outcome>" or "cancelled: <title>" when it closes, with
+`data = {task_id, kind, status}` and the task's contact when `contact_ref` resolves to a contact of the company.
+
+## Writing by hand
+
+`POST companies/<id>/compose/` → `outreach_service.compose_message`: the locks and the outreach gate of
+`request_draft` (a refusal → one Activity `blocked: <reason>`, 409 `not_eligible`), the legal footer of the contact's
+basis and language (none → 409 `no_legal_basis`), then communicator's `compose_service.compose` from the owner's
+mailbox (else the channel default), approved by its author and due now; it stops the thread's sequence. Activity
+`draft` "written by hand" with the message id; the `message_sent` receiver records the send. With `reply_id` the
+message answers that reply (`In-Reply-To`, its thread); the reply must belong to a thread of this company and of the
+contact.
+
 ## Integration
 
 | Module | leads calls | leads receives |
 |---|---|---|
-| communicator | `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>, mailbox_user_id=<owner id>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, notification of the reply plan's severity (`none` = none); `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce". Calls `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `explain` / `scope` |
+| communicator | `compose(channel_idx, recipient, subject, body_text, subject_ref, author, mailbox_user_id, in_reply_to)` for a hand-written mail; `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>, mailbox_user_id=<owner id>)` — the only caller from leads; leads never writes a `Message` | `reply_received` → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, notification of the reply plan's severity (`none` = none); `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce". Calls `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `explain` / `scope` |
 | agreements | `resolve_clause_set(channel_idx, legal_basis, language)` + `render_legal_footer` (contact language, else channel default); `LegalBasis` enum | — (a missing clause set → Activity `skipped: no clause set`, no draft) |
 | siteintel | `request_audit(domain, channel_idx, requested_by)` | `report_ready(audit, succeeded_sources)` → analysis task |
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |
 | notifications (soft) | `notify(channel_idx, recipient_role=LEADS_NOTIFY_ROLE, severity, subject_ref, title, body, recipient_user_id=<owner id or null>)` — the owner only when the company has one | — |
 | contact_forms (soft) | reads `Lead`, never writes it | `lead_status_changed` on creation |
+| todo (soft) | `task_service.create` / `cancel` / `scrub`, `Task` reads for the GDPR export — only in `services/task_bridge.py` | `task_created`, `task_closed` → Activity `task` (§ Tasks) |
 | accounts (soft) | verified `EmailAddress` → `Customer.uid` on `create-customer/` | — |
 
 Emitted: `stage_entered(company, stage)` (own receiver → `evaluate_rules` task) and
@@ -235,7 +274,7 @@ re-created from a form.
 GDPR hooks: every installed app's top-level `<app>.gdpr` module with `gdpr_export(email) -> dict` and
 `gdpr_erase(email) -> dict[str, int]` (`gdpr/protocol.GdprHooks`) is discovered at call time. Erasure runs in one
 transaction after a `note` "gdpr erase requested" on every affected company; leads' own hook anonymises the contacts
-(actor `gdpr`) and scrubs their Activities to `[erased]`. Matching covers the address and its token.
+(actor `gdpr`), erases the free text of their tasks (`task_service.scrub(contact_ref=…)`, also on retention) and scrubs their Activities to `[erased]`; the export lists the contact's tasks (`id, title, status, due_at`) under `Task`. Matching covers the address and its token.
 
 `utils/emails.email_hash` / `anonymised_address` are canonical; communicator and agreements keep local copies (no
 dependency on leads) pinned by parity tests. Operating it: `operations.md`.

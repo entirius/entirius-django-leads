@@ -19,7 +19,7 @@ item below: the rule, then where it is enforced.
 - **`transition_stage` is the only stage change.** Setting `company.stage` directly skips the timeline and
   `stage_entered`, so no rule runs. Django admin keeps `stage` read-only and cannot add companies for that reason.
 - **Leads never writes a communicator `Message` or a contact_forms `Lead`** — drafts go through `communicate()`,
-  submissions are only read.
+  hand-written mail through `compose()`, submissions are only read.
 - **`utils/emails` token functions are copied, not imported,** into communicator and agreements. A change here
   without the copies breaks suppression; `tests/test_retention.py` pins all three.
 
@@ -59,8 +59,11 @@ item below: the rule, then where it is enforced.
 
 ## Rules, gate and paid calls
 
-- **The outreach gate runs only inside `outreach_service.request_draft`,** on locked company then contact rows. A new
-  outreach path calls `request_draft`; it never checks `block_reason` itself and never calls `communicate()`.
+- **The outreach gate runs only inside `outreach_service.request_draft` and `compose_message`,** on locked company
+  then contact rows. A new outreach path calls one of them; it never checks `block_reason` itself and never calls
+  `communicate()` or `compose()`.
+- **Only `services/task_bridge.py` (and `signals/`) import `django_todo`.** Every bridge call is a no-op without it;
+  a new caller goes through the bridge, so the module stays optional.
 - **Lock order is company, then contact** everywhere. The reverse deadlocks against a concurrent draft.
 - **No toolbox call inside a transaction or under a row lock** (`test_no_toolbox_call_inside_atomic`). Claims are
   committed before the paid call and completed after it.

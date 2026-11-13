@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **Tasks from replies** (soft dependency `django_todo`; `services/task_bridge.py` is its only importer, every call
+  a no-op without it). A reply creates at most one task for the company's owner (none or deactivated → unowned),
+  about `leads.Company:<id>`, naming `leads.Contact:<id>`: needs review or no class → "Read the reply"; `interested`
+  → "Interested: answer and open a deal"; `not_now` → "Come back: <contact>" the day after the return date, else in
+  `resume_days["not_now"]` (30); `out_of_office` without a return date → "Try again: <contact>" in
+  `resume_days["out_of_office"]` (7); `wrong_person` → "Find the right person". Dedup keys `reply:<id>`,
+  `resume:<contact id>`, `wrong:<contact id>`. A newer reply, an opt-out and an anonymisation cancel the contact's
+  open "come back" task. A failing task creation is logged; the reply stays recorded.
+- **Channel settings.** `Channel.resume_days` (JSON, migration `0013`) and `GET` / `PATCH channel/` (area
+  `leads.settings`) with the effective days per class.
+- **Tasks in the timeline.** Activity kind `task` (migration `0013`): "task: <title>" when a person creates a task
+  about a company, "done: <title> — <outcome>" / "cancelled: <title>" when one closes; `data = {task_id, kind,
+  status}` and the task's contact.
+- **Writing by hand.** `POST companies/<id>/compose/` `{contact_id, subject, body, reply_id?}` →
+  `outreach_service.compose_message`: the locks and gate of `request_draft` (409 `not_eligible`, one `blocked`
+  activity), the legal footer of the contact's basis and language (409 `no_legal_basis`), then communicator's
+  `compose()` from the owner's mailbox, answering the given reply of this company. Activity `draft` "written by hand".
+- **GDPR.** Erasure and anonymisation erase the free text of the contact's tasks (`task_service.scrub`); the export
+  lists them under `Task`.
+- **Packaging.** The `todo` extra (`entirius-django-todo>=0.1.0`) is added once todo 0.1.0 is on PyPI — until then
+  the host installs it next to leads; the suite runs the task tests when `django_todo` is importable.
+
 - **Company owner.** `Company.owner` (FK user, `SET_NULL`, index `(channel, owner)`) and `ImportBatch.owner`
   (migration `0012`) — the module's first user FK, so it now reads `AUTH_USER_MODEL`. Written only by
   `owner_service` (never in `EDITABLE_FIELDS`), every change an Activity `note` "owner: <username | none>". API:

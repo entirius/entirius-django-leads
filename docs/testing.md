@@ -34,6 +34,8 @@ exported from the service (`manage.py spectacular`) and filtered to `/api/leads/
 | `test_owner.py` | owner picker (active staff only, service users left out, search, cap of 50, `{id, username, name}` only), manual create defaults to the caller, patch set / clear with `owner:` notes, a non-staff or inactive owner refused, bulk assign (only changes, over 200 or a foreign company → 400), list filter `me` / `none` / id, `owner__username` sort, constant list query count (50 companies, 5 owners), import with and without `owner_id` (bulk and slow path), reply alert to the owner only / to the role, no-op without notifications, `mailbox_user_id` of drafts |
 | `test_import_attributes.py` | two attribute columns and a contact column, ignored headers reported once, bad value skips the row, matched company filled for missing keys only |
 | `test_funnel.py` | funnel numbers on a fixed timeline, origin and date filters, fixed query count, endpoint |
+| `test_tasks.py` | a task per reply class (table), no task for the other classes, owner and due now, dedup, `resume_days`, a newer reply / opt-out / anonymisation cancelling the "come back" task, no-op without `django_todo`, a failing creation keeping the reply, timeline of person-created, done and cancelled tasks, other subjects and channels ignored, channel settings API, GDPR export and scrub (skipped without `django_todo`) |
+| `test_compose.py` | compose through the owner's mailbox after the gate, an opted-out contact refused with one `blocked`, answering a reply, a reply of another company or contact, no communicator channel, no clause set, bad requests, staff only |
 | `test_openapi.py` | `spectacular --validate --fail-on-warn` over `django_leads.urls` |
 
 ## BDD in zeno

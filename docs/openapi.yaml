@@ -451,6 +451,74 @@ paths:
           description: No response body
         '409':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/channel/:
+    get:
+      operationId: leads_channel_settings_retrieve
+      summary: Channel settings
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Channel
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelSettingsResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: leads_channel_settings_update
+      summary: Change channel settings
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Channel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelSettingsResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/:
     get:
       operationId: leads_companies_list
@@ -715,6 +783,58 @@ paths:
         '409':
           description: No response body
         '503':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/compose/:
+    post:
+      operationId: api_leads_v2_admin_companies_compose_create
+      description: 'The outreach gate first: 409 `not_eligible` with the reason (one `blocked` activity). Then the legal footer
+        of the contact''s basis and language (409 `no_legal_basis`) and communicator''s compose from the owner''s mailbox,
+        approved by the caller and due now; it stops the thread''s sequence. 409 `communicator_channel_missing`; 400 for a
+        foreign or email-less contact, a reply of another company or another contact, a blank or too long text.'
+      summary: Send a hand-written mail to a contact
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComposeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ComposeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ComposeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
           description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/contacts/{contact_id}/mailable/:
     get:
@@ -3139,6 +3259,35 @@ components:
       - status
       title: AuditRequestedResponse
       type: object
+    ChannelSettingsResponse:
+      properties:
+        idx:
+          description: Channel idx.
+          examples:
+          - default-europe
+          title: Idx
+          type: string
+        name:
+          description: Channel name.
+          examples:
+          - Default Europe
+          title: Name
+          type: string
+        resume_days:
+          additionalProperties:
+            type: integer
+          description: Effective days until a follow-up task per reply class (not_now, out_of_office).
+          examples:
+          - not_now: 30
+            out_of_office: 7
+          title: Resume Days
+          type: object
+      required:
+      - idx
+      - name
+      - resume_days
+      title: ChannelSettingsResponse
+      type: object
     CommunicateRequest:
       additionalProperties: false
       properties:
@@ -3663,6 +3812,45 @@ components:
       - scored_at
       - owner
       title: CompanyResponse
+      type: object
+    ComposeRequest:
+      additionalProperties: false
+      properties:
+        contact_id:
+          description: Contact of the company.
+          examples:
+          - 102
+          title: Contact Id
+          type: integer
+        subject:
+          description: Subject.
+          examples:
+          - Our call on Tuesday
+          maxLength: 255
+          minLength: 1
+          title: Subject
+          type: string
+        body:
+          description: Plain-text body; the legal footer is added.
+          examples:
+          - Hello Ola, …
+          minLength: 1
+          title: Body
+          type: string
+        reply_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: A reply of a thread of this company the message answers.
+          examples:
+          - 31
+          title: Reply Id
+      required:
+      - contact_id
+      - subject
+      - body
+      title: ComposeRequest
       type: object
     Condition:
       additionalProperties: false
@@ -5011,6 +5199,17 @@ components:
           title: Is Active
       title: AttributeDefinitionUpdateRequest
       type: object
+    PatchedChannelSettingsRequest:
+      additionalProperties: false
+      properties:
+        resume_days:
+          anyOf:
+          - $ref: '#/components/schemas/ResumeDays'
+          - type: 'null'
+          default: null
+          description: Replaces the channel's values; a key left out or null uses the default, null resets all.
+      title: ChannelSettingsRequest
+      type: object
     PatchedCompanyUpdateRequest:
       additionalProperties: false
       properties:
@@ -5568,6 +5767,33 @@ components:
       - updated_by_id
       - modified_at
       title: ProfileResponse
+      type: object
+    ResumeDays:
+      additionalProperties: false
+      properties:
+        not_now:
+          anyOf:
+          - maximum: 365
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Days until "Come back" after not now; null = 30.
+          examples:
+          - 30
+          title: Not Now
+        out_of_office:
+          anyOf:
+          - maximum: 365
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Days until "Try again" after an absence without a return date; null = 7.
+          examples:
+          - 7
+          title: Out Of Office
+      title: ResumeDays
       type: object
     RetentionState:
       properties:

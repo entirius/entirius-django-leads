@@ -31,6 +31,7 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
 | POST | `<channel_idx>/companies/<id>/score/` | — | 200 `ScoreResponse` `{segment, points, disqualified, reasons, reasons_structured: [{field, kind, points, label}], profile_id}`; stores `score_points`, `score_segment`, `scored_at`; Activity `score` with the reasons |
 | POST | `<channel_idx>/companies/<id>/communicate/` | `template_key`, `contact_id` | 201 `{message_id, status}` — a reviewable communicator draft |
+| POST | `<channel_idx>/companies/<id>/compose/` | `contact_id`, `subject` (1–255), `body` (plain text, the legal footer is added), `reply_id` (optional: a reply of a thread of this company) | 201 `{message_id, status}` — approved, from the owner's mailbox; Activity `draft` "written by hand" |
 | GET | `<channel_idx>/companies/<id>/contacts/<contact_id>/mailable/` | — | 200 `MailableResponse` |
 | POST | `<channel_idx>/companies/<id>/request-audit/` | — | 202 `{audit_id, status}`; Activity `intel` "audit requested" |
 | POST | `<channel_idx>/companies/<id>/create-customer/` | — (routed only with `django_accounts`) | 200 `{customer_uid}` |
@@ -44,6 +45,10 @@ the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks
 are not writable here. A refused attribute (unknown or inactive key, a value its kind refuses, a missing required
 key) is a 400 on `attributes`. An `owner_id` that is not an active staff user (or is a service user of an access
 application) is a 400 on `owner_id`, here, on `assign/` and on `imports/`.
+
+`compose/` errors: 409 `NOT_ELIGIBLE` (the outreach gate, one Activity `blocked`), `NO_LEGAL_BASIS` (no clause set or
+an empty footer), `COMMUNICATOR_CHANNEL_MISSING`; 400 for a foreign or email-less contact, a `reply_id` of another
+company or another contact, a blank or too long subject or body.
 
 `communicate/` skips rule conditions and cooldown, not the outreach gate (`concept.md` § Outreach gate).
 `create-customer/` links the Customer owning the primary contact's email through a **verified** allauth
@@ -81,6 +86,16 @@ DELETE decides by use (`contact_service.is_used`): a contact that opted out, has
 email under the company's `subject_ref` is anonymised like retention does it (`anonymised_at` set, personal fields
 blanked, timeline and thread kept, never a recipient again); any other contact is deleted and a `contact removed` note
 stays on the timeline. Removing an anonymised contact answers 200 and changes nothing.
+
+## Channel settings
+
+| Method | Path | Body | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/channel/` | — | 200 `{idx, name, resume_days}` |
+| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all) | 200 `{idx, name, resume_days}` |
+
+`resume_days` in the response is effective: the channel's values over the defaults `{not_now: 30, out_of_office: 7}`
+— days until the "come back" task of a reply of that class (`concept.md` § Tasks). Area `leads.settings`.
 
 ## Stages
 
