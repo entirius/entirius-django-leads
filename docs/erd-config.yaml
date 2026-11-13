@@ -9,6 +9,15 @@ groups:
       - StageEventRule
       - Company
       - Contact
+  - name: deals
+    title: "Deals"
+    models:
+      - Channel
+      - Company
+      - Contact
+      - DealStage
+      - Deal
+      - Activity
   - name: attributes
     title: "Attributes & Scoring"
     models:

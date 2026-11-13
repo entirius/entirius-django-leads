@@ -11,7 +11,7 @@ from agreements, website facts from siteintel, human attention from notification
 
 | Model | Holds | Key rule |
 |---|---|---|
-| `Channel` | `idx`, languages, `retention_days` | own scoping model (created in Django admin, never from signals); its `idx` is the same channel in communicator, agreements and siteintel |
+| `Channel` | `idx`, languages, `retention_days`, `resume_days`, `default_currency` (FK `django_regional.Currency`, null) | own scoping model (created in Django admin, never from signals); its `idx` is the same channel in communicator, agreements and siteintel |
 | `Stage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`, `unresponsive`), `is_terminal` | new companies enter the lowest `order`; unique `(channel, key)` |
 | `StageEventRule` | `event`, `target_stage` (null = keep the stage), `forward_only` | the event → stage map; unique `(channel, event)` |
 | `Company` | name, `domain`, website, `lead_type` (a code), industry, `platform`, `hooks`, stage, `source`, `do_not_contact`, `customer_uid`, `rotation_count`, `last_activity_at`, `origin` (free text), `attributes`, `score_points`, `score_segment`, `scored_at`, `owner` (FK user, null) | unique `(channel, domain)`; `domain` is always the registrable domain; GIN index on `attributes`; index `(channel, owner)` |
@@ -19,7 +19,9 @@ from agreements, website facts from siteintel, human attention from notification
 | `Contact` | email, names, job title, phone, language, `is_primary`, `legal_basis`, `opt_out_at`, `anonymised_at`, `wrong_person_at`, `attributes` | unique `(company, email)` for non-empty emails; `legal_basis` null = none recorded |
 | `AttributeDefinition` | `entity` (`company`, `contact`, `deal`), `key`, `label`, `kind`, `options`, `required`, `order`, `show_in_list`, `is_active` | unique `(channel, entity, key)`; the kind is fixed once a value is stored |
 | `ScoringProfile` | `key`, `thresholds {S, M, L}`, `rules`, `disqualifiers`, `is_active` | unique `(channel, key)`; the first active profile by key scores the channel |
-| `Activity` | `kind`, `message`, `data`, `actor` per company (and contact) | written only by `activity_service`, which also moves `Company.last_activity_at` |
+| `DealStage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`) | the sales pipeline; unique `(channel, key)`; a stage holding deals cannot be deleted nor change kind |
+| `Deal` | `company` (`CASCADE`), `contact` (null, `SET_NULL`), `title`, `owner` (FK user, null), `stage` (`PROTECT`), `stage_entered_at`, `value_one_off` / `value_recurring` (`Decimal(14, 2)`, null), `recurring_period` (`month`, `year`), `currency` (FK `Currency`, null, `PROTECT`), `expected_close_date`, `closed_at`, `lost_reason`, `attributes`, `created_by` | written only by `deal_service` (owner: `owner_service`); indexes `(channel, stage)`, `(channel, owner)`, `(company)` |
+| `Activity` | `kind`, `message`, `data`, `actor` per company (and contact, and deal) | written only by `activity_service`, which also moves `Company.last_activity_at` |
 | `ImportBatch` | counters, `row_count`, `last_row_done`, `size_bytes`, capped `report`, `run_rules`, `owner` (FK user, null) | never the CSV itself |
 | `StageRule` | trigger, stage, action, template, contact strategy, conditions, cooldown, order | evaluated by `rule_service` |
 | `RuleRun` | one evaluation: `outcome`, `state`, `event_key`, `detail` | unique `(rule, company, event_key)` for non-empty keys |
@@ -180,6 +182,42 @@ language, lead type) → (default language, any). A type without its own variant
 template at all is communicator's `no_template` failure, as before. Follow-ups of a sequence resolve without an
 audience (communicator does not keep one per thread).
 
+## Two levels
+
+- **Company stages** (`Stage`, `stage_service`): prospecting — new, contacted, replied, qualified, unresponsive … The
+  outbound automation (rules, sequences, rotation, the event → stage map) runs on them.
+- **Deals** (`DealStage`, `deal_service`): selling — one sales pipeline per channel, stages of kind `open`, `won` or
+  `lost`. A person opens a deal on a company; nothing opens one automatically.
+
+The two never move each other: a won deal leaves the company's stage where it is (moving a customer to the company
+stage "won" stays a person's move), and no rule fires on a deal. Different tables, different services.
+
+## Deals
+
+- **Opening**: `deal_service.create` puts the deal in the channel's first `open` stage by `order` (none → 409
+  `no_deal_stage`). The owner defaults to the company's owner while active, then to the creator when they can own;
+  the currency to `Channel.default_currency`. Activity `deal` "deal opened: <title>" on the company timeline.
+- **Moving**: `deal_service.transition` — any stage to any stage of the channel. Entering `won` or `lost` sets
+  `closed_at`; `lost` requires `lost_reason`; leaving a closed stage clears both. Activity `deal`
+  "deal <from> -> <to>" with `data = {deal_id, from, to}`; the signal `deal_stage_changed(deal, previous, stage)` is
+  sent on commit. The API names the target by key or by kind (= the first stage of that kind; a channel without one
+  refuses with 409 `no_deal_stage`).
+- **Editing**: `deal_service.update` whitelists `title`, `contact_id` (a contact of the same company), the two values,
+  `recurring_period`, `currency`, `expected_close_date` and `attributes` (entity `deal`, through
+  `attribute_service`). `owner` changes through `owner_service.set_deal_owner`, `stage` only through `transition`;
+  `company` and `closed_at` are never editable.
+- **Money**: `Decimal` end to end, decimal strings in the API (`"12000.00"`, never a JSON number), never negative, and
+  a value without a currency is refused. The board totals per currency (recurring per month: a yearly value counts
+  as a twelfth) and never adds currencies.
+- **Deleting**: open deals only (409 `deal_closed`); the timeline keeps "deal deleted: <title>" with the old id and
+  the deal's open tasks are cancelled ("deal deleted").
+- **Concurrency**: an update saves only the patched columns, so it never writes back a stage or owner changed by a
+  concurrent request.
+- **On the company**: the company card counts its deals per kind; `companies/<id>/deals/` lists them.
+- **Tasks**: the CMS creates tasks about a deal with `subject_ref = leads.Deal:<id>` and `subject_label` =
+  "<company> — <title>" (both in every deal response); the timeline receivers write them on the deal's company with
+  the deal set, and `open_tasks` counts them.
+
 ## Tasks
 
 The pipeline tells the owner what to do next through `django_todo` (soft dependency: `services/task_bridge.py` is
@@ -191,7 +229,7 @@ company (`subject_ref = leads.Company:<id>`, `subject_label` = its name), names 
 | Reply | Task | Due | `source` / `dedup_key` |
 |---|---|---|---|
 | `needs_review`, or no class | `todo` "Read the reply" | now | `leads.reply.review` / `reply:<reply id>` |
-| `interested` | `todo` "Interested: answer and open a deal" | now | `leads.reply.interested` / `reply:<reply id>` |
+| `interested` | `todo` "Interested: answer and open a deal", note "Open a deal on this company" (no deal is opened automatically) | now | `leads.reply.interested` / `reply:<reply id>` |
 | `not_now` | `mail` "Come back: <contact>" | the day after `intent_return_date`, else now + `resume_days["not_now"]` | `leads.reply.not_now` / `resume:<contact id>` |
 | `out_of_office` without a return date | `mail` "Try again: <contact>" | now + `resume_days["out_of_office"]` | `leads.reply.out_of_office` / `resume:<contact id>` |
 | `wrong_person` | `todo` "Find the right person" | now | `leads.reply.wrong_person` / `wrong:<contact id>` |
@@ -203,7 +241,8 @@ A newer reply of the contact cancels its open `resume:<contact id>` task (outcom
 opt-out ("opted out") and an anonymisation ("anonymised"). Nothing is drafted when a "come back" task is due: the
 person decides. The task is created after the reply commits; a failure is logged and the reply stays recorded.
 
-Manual tasks have no leads endpoint: the CMS uses the todo API with `subject_ref = leads.Company:<id>`. Leads writes
+Manual tasks have no leads endpoint: the CMS uses the todo API with `subject_ref = leads.Company:<id>` or
+`leads.Deal:<id>` (written on the deal's company with `Activity.deal` set). Leads writes
 the timeline: Activity `task` "task: <title>" when a person creates one (tasks with a `leads.` source write none —
 the reply activity says why), "done: <title> — <outcome>" or "cancelled: <title>" when it closes, with
 `data = {task_id, kind, status}` and the task's contact when `contact_ref` resolves to a contact of the company.
@@ -228,13 +267,14 @@ contact.
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |
 | notifications (soft) | `notify(channel_idx, recipient_role=LEADS_NOTIFY_ROLE, severity, subject_ref, title, body, recipient_user_id=<owner id or null>)` — the owner only when the company has one | — |
 | contact_forms (soft) | reads `Lead`, never writes it | `lead_status_changed` on creation |
-| todo (soft) | `task_service.create` / `cancel` / `scrub`, `Task` reads for the GDPR export — only in `services/task_bridge.py` | `task_created`, `task_closed` → Activity `task` (§ Tasks) |
+| todo (soft) | `task_service.create` / `cancel` / `scrub`, `Task` reads for the GDPR export and the open-task counts of deals — only in `services/task_bridge.py` | `task_created`, `task_closed` → Activity `task` (§ Tasks), also for `leads.Deal:<id>` |
 | accounts (soft) | verified `EmailAddress` → `Customer.uid` on `create-customer/` | — |
 
-Emitted: `stage_entered(company, stage)` (own receiver → `evaluate_rules` task) and
+Emitted: `stage_entered(company, stage)` (own receiver → `evaluate_rules` task), `deal_stage_changed(deal, previous,
+stage)` (on commit of a real deal stage change; no own receiver) and
 `contact_anonymised(email_hash, anonymised_email, subject_ref)` — communicator suppresses the token on every
 channel and anonymises its threads. All receivers use `dispatch_uid="django_leads.<name>"`, run after commit, never
-raise into the sender, and handle only `subject_ref` `leads.Company:<int>`.
+raise into the sender, and handle only `subject_ref` `leads.Company:<int>` (and, for tasks, `leads.Deal:<int>`).
 
 ### Intel analysis
 
@@ -270,6 +310,10 @@ Rows are never deleted. Retention and erasure pseudonymise a contact: email → 
 Company (and its attributes — company data), stage, hooks, counters and timeline stay. The GDPR export lists the
 contact attributes with the contact. An erased address is never re-imported (`erased_address`) nor
 re-created from a form.
+
+A deal is company data: anonymising (retention, erasure) or removing a contact only takes it off its deals
+(`Deal.contact` → null; `SET_NULL` on removal). Nothing on a deal is scrubbed, so deal titles and lost reasons must not carry personal
+data (`gotchas.md`).
 
 GDPR hooks: every installed app's top-level `<app>.gdpr` module with `gdpr_export(email) -> dict` and
 `gdpr_erase(email) -> dict[str, int]` (`gdpr/protocol.GdprHooks`) is discovered at call time. Erasure runs in one

@@ -16,7 +16,7 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 | Permission | `IsAdminUser` — a customer JWT is a 403 |
 | Channel | `<channel_idx>` is `Channel.idx`; an unknown idx is a 404. A row id of another channel is a 404, never a leak |
 | Paged lists | `?page=&page_size=` (default 20, max 100) → `{count, next, previous, results}` |
-| Unpaged lists | stages, rules, analysis and recipient profiles → `{results}` |
+| Unpaged lists | stages, deal stages, the deal board, rules, analysis and recipient profiles → `{results}` |
 
 ## Companies
 
@@ -40,7 +40,7 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 {id, key, label, order, kind, is_terminal}, stage_entered_at, source, external_ref, do_not_contact,
 customer_uid, rotation_count, last_activity_at, origin, attributes, score_points (null = never scored), score_segment
 ("" = never scored), scored_at, owner {id, username, name} | null`. `CompanyDetailResponse` adds `contacts` (all), `activities`
-(last 20, newest first) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
+(last 20, newest first), `deals` (`{open, won, lost}` counts, one query) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
 the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks`, the score fields and `customer_uid`
 are not writable here. A refused attribute (unknown or inactive key, a value its kind refuses, a missing required
 key) is a 400 on `attributes`. An `owner_id` that is not an active staff user (or is a service user of an access
@@ -91,8 +91,8 @@ stays on the timeline. Removing an anonymised contact answers 200 and changes no
 
 | Method | Path | Body | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/channel/` | — | 200 `{idx, name, resume_days}` |
-| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all) | 200 `{idx, name, resume_days}` |
+| GET | `<channel_idx>/channel/` | — | 200 `{idx, name, default_currency, resume_days}` |
+| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all); `default_currency` (ISO 4217 of a platform currency, pre-fills new deals; null clears; unknown code → 400) | 200 `{idx, name, default_currency, resume_days}` |
 
 `resume_days` in the response is effective: the channel's values over the defaults `{not_now: 30, out_of_office: 7}`
 — days until the "come back" task of a reply of that class (`concept.md` § Tasks). Area `leads.settings`.
@@ -106,6 +106,39 @@ stays on the timeline. Removing an anonymised contact answers 200 and changes no
 | GET | `<channel_idx>/stages/<id>/` | — | 200 `StageResponse` |
 | PATCH | `<channel_idx>/stages/<id>/` | any field of POST, no nulls | 200 `StageResponse` |
 | DELETE | `<channel_idx>/stages/<id>/` | — | 204 |
+
+## Deal stages
+
+| Method | Path | Body | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/deal-stages/` | — | 200 `{results: [DealStageResponse]}` in `order` — `id, key, label, order, kind` |
+| POST | `<channel_idx>/deal-stages/` | `key` (slug, required), `label` (required), `order` (0–32767), `kind` (`open`, `won`, `lost`; default `open`) | 201 `DealStageResponse`; 409 `deal_stage_exists` |
+| GET | `<channel_idx>/deal-stages/<id>/` | — | 200 `DealStageResponse` |
+| PATCH | `<channel_idx>/deal-stages/<id>/` | any field of POST, no nulls | 200; 409 `deal_stage_not_empty` on a new kind while the stage holds deals |
+| DELETE | `<channel_idx>/deal-stages/<id>/` | — | 204; 409 `deal_stage_not_empty` while deals sit in it |
+
+Area `leads.settings`. A channel needs a stage of each kind to close deals; a new deal starts in the first `open` one.
+
+## Deals
+
+| Method | Path | Body / params | Success |
+|---|---|---|---|
+| GET | `<channel_idx>/deals/` | `stage` (key), `kind` (`open`, `won`, `lost`), `owner` (`me`, `none`, a user id), `company` (id), `search` (title, company name or domain), `close_from` / `close_to` (expected close date, ISO), `sort` (`expected_close_date`, `stage_entered_at`, `value_one_off`, `value_recurring`, `created`; `-` prefix; empty values last; default `-created`), paging | 200 `DealListResponse` |
+| POST | `<channel_idx>/deals/` | `company_id` (required, a company of the channel), `title` (required, ≤ 255), `contact_id` (a contact of that company), `owner_id` (absent = the company's active owner, else the requesting user when they can own; null = none), `value_one_off`, `value_recurring` (decimal strings, ≤ 14 digits, 2 decimals, never negative), `recurring_period` (`month`, `year`), `currency` (ISO 4217; absent = the channel default), `expected_close_date`, `attributes` (deal attributes; required ones must be given) | 201 `DealResponse`; Activity `deal` "deal opened: <title>"; 409 `no_deal_stage` without an open stage |
+| GET | `<channel_idx>/deals/board/` | `owner` | 200 `{results: [{stage, count, totals: [{currency, one_off, recurring}], deals}]}` — every deal stage in order, totals per currency (`recurring` per month: a yearly value counts as a twelfth; deals without a value count but add nothing), the first 25 deals by `stage_entered_at` |
+| GET | `<channel_idx>/deals/<id>/` | — | 200 `DealResponse` |
+| PATCH | `<channel_idx>/deals/<id>/` | any field of POST except `company_id`; `title` and `recurring_period` not null; `contact_id`, `currency`, values, `expected_close_date`, `owner_id` null clear; `attributes` merged (null removes a key) | 200 `DealResponse`; Activity `deal` "deal updated: <title>" (`data.fields`), an owner change "deal owner: <username \| none>" |
+| DELETE | `<channel_idx>/deals/<id>/` | — | 204, Activity `deal` "deal deleted: <title>", the deal's open tasks cancelled; 409 `deal_closed` for a won or lost deal |
+| POST | `<channel_idx>/deals/<id>/transition/` | exactly one of `stage_key` or `kind` (= the first stage of that kind), `lost_reason` (≤ 255) | 200 `DealResponse`; Activity `deal` "deal <from> -> <to>" (`data = {deal_id, from, to}`); 404 unknown key; 409 `no_deal_stage` when the channel has no stage of the kind; 400 on `lost_reason` for a lost stage without one |
+| GET | `<channel_idx>/deals/<id>/activities/` | paging | 200 `ActivityListResponse` of the entries about the deal (stage moves, edits, tasks) |
+| GET | `<channel_idx>/companies/<id>/deals/` | paging | 200 `DealListResponse` of the company, newest first |
+
+`DealResponse`: `id, title, company {id, name, domain}, contact {id, name} | null, owner {id, username, name} | null,
+stage {key, label, kind}, stage_entered_at, value_one_off, value_recurring` (decimal strings or null)`,
+recurring_period, currency` (ISO code or null)`, expected_close_date, closed_at, lost_reason, attributes, open_tasks`
+(open todo tasks about the deal; 0 without the todo module)`, subject_ref` (`leads.Deal:<id>`)`, subject_label`
+("<company> — <title>", for a task about the deal)`, created_by, created_at, modified_at`. A value without a currency,
+a negative value or a JSON number instead of a string is a 400 on that field. Area `leads.companies`.
 
 ## Stage events
 
@@ -123,9 +156,8 @@ The event → stage map (`concept.md` § Event → stage map); area `leads.setti
 
 ## Attributes and fields
 
-A channel defines its own fields for companies, contacts and deals (`deal` is accepted ahead of the deals model).
-Values live in the entity's `attributes` and are written only through company / contact create and patch, and the
-CSV import. Values are stored normalised: `number` → decimal string (at most 30 digits), `date` → ISO date, `bool` → bool, `select` → one
+A channel defines its own fields for companies, contacts and deals. Values live in the entity's `attributes` and are
+written only through company / contact / deal create and patch, and the CSV import. Values are stored normalised: `number` → decimal string (at most 30 digits), `date` → ISO date, `bool` → bool, `select` → one
 listed value, `multiselect` → a list of listed values, `url` → http(s) URL, `text` → at most 2 000 characters, never
 interpreted as HTML.
 
@@ -136,7 +168,7 @@ interpreted as HTML.
 | GET | `<channel_idx>/attributes/<id>/` | — | 200 `AttributeDefinitionResponse` |
 | PATCH | `<channel_idx>/attributes/<id>/` | any of `label`, `kind` (409 once a value is stored or a condition names it), `options`, `required`, `order`, `show_in_list`, `is_active`, no nulls — entity and key are fixed | 200 `AttributeDefinitionResponse` |
 | DELETE | `<channel_idx>/attributes/<id>/` | — | 204; 409 while values are stored (deactivate instead) |
-| GET | `<channel_idx>/fields/` | — | 200 `{results: [{name, kind, label, options}]}` |
+| GET | `<channel_idx>/fields/` | `entity` (`company`, default, or `deal`) | 200 `{results: [{name, kind, label, options}]}` |
 
 `required` is enforced on create and on a patch that touches the key, never retroactively. An inactive definition
 keeps its stored values but is refused in new values, conditions, imports and list filters.
@@ -144,7 +176,8 @@ keeps its stored values but is refused in new values, conditions, imports and li
 `fields/` lists every fact a rule condition or a scoring rule may name: the built-ins `lead_type` (select of the
 active lead types and `UNKNOWN`), `industry`, `platform`, `domain`, `origin` (text), `stage` (select of the stage
 keys), `hooks_count`, `emails_count`, `rotation_count`, `score_points` (number), `score_segment` (select `S1`–`S4`),
-then `attr.<key>` for every active company attribute. Area `leads.settings`.
+then `attr.<key>` for every active company attribute. `entity=deal` lists only the active deal attributes as
+`attr.<key>` (deals have no built-in facts). Area `leads.settings`.
 
 A scoring profile PATCH re-checks only the fields it carries: a profile whose attribute was deactivated can still be
 switched off, while re-saving its rules is refused until they name known fields. A condition whose stored value no
@@ -183,7 +216,7 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/activities/` | `company` (id), paging | 200 `ActivityListResponse` — `id, company_id, contact_id, kind, message, data, actor, created_at`, newest first |
+| GET | `<channel_idx>/activities/` | `company` (id), paging | 200 `ActivityListResponse` — `id, company_id, contact_id, deal_id, kind, message, data, actor, created_at`, newest first |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
 | POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |

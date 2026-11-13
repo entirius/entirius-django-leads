@@ -28,10 +28,11 @@ src/django_leads/
 ├── apps.py (connects receivers)  enums.py  settings.py (read at import)  urls.py  admin.py
 ├── models/       channel stage stage_event_rule company contact activity import_batch stage_rule rule_run claim
 │                 analysis_profile recipient_pick_profile erased_address lead_type attribute_definition
-│                 scoring_profile
+│                 scoring_profile deal_stage deal
 ├── schemas/      requests.py  responses.py
 ├── api/admin/    urls.py  views/ _base (auth, paging, Conflict)  company  company_action  contact  stage
 │                 stage_event  activity  import  report  rule  profile  gdpr  attribute  scoring  channel
+│                 deal  deal_stage
 │                 customer_link (accounts only)
 │                 test_views (development)
 ├── services/     activity (only Activity writer)  company  contact  stage (transition_stage)  import  sweep
@@ -40,7 +41,8 @@ src/django_leads/
 │                 suppression (communicator do-not-contact)  mailable  funnel  attribute (values)
 │                 fact (the one accessor)  condition  scoring  follow_up (tasks after a reply)
 │                 task_bridge (the only django_todo importer)  channel (settings)
-├── signals/      __init__ (stage_entered, contact_anonymised)  _deferred (after_commit)
+│                 deal_stage (sales pipeline)  deal (only Deal writer)  deal_board (columns, totals)
+├── signals/      __init__ (stage_entered, contact_anonymised, deal_stage_changed)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge
 │                 todo_receivers (timeline, soft)
 ├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks   (queue leads_default)

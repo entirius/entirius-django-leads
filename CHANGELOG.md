@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+Released as 0.5.0.
+
+- **Deals** (migration `0014`). A second level next to the company stages: one sales pipeline per channel
+  (`DealStage`: `key`, `label`, `order`, `kind` `open | won | lost`) and `Deal` on a company — owner, one-off and
+  recurring value (`Decimal(14, 2)`, `month` / `year`), currency (FK `django_regional.Currency`), expected close date,
+  `closed_at`, `lost_reason`, deal attributes, `created_by`. `deal_service` is the only writer: create (first open
+  stage; owner = the company's owner, else the creator; currency = `Channel.default_currency`), update (whitelist;
+  `stage`, `owner`, `company`, `closed_at` never), transition (any stage to any stage; won / lost set `closed_at`,
+  lost needs a reason, reopening clears both; signal `deal_stage_changed` on commit), delete (open deals only; their
+  open tasks are cancelled). Anonymising a contact takes it off its deals.
+  Every change is an Activity `deal` on the company timeline with `Activity.deal` set. A won deal does not move the
+  company's stage.
+- **Deals API** (area `leads.companies`): `deals/` (filters `stage`, `kind`, `owner`, `company`, `search`,
+  `close_from`, `close_to`; sort allowlist), `deals/board/` (columns per stage, totals per currency with the recurring
+  value per month, first 25 deals; constant query count), `deals/<id>/`, `deals/<id>/transition/` (`stage_key` or
+  `kind`; 400 without a lost reason, 409 `no_deal_stage`), `deals/<id>/activities/`, `companies/<id>/deals/`; the
+  company card gains `deals {open, won, lost}`. Deal stages under `deal-stages/` (area `leads.settings`; 409 while in
+  use). Amounts travel as decimal strings; a JSON number is refused.
+- **Deal attributes and fields.** Attribute definitions of entity `deal` now hold values; `fields/?entity=deal`
+  lists them. `Channel.default_currency` in `GET` / `PATCH channel/`.
+- **Tasks about deals.** `subject_ref = leads.Deal:<id>` (`utils/refs.deal_ref` / `deal_from_ref`); the timeline
+  receivers write those tasks on the deal's company with the deal set; deal responses carry `subject_ref`,
+  `subject_label` ("<company> — <title>") and `open_tasks`. The interested-reply task gets the note "Open a deal on
+  this company" — no deal is opened automatically. `ActivityResponse` gains `deal_id`.
+
 - **Tasks from replies** (soft dependency `django_todo`; `services/task_bridge.py` is its only importer, every call
   a no-op without it). A reply creates at most one task for the company's owner (none or deactivated → unowned),
   about `leads.Company:<id>`, naming `leads.Contact:<id>`: needs review or no class → "Read the reply"; `interested`

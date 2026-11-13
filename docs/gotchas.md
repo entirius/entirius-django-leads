@@ -91,13 +91,29 @@ item below: the rule, then where it is enforced.
 - **Profile prompts and rendered prompts never reach logs, Activity data or API lists.** Company and site values go
   into prompts only wrapped by `utils/prompts.as_data`.
 
+## Deals
+
+- **Company stages and deal stages are different tables and services.** Never reuse `Stage` / `stage_service` for a
+  deal, and never move a company when a deal is won — the company's stage map stays independent.
+- **`deal_service.transition` is the only deal stage change;** `owner_service.set_deal_owner` the only owner change.
+  `stage`, `owner`, `company` and `closed_at` are never in the update whitelist.
+- **Amounts are `Decimal` end to end** and strings in the API; a JSON number is refused (it would pass through a
+  float). Totals are grouped by currency — never add two currencies, never sum amounts in Python.
+- **The board and the lists must not query per deal or per stage:** `select_related` of company, contact, owner,
+  stage and currency; one aggregate for totals, one windowed query for the first 25 deals per stage, one query for
+  open tasks (`task_bridge.open_counts`). `test_deals.py` compares query counts.
+- **No personal data in deal titles or lost reasons.** GDPR erasure scrubs contacts and their tasks, never deals; a
+  contact anonymised or deleted only clears `Deal.contact`.
+- **`deal_service.update` saves only the patched columns** (`update_fields`). A full `save()` of a deal loaded
+  before a concurrent transition writes the old stage back.
+
 ## Receivers
 
 - **Every receiver defers with `signals/_deferred.after_commit` and never raises into the sender,** with
   `dispatch_uid="django_leads.<name>"`. A receiver that raises would roll back a communicator send or a form
   submission.
-- **Only `subject_ref` `leads.Company:<int>` belongs to leads** (`utils/refs.company_from_ref`); other modules' threads
-  share the signals.
+- **Only `subject_ref` `leads.Company:<int>` and `leads.Deal:<int>` belong to leads** (`utils/refs`); other modules'
+  threads and tasks share the signals. A deal's task is written on the deal's company, only for the deal's channel.
 - **GDPR hooks are discovered at call time** (`gdpr/registry.discover`), never in `ready()`. A `gdpr` module missing
   either hook raises `ImproperlyConfigured` on the first export or erase, not at boot.
 

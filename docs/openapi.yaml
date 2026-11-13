@@ -653,7 +653,7 @@ paths:
   /api/leads/v2/admin/{channel_idx}/companies/{id}/:
     get:
       operationId: api_leads_v2_admin_companies_retrieve
-      summary: One company with contacts and its last 20 activities
+      summary: One company with contacts, its last 20 activities and deal counts
       parameters:
       - in: path
         name: channel_idx
@@ -913,6 +913,48 @@ paths:
         '404':
           description: No response body
         '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/deals/:
+    get:
+      operationId: leads_company_deals_list
+      summary: Deals of one company, newest first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
           description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/request-audit/:
     post:
@@ -1276,10 +1318,555 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/deal-stages/:
+    get:
+      operationId: leads_deal_stages_list
+      summary: Deal stages of the channel in pipeline order
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Deal Stages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_deal_stages_create
+      description: 'Deals need at least one stage of each kind: a new deal starts in the first open stage.'
+      summary: Add a deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Deal Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealStageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DealStageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DealStageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deal-stages/{id}/:
+    get:
+      operationId: api_leads_v2_admin_deal_stages_retrieve
+      summary: One deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deal Stages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_deal_stages_partial_update
+      description: 409 on a key in use, or on a new kind while the stage holds deals.
+      summary: Update a deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deal Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDealStageUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDealStageUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDealStageUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_deal_stages_destroy
+      description: 409 while deals sit in the stage — move them first.
+      summary: Delete a deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deal Stages
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/:
+    get:
+      operationId: leads_deals_list
+      summary: Deals of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: close_from
+        schema:
+          type: string
+        description: Expected close date on or after (YYYY-MM-DD).
+      - in: query
+        name: close_to
+        schema:
+          type: string
+        description: Expected close date on or before (YYYY-MM-DD).
+      - in: query
+        name: company
+        schema:
+          type: integer
+        description: Company id.
+      - in: query
+        name: kind
+        schema:
+          type: string
+        description: open, won or lost.
+      - in: query
+        name: owner
+        schema:
+          type: string
+        description: me = the caller's companies, none = without an owner, a user id; blank = any.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Substring of the title or the company's name or domain.
+      - in: query
+        name: sort
+        schema:
+          type: string
+        description: expected_close_date, stage_entered_at, value_one_off, value_recurring, created; `-` prefix.
+      - in: query
+        name: stage
+        schema:
+          type: string
+        description: Deal stage key.
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_deals_create
+      description: Starts in the first open deal stage (409 without one). Without `owner_id` the company's owner owns it,
+        else the requesting user; without `currency` the channel default.
+      summary: Open a deal on a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Deals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DealCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DealCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/:
+    get:
+      operationId: api_leads_v2_admin_deals_retrieve
+      summary: One deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_deals_partial_update
+      description: Stage moves through transition/; `attributes` is merged (null removes a key); `owner_id` sets the owner
+        (null clears it). A value needs a currency; amounts are never negative.
+      summary: Update a deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDealUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDealUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDealUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_deals_destroy
+      description: 409 for a won or lost deal.
+      summary: Delete an open deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/activities/:
+    get:
+      operationId: leads_deal_activities_list
+      summary: Timeline entries about the deal, newest first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/transition/:
+    post:
+      operationId: api_leads_v2_admin_deals_transition_create
+      description: By `stage_key`, or by `kind` = the first stage of that kind (409 when the channel has none). A lost stage
+        needs `lost_reason` (400).
+      summary: Move a deal to another deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DealTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DealTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/board/:
+    get:
+      operationId: leads_deals_board
+      description: Count, totals per currency (recurring per month) and the first 25 deals of every stage.
+      summary: 'Deal board: one column per deal stage'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: owner
+        schema:
+          type: string
+        description: me = the caller's companies, none = without an owner, a user id; blank = any.
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealBoardResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/fields/:
     get:
       operationId: leads_fields_list
-      description: Built-in facts, then the active company attributes as attr.<key>, with kinds and options.
+      description: Built-in facts, then the active company attributes as attr.<key>, with kinds and options; entity=deal lists
+        the active deal attributes only.
       summary: Facts rule conditions and scoring rules may name
       parameters:
       - in: path
@@ -1287,6 +1874,11 @@ paths:
         schema:
           type: string
         required: true
+      - in: query
+        name: entity
+        schema:
+          type: string
+        description: company (default) or deal.
       tags:
       - Leads Attributes
       security:
@@ -2838,6 +3430,14 @@ components:
           examples:
           - null
           title: Contact Id
+        deal_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Deal the entry is about; null = none or deleted.
+          examples:
+          - null
+          title: Deal Id
         kind:
           description: Activity kind.
           examples:
@@ -2874,6 +3474,7 @@ components:
       - id
       - company_id
       - contact_id
+      - deal_id
       - kind
       - message
       - data
@@ -3198,7 +3799,7 @@ components:
       title: AttributeDefinitionResponse
       type: object
     AttributeEntity:
-      description: What a custom attribute describes; `deal` is accepted ahead of the deals model.
+      description: What a custom attribute describes.
       enum:
       - company
       - contact
@@ -3273,6 +3874,14 @@ components:
           - Default Europe
           title: Name
           type: string
+        default_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ISO 4217 of new deals; null = none.
+          examples:
+          - PLN
+          title: Default Currency
         resume_days:
           additionalProperties:
             type: integer
@@ -3285,6 +3894,7 @@ components:
       required:
       - idx
       - name
+      - default_currency
       - resume_days
       title: ChannelSettingsResponse
       type: object
@@ -3552,6 +4162,9 @@ components:
           description: Owner; null = none.
           examples:
           - null
+        deals:
+          $ref: '#/components/schemas/DealCounts'
+          description: Deals of the company per stage kind.
         contacts:
           description: Contacts of the company.
           items:
@@ -3595,6 +4208,7 @@ components:
       - score_segment
       - scored_at
       - owner
+      - deals
       - contacts
       - activities
       title: CompanyDetailResponse
@@ -4151,6 +4765,587 @@ components:
       - customer_uid
       title: CustomerLinkResponse
       type: object
+    DealBoardColumn:
+      properties:
+        stage:
+          $ref: '#/components/schemas/DealStageResponse'
+          description: The deal stage.
+        count:
+          description: Deals in the stage.
+          examples:
+          - 3
+          title: Count
+          type: integer
+        totals:
+          description: Totals per currency; never added across currencies.
+          items:
+            $ref: '#/components/schemas/DealTotal'
+          title: Totals
+          type: array
+        deals:
+          description: The first 25 deals, longest in the stage first.
+          items:
+            $ref: '#/components/schemas/DealResponse'
+          title: Deals
+          type: array
+      required:
+      - stage
+      - count
+      - totals
+      - deals
+      title: DealBoardColumn
+      type: object
+    DealBoardResponse:
+      properties:
+        results:
+          description: One column per deal stage in pipeline order.
+          items:
+            $ref: '#/components/schemas/DealBoardColumn'
+          title: Results
+          type: array
+      required:
+      - results
+      title: DealBoardResponse
+      type: object
+    DealCompany:
+      properties:
+        id:
+          description: Company id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        name:
+          description: Name.
+          examples:
+          - Example Shop
+          title: Name
+          type: string
+        domain:
+          description: Registrable domain.
+          examples:
+          - example-shop-2.test
+          title: Domain
+          type: string
+      required:
+      - id
+      - name
+      - domain
+      title: DealCompany
+      type: object
+    DealContact:
+      properties:
+        id:
+          description: Contact id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        name:
+          description: Full name; the email when the contact has no name.
+          examples:
+          - Jan Kowalski
+          title: Name
+          type: string
+      required:
+      - id
+      - name
+      title: DealContact
+      type: object
+    DealCounts:
+      properties:
+        open:
+          description: Open deals.
+          examples:
+          - 1
+          title: Open
+          type: integer
+        won:
+          description: Won deals.
+          examples:
+          - 0
+          title: Won
+          type: integer
+        lost:
+          description: Lost deals.
+          examples:
+          - 0
+          title: Lost
+          type: integer
+      required:
+      - open
+      - won
+      - lost
+      title: DealCounts
+      type: object
+    DealCreateRequest:
+      additionalProperties: false
+      properties:
+        company_id:
+          description: The company of the channel the deal is on.
+          examples:
+          - 100
+          minimum: 1
+          title: Company Id
+          type: integer
+        title:
+          description: What is sold; no personal data.
+          examples:
+          - Shop audit
+          maxLength: 255
+          minLength: 1
+          title: Title
+          type: string
+        contact_id:
+          anyOf:
+          - minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: A contact of the company.
+          title: Contact Id
+        owner_id:
+          anyOf:
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); absent = the company's owner, else the requesting user; null = none.
+          title: Owner Id
+        value_one_off:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '12000.00'
+          title: Value One Off
+        value_recurring:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '500.00'
+          title: Value Recurring
+        recurring_period:
+          $ref: '#/components/schemas/RecurringPeriod'
+          default: month
+          description: month or year.
+        currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 4217; absent = the channel default.
+          examples:
+          - PLN
+          title: Currency
+        expected_close_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Expected close date.
+          title: Expected Close Date
+        attributes:
+          additionalProperties: true
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
+          type: object
+      required:
+      - company_id
+      - title
+      title: DealCreateRequest
+      type: object
+    DealListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Deals of the page.
+          items:
+            $ref: '#/components/schemas/DealResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: DealListResponse
+      type: object
+    DealResponse:
+      properties:
+        id:
+          description: Deal id.
+          examples:
+          - 7
+          title: Id
+          type: integer
+        title:
+          description: What is sold.
+          examples:
+          - Shop audit
+          title: Title
+          type: string
+        company:
+          $ref: '#/components/schemas/DealCompany'
+          description: The company.
+        contact:
+          anyOf:
+          - $ref: '#/components/schemas/DealContact'
+          - type: 'null'
+          description: Contact; null = none.
+          examples:
+          - null
+        owner:
+          anyOf:
+          - $ref: '#/components/schemas/OwnerResponse'
+          - type: 'null'
+          description: Owner; null = none.
+          examples:
+          - null
+        stage:
+          $ref: '#/components/schemas/DealStageSummary'
+          description: Current deal stage.
+        stage_entered_at:
+          description: Entered the current stage.
+          examples:
+          - '2026-11-13T12:00:00Z'
+          format: date-time
+          title: Stage Entered At
+          type: string
+        value_one_off:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: One-off value, decimal string.
+          examples:
+          - '12000.00'
+          title: Value One Off
+        value_recurring:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Recurring value per period, decimal string.
+          examples:
+          - '500.00'
+          title: Value Recurring
+        recurring_period:
+          description: month or year.
+          examples:
+          - month
+          title: Recurring Period
+          type: string
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ISO 4217; null = none.
+          examples:
+          - PLN
+          title: Currency
+        expected_close_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Expected close date.
+          examples:
+          - '2026-12-31'
+          title: Expected Close Date
+        closed_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Entered a won or lost stage; null = open.
+          examples:
+          - null
+          title: Closed At
+        lost_reason:
+          description: Why it was lost; empty unless lost.
+          examples:
+          - ''
+          title: Lost Reason
+          type: string
+        attributes:
+          additionalProperties: true
+          description: Deal attribute values by key.
+          examples:
+          - {}
+          title: Attributes
+          type: object
+        open_tasks:
+          description: Open tasks about the deal; 0 without the todo module.
+          examples:
+          - 1
+          title: Open Tasks
+          type: integer
+        subject_ref:
+          description: Reference for a task about the deal.
+          examples:
+          - leads.Deal:7
+          title: Subject Ref
+          type: string
+        subject_label:
+          description: Label for a task about the deal.
+          examples:
+          - Example Shop — Shop audit
+          title: Subject Label
+          type: string
+        created_by:
+          description: Who opened it.
+          examples:
+          - anna
+          title: Created By
+          type: string
+        created_at:
+          description: Opened.
+          examples:
+          - '2026-11-13T12:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+        modified_at:
+          description: Last change.
+          examples:
+          - '2026-11-13T12:00:00Z'
+          format: date-time
+          title: Modified At
+          type: string
+      required:
+      - id
+      - title
+      - company
+      - contact
+      - owner
+      - stage
+      - stage_entered_at
+      - value_one_off
+      - value_recurring
+      - recurring_period
+      - currency
+      - expected_close_date
+      - closed_at
+      - lost_reason
+      - attributes
+      - open_tasks
+      - subject_ref
+      - subject_label
+      - created_by
+      - created_at
+      - modified_at
+      title: DealResponse
+      type: object
+    DealStageKind:
+      description: A deal is open until it enters a `won` or `lost` stage.
+      enum:
+      - open
+      - won
+      - lost
+      title: DealStageKind
+      type: string
+    DealStageListResponse:
+      properties:
+        results:
+          description: Deal stages in pipeline order.
+          items:
+            $ref: '#/components/schemas/DealStageResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: DealStageListResponse
+      type: object
+    DealStageRequest:
+      additionalProperties: false
+      properties:
+        key:
+          description: Slug.
+          examples:
+          - offer
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Offer sent
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+        order:
+          default: 0
+          description: Position in the pipeline.
+          maximum: 32767
+          minimum: 0
+          title: Order
+          type: integer
+        kind:
+          $ref: '#/components/schemas/DealStageKind'
+          default: open
+          description: open, won or lost.
+      required:
+      - key
+      - label
+      title: DealStageRequest
+      type: object
+    DealStageResponse:
+      properties:
+        id:
+          description: Deal stage id.
+          examples:
+          - 10
+          title: Id
+          type: integer
+        key:
+          description: Slug.
+          examples:
+          - offer
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Offer sent
+          title: Label
+          type: string
+        order:
+          description: Position in the pipeline.
+          examples:
+          - 10
+          title: Order
+          type: integer
+        kind:
+          description: open, won or lost.
+          examples:
+          - open
+          title: Kind
+          type: string
+      required:
+      - id
+      - key
+      - label
+      - order
+      - kind
+      title: DealStageResponse
+      type: object
+    DealStageSummary:
+      properties:
+        key:
+          description: Slug.
+          examples:
+          - offer
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Offer sent
+          title: Label
+          type: string
+        kind:
+          description: open, won or lost.
+          examples:
+          - open
+          title: Kind
+          type: string
+      required:
+      - key
+      - label
+      - kind
+      title: DealStageSummary
+      type: object
+    DealTotal:
+      properties:
+        currency:
+          description: ISO 4217.
+          examples:
+          - PLN
+          title: Currency
+          type: string
+        one_off:
+          description: Sum of one-off values, decimal string.
+          examples:
+          - '24000.00'
+          title: One Off
+          type: string
+        recurring:
+          description: Sum of recurring values per month (a yearly value counts as a twelfth), decimal string.
+          examples:
+          - '1000.00'
+          title: Recurring
+          type: string
+      required:
+      - currency
+      - one_off
+      - recurring
+      title: DealTotal
+      type: object
+    DealTransitionRequest:
+      additionalProperties: false
+      description: Name the target stage by `stage_key`, or by `kind` = its first stage of that kind.
+      properties:
+        stage_key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Target deal stage key.
+          title: Stage Key
+        kind:
+          anyOf:
+          - $ref: '#/components/schemas/DealStageKind'
+          - type: 'null'
+          default: null
+          description: 'open, won or lost: the first stage of the kind.'
+        lost_reason:
+          default: ''
+          description: Required for a lost stage; no personal data.
+          maxLength: 255
+          title: Lost Reason
+          type: string
+      title: DealTransitionRequest
+      type: object
     DevAnonymiseRequest:
       additionalProperties: false
       properties:
@@ -4303,7 +5498,7 @@ components:
     FieldListResponse:
       properties:
         results:
-          description: Built-in facts, then active company attributes.
+          description: Built-in facts, then active company attributes; with entity=deal the active deal attributes.
           items:
             $ref: '#/components/schemas/FieldResponse'
           title: Results
@@ -5202,6 +6397,16 @@ components:
     PatchedChannelSettingsRequest:
       additionalProperties: false
       properties:
+        default_currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 4217 of new deals; null clears it.
+          examples:
+          - PLN
+          title: Default Currency
         resume_days:
           anyOf:
           - $ref: '#/components/schemas/ResumeDays'
@@ -5382,6 +6587,131 @@ components:
             removes a key.
           title: Attributes
       title: ContactUpdateRequest
+      type: object
+    PatchedDealStageUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_]+$
+            type: string
+          - type: 'null'
+          default: null
+          description: Slug.
+          title: Key
+        label:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Label.
+          title: Label
+        order:
+          anyOf:
+          - maximum: 32767
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: Position in the pipeline.
+          title: Order
+        kind:
+          anyOf:
+          - $ref: '#/components/schemas/DealStageKind'
+          - type: 'null'
+          default: null
+          description: open, won or lost; fixed while the stage holds deals.
+      title: DealStageUpdateRequest
+      type: object
+    PatchedDealUpdateRequest:
+      additionalProperties: false
+      properties:
+        title:
+          anyOf:
+          - maxLength: 255
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: What is sold; no personal data.
+          title: Title
+        contact_id:
+          anyOf:
+          - minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: A contact of the company; null clears it.
+          title: Contact Id
+        owner_id:
+          anyOf:
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); null clears the owner.
+          title: Owner Id
+        value_one_off:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '12000.00'
+          title: Value One Off
+        value_recurring:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '500.00'
+          title: Value Recurring
+        recurring_period:
+          anyOf:
+          - $ref: '#/components/schemas/RecurringPeriod'
+          - type: 'null'
+          default: null
+          description: month or year.
+        currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 4217; null clears it.
+          title: Currency
+        expected_close_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Expected close date; null clears it.
+          title: Expected Close Date
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
+      title: DealUpdateRequest
       type: object
     PatchedLeadTypeUpdateRequest:
       additionalProperties: false
@@ -5768,6 +7098,12 @@ components:
       - modified_at
       title: ProfileResponse
       type: object
+    RecurringPeriod:
+      enum:
+      - month
+      - year
+      title: RecurringPeriod
+      type: string
     ResumeDays:
       additionalProperties: false
       properties:
