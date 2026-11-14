@@ -4,6 +4,13 @@
 
 Released as 0.5.0.
 
+- **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
+  `POST deals/<id>/archive/` (won or lost only, 409 `deal_open`) and `POST deals/<id>/restore/`, both idempotent,
+  with Activity `deal` "deal archived: <title>" / "deal restored: <title>" (`event` `deal_archived` /
+  `deal_restored`). An archived deal is left out of `deals/`, `companies/<id>/deals/`, the board and the company
+  card's counts; `deals/?archived=true` lists only the archived ones. It takes no update, transition or delete until
+  restored (409 `deal_archived`). The funnel is unchanged.
+
 - **The outreach gate answers for the recipient.** A receiver of communicator's `recipient_check` refuses a message
   about a company whose contact with the thread's address the gate refuses, as a sentence
   (`recipient_service.REFUSAL_SENTENCES`, `refusal_sentence`); a do-not-contact company refuses also without such a

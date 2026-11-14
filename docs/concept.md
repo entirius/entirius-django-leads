@@ -20,7 +20,7 @@ from agreements, website facts from siteintel, human attention from notification
 | `AttributeDefinition` | `entity` (`company`, `contact`, `deal`), `key`, `label`, `kind`, `options`, `required`, `order`, `show_in_list`, `is_active` | unique `(channel, entity, key)`; the kind is fixed once a value is stored |
 | `ScoringProfile` | `key`, `thresholds {S, M, L}`, `rules`, `disqualifiers`, `is_active` | unique `(channel, key)`; the first active profile by key scores the channel |
 | `DealStage` | `key`, `label`, `order`, `kind` (`open`, `won`, `lost`) | the sales pipeline; unique `(channel, key)`; a stage holding deals cannot be deleted nor change kind |
-| `Deal` | `company` (`CASCADE`), `contact` (null, `SET_NULL`), `title`, `owner` (FK user, null), `stage` (`PROTECT`), `stage_entered_at`, `value_one_off` / `value_recurring` (`Decimal(14, 2)`, null), `recurring_period` (`month`, `year`), `currency` (FK `Currency`, null, `PROTECT`), `expected_close_date`, `closed_at`, `lost_reason`, `attributes`, `created_by` | written only by `deal_service` (owner: `owner_service`); indexes `(channel, stage)`, `(channel, owner)`, `(company)` |
+| `Deal` | `company` (`CASCADE`), `contact` (null, `SET_NULL`), `title`, `owner` (FK user, null), `stage` (`PROTECT`), `stage_entered_at`, `value_one_off` / `value_recurring` (`Decimal(14, 2)`, null), `recurring_period` (`month`, `year`), `currency` (FK `Currency`, null, `PROTECT`), `expected_close_date`, `closed_at`, `lost_reason`, `archived_at` (null), `attributes`, `created_by` | written only by `deal_service` (owner: `owner_service`); indexes `(channel, stage)`, `(channel, owner)`, `(company)` |
 | `Activity` | `kind`, `message`, `data`, `actor` per company (and contact, and deal) | written only by `activity_service`, which also moves `Company.last_activity_at` |
 | `ImportBatch` | counters, `row_count`, `last_row_done`, `size_bytes`, capped `report`, `run_rules`, `owner` (FK user, null) | never the CSV itself |
 | `StageRule` | trigger, stage, action, template, contact strategy, conditions, cooldown, order | evaluated by `rule_service` |
@@ -223,9 +223,18 @@ stage "won" stays a person's move), and no rule fires on a deal. Different table
   as a twelfth) and never adds currencies.
 - **Deleting**: open deals only (409 `deal_closed`); the timeline keeps "deal deleted: <title>" with the old id and
   the deal's open tasks are cancelled ("deal deleted").
+- **Archiving**: a won or lost deal cannot be deleted — it is the record of a sale — but `deal_service.archive` takes
+  it out of the deal lists, the board and the company card's counts (`archived_at`); `deals/?archived=true` lists
+  the archived ones, the detail and its activities answer as for any deal, and a task about it stays as it is. An
+  open deal is refused (409 `deal_open`); archiving twice changes nothing. An archived deal takes no update, owner
+  change, transition (so no reopen) or delete (409 `deal_archived`) until `deal_service.restore` clears the mark.
+  The funnel counts company stage moves, never deals, so an archived deal changes no report. Activity `deal`
+  "deal archived: <title>" / "deal restored: <title>". Archive and the other writes lock the deal's row, so they
+  never interleave.
 - **Concurrency**: an update saves only the patched columns, so it never writes back a stage or owner changed by a
   concurrent request.
-- **On the company**: the company card counts its deals per kind; `companies/<id>/deals/` lists them.
+- **On the company**: the company card counts its deals per kind; `companies/<id>/deals/` lists them (archived
+  deals left out of both).
 - **Tasks**: the CMS creates tasks about a deal with `subject_ref = leads.Deal:<id>` and `subject_label` =
   "<company> — <title>" (both in every deal response); the timeline receivers write them on the deal's company with
   the deal set, and `open_tasks` counts them.
@@ -282,7 +291,7 @@ of the CRM features also carries in `data` every part a screen needs to render t
 | task created / done / cancelled / reopened | `event: "task_created" \| "task_done" \| "task_cancelled" \| "task_reopened"`, `task_id`, `title`, `kind`, `status`, `outcome` or `reason` when there is one |
 | hand-written mail | `event: "composed"`, `message_id`, `thread_id` |
 | sequence stopped or paused by a reply or a hand-written mail (Activity `note`) | `event: "sequence_stopped" \| "sequence_paused"`, `resume_at` (ISO or null) when paused |
-| deal opened / moved / won / lost / reopened / deleted | `event: "deal_opened" \| "deal_moved" \| "deal_won" \| "deal_lost" \| "deal_reopened" \| "deal_deleted"`, `deal_id`, `title`; a move adds `from`, `to` (keys), `from_stage`, `to_stage` (names) and `reason` when lost |
+| deal opened / moved / won / lost / reopened / deleted / archived / restored | `event: "deal_opened" \| "deal_moved" \| "deal_won" \| "deal_lost" \| "deal_reopened" \| "deal_deleted" \| "deal_archived" \| "deal_restored"`, `deal_id`, `title`; a move adds `from`, `to` (keys), `from_stage`, `to_stage` (names) and `reason` when lost |
 | owner set or cleared (company, deal) | `event: "owner_set" \| "owner_cleared"`, `owner_name` (full name, else username; `""` when cleared) |
 | stage moved | `from`, `to` (keys), `from_label`, `to_label` |
 
