@@ -29,9 +29,9 @@ def candidates(company: Company) -> list[Contact]:
     return list(contacts.select_related("language").order_by("-is_primary", "pk"))
 
 
-def block_reasons(contact: Contact) -> list[str]:
+def block_reasons(contact: Contact, refusals: dict[str, str | None] | None = None) -> list[str]:
     """The outreach gate: every reason no draft may go to the contact, in gate order; communicator's `can_mail` code
-    last (asked only for a contact with an email)."""
+    last (asked only for a contact with an email; looked up in `refusals` when a page asked for all its addresses)."""
     checks = (
         (contact.company.do_not_contact, "do_not_contact"),
         (not contact.email, "no_email"),
@@ -41,8 +41,24 @@ def block_reasons(contact: Contact) -> list[str]:
         (not contact.legal_basis, "no_legal_basis"),
     )
     reasons = [reason for failed, reason in checks if failed]
-    refusal = suppression_service.refusal(contact.company.channel, contact.email) if contact.email else None
+    refusal = _refusal(contact, refusals) if contact.email else None
     return [*reasons, refusal] if refusal else reasons
+
+
+def _refusal(contact: Contact, refusals: dict[str, str | None] | None) -> str | None:
+    if refusals is None:
+        return suppression_service.refusal(contact.company.channel, contact.email)
+    return refusals[contact.email]
+
+
+def mail_blocks(contacts: list[Contact]) -> dict[int, str]:
+    """The first reason of `block_reasons` per contact id, "" when it can be mailed — for contacts of one channel
+    with their company and its channel loaded: three queries for any number of contacts."""
+    if not contacts:
+        return {}
+    emails = [contact.email for contact in contacts if contact.email]
+    refusals = suppression_service.refusals(contacts[0].company.channel, emails)
+    return {contact.pk: next(iter(block_reasons(contact, refusals)), "") for contact in contacts}
 
 
 def block_reason(contact: Contact) -> str | None:

@@ -66,11 +66,17 @@ class ContactResponse(BaseModel):
     anonymised_at: datetime | None = Field(description="Anonymised.", examples=[None])
     wrong_person_at: datetime | None = Field(description="Flagged by a wrong-person reply.", examples=[None])
     attributes: dict[str, Any] = Field(description="Contact attribute values by key.", examples=[{"role": "buyer"}])
+    mail_block: str = Field(
+        description="First reason of the send check (`mailable/`) why the contact cannot be mailed now; empty when "
+        "it can.",
+        examples=["wrong_person"],
+    )
 
     @classmethod
-    def of(cls, contact) -> "ContactResponse":
-        fields = {name: getattr(contact, name) for name in cls.model_fields if name != "language"}
-        return cls.model_validate({**fields, "language": contact.language.iso2.lower() if contact.language else None})
+    def of(cls, contact, mail_block: str) -> "ContactResponse":
+        fields = {name: getattr(contact, name) for name in cls.model_fields if name not in ("language", "mail_block")}
+        language = contact.language.iso2.lower() if contact.language else None
+        return cls.model_validate({**fields, "language": language, "mail_block": mail_block})
 
 
 class ActivityResponse(BaseModel):
@@ -266,6 +272,12 @@ class RuleRunResponse(BaseModel):
     fired_at: datetime = Field(description="Evaluated.", examples=["2026-09-13T12:00:00Z"])
     outcome: str = Field(description="fired, skipped, blocked or cooldown; empty while claimed.", examples=["fired"])
     detail: str = Field(description="Short reason.", examples=["message 7 review_required"])
+    company_name: str = Field(description="Name of the company; empty when it has none.", examples=["Example Shop"])
+
+    @classmethod
+    def of(cls, run) -> "RuleRunResponse":
+        fields = {name: getattr(run, name) for name in cls.model_fields if name != "company_name"}
+        return cls.model_validate({**fields, "company_name": run.company.name})
 
 
 class RuleRunListResponse(_Page):

@@ -91,4 +91,4 @@ class RuleRunListView(AdminView):
     def get(self, request: Request, channel_idx: str) -> Response:
         query = parse(RuleRunListQuery, request.query_params.dict())
         runs = config_service.list_rule_runs(self.channel(channel_idx), company_id=query.company)
-        return self.paginated(request, runs, RuleRunResponse.model_validate)
+        return self.paginated(request, runs, RuleRunResponse.of)

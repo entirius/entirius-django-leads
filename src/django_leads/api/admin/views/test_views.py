@@ -69,9 +69,7 @@ class DevEvaluateView(DevelopmentView):
         runs = rule_service.evaluate_rules(
             company, body.trigger, stage=stage if body.trigger == RuleTrigger.STAGE_ENTERED else None
         )
-        return Response(
-            DevEvaluateResponse(runs=[RuleRunResponse.model_validate(run) for run in runs]).model_dump(mode="json")
-        )
+        return Response(DevEvaluateResponse(runs=[RuleRunResponse.of(run) for run in runs]).model_dump(mode="json"))
 
 
 class DevRotateNowView(DevelopmentView):

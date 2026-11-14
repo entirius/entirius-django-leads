@@ -33,7 +33,7 @@ def list_rules(channel: Channel) -> QuerySet[StageRule]:
 
 
 def list_rule_runs(channel: Channel, company_id: int | None = None) -> QuerySet[RuleRun]:
-    runs = RuleRun.objects.filter(rule__channel=channel)
+    runs = RuleRun.objects.filter(rule__channel=channel).select_related("company")
     return runs.filter(company_id=company_id) if company_id else runs
 
 

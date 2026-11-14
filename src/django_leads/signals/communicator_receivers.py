@@ -128,12 +128,13 @@ def record_reply(thread, reply) -> bool:
 
 
 def alert_reply(company, reply) -> bool:
-    """`Reply from <company> — <class words>` to the owner, else the role; nothing for a plan without an alert."""
+    """`Reply from <company> — <class words>` (`— Needs review` for a flagged reply without a class) to the owner, else
+    the role; nothing for a plan without an alert."""
     severity = (reply.plan_applied or {}).get("notify") or "high"
     if severity == NO_ALERT:
         return False
     body = (reply.body_text or "")[:REPLY_EXCERPT]
-    return alert_service.alert(company, severity=severity, title=reply_title(company.name, reply.intent), body=body)
+    return alert_service.alert(company, severity=severity, title=reply_title(company.name, reply), body=body)
 
 
 def block_company(subject_ref: str) -> None:

@@ -267,5 +267,7 @@ def _stamp(contact: Contact, field: str) -> bool:
 
 
 def list_contacts(channel: Channel, company_id: int | None = None) -> QuerySet[Contact]:
-    contacts = Contact.objects.filter(company__channel=channel).select_related("language").order_by("id")
+    contacts = (
+        Contact.objects.filter(company__channel=channel).select_related("language", "company__channel").order_by("id")
+    )
     return contacts.filter(company_id=company_id) if company_id else contacts

@@ -190,20 +190,18 @@ def run_file(batch: ImportBatch, path: Path) -> ImportBatch:
 
 
 def note_ignored_headers(batch: ImportBatch, header: list[str]) -> None:
-    """Every column the import does not read, once per batch: `{row: 1, reason: "ignored_column:<name>"}` (the name
-    capped at 64 characters), and the names in `ignored_columns`. Attribute columns count as read only for active definitions of the channel. A retry
-    finds the entries of its first attempt (row 1 is the header) and adds none."""
-    if batch.ignored_columns or any(entry["row"] == 1 for entry in batch.report):
+    """Every column the import does not read, once per batch, in `ignored_columns` (each name capped at 64
+    characters); the row report stays about rows. Attribute columns count as read only for active definitions of the
+    channel. A retry finds the names of its first attempt and adds none."""
+    if batch.ignored_columns:
         return
     known = {*CSV_COLUMNS, *COLUMN_ALIASES.values(), *_attribute_headers(batch.channel)}
     names = dict.fromkeys(name[:HEADER_MAX_LENGTH] for name in header if name and name not in known)
     ignored = list(names)[: leads_settings.LEADS_IMPORT_REPORT_MAX]
     if not ignored:
         return
-    room = max(leads_settings.LEADS_IMPORT_REPORT_MAX - len(batch.report), 0)
     batch.ignored_columns = ignored
-    batch.report.extend({"row": 1, "reason": f"ignored_column:{name}"} for name in ignored[:room])
-    batch.save(update_fields=["ignored_columns", "report", "modified_at"])
+    batch.save(update_fields=["ignored_columns", "modified_at"])
 
 
 def _attribute_headers(channel: Channel) -> list[str]:

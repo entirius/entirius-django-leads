@@ -66,6 +66,12 @@ def refusal(channel: Channel, email: str) -> str | None:
     return store.can_mail(target, email) if target else None
 
 
+def refusals(channel: Channel, emails: list[str]) -> dict[str, str | None]:
+    """`refusal` of every address, keyed by the address as given — three queries for any number."""
+    target = communicator_channel(channel)
+    return store.can_mail_many(target, emails) if target else dict.fromkeys(emails)
+
+
 def explain(channel: Channel, email: str) -> dict[str, Any] | None:
     target = communicator_channel(channel)
     return store.explain(target, email) if target and email else None

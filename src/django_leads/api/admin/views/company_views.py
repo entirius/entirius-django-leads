@@ -13,6 +13,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView, Conflict, parse
+from django_leads.api.admin.views.contact_views import contact_rows
 from django_leads.api.admin.views.owner_views import owner_or_400
 from django_leads.enums import LeadSource
 from django_leads.models import Company, Stage
@@ -28,7 +29,6 @@ from django_leads.schemas.responses import (
     CompanyDetailResponse,
     CompanyListResponse,
     CompanyResponse,
-    ContactResponse,
 )
 from django_leads.services import (
     attribute_service,
@@ -62,7 +62,7 @@ def attribute_filters(request: Request) -> dict[str, str]:
 
 
 def detail(company: Company) -> dict:
-    contacts = [ContactResponse.of(contact) for contact in company.contacts.select_related("language")]
+    contacts = contact_rows(list(company.contacts.select_related("language")))
     activities = [ActivityResponse.model_validate(row) for row in company.activities.all()[:RECENT_ACTIVITIES]]
     body = CompanyDetailResponse(
         **CompanyResponse.of(company).model_dump(),
