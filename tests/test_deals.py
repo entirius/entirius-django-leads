@@ -535,3 +535,106 @@ def test_deleting_a_deal_cancels_its_open_tasks(admin_api, pipeline, company, dj
     with django_capture_on_commit_callbacks(execute=True):
         assert admin_api.delete(api_url(f"deals/{deal['id']}/")).status_code == 204
     assert Task.objects.get(subject_ref=deal["subject_ref"]).status == "cancelled"
+
+
+# --- archive -----------------------------------------------------------------------------------------------------------
+
+
+def archive(admin_api, deal_id: int, action: str = "archive"):
+    return admin_api.post(api_url(f"deals/{deal_id}/{action}/"))
+
+
+def won_deal(admin_api, company, **fields) -> int:
+    deal_id = open_deal(admin_api, company, **fields)["id"]
+    assert move(admin_api, deal_id, kind="won").status_code == 200
+    return deal_id
+
+
+def list_ids(admin_api, path: str = "deals/", **params) -> list[int]:
+    return [row["id"] for row in admin_api.get(api_url(path), params).json()["results"]]
+
+
+def test_a_closed_deal_is_archived_once_and_restored(admin_api, pipeline, company):
+    deal_id = won_deal(admin_api, company)
+    first = archive(admin_api, deal_id)
+    assert first.status_code == 200 and first.json()["archived_at"] is not None
+    assert archive(admin_api, deal_id).json()["archived_at"] == first.json()["archived_at"]
+    restored = archive(admin_api, deal_id, "restore")
+    assert restored.status_code == 200 and restored.json()["archived_at"] is None
+    assert archive(admin_api, deal_id, "restore").json()["archived_at"] is None
+    rows = Activity.objects.filter(deal_id=deal_id, data__event__in=["deal_archived", "deal_restored"])
+    assert [(row.message, row.data["event"]) for row in rows.order_by("pk")] == [
+        ("deal archived: Shop audit", "deal_archived"),
+        ("deal restored: Shop audit", "deal_restored"),
+    ]
+
+
+def test_a_lost_deal_can_be_archived(admin_api, pipeline, company):
+    deal_id = open_deal(admin_api, company)["id"]
+    move(admin_api, deal_id, kind="lost", lost_reason="price")
+    assert archive(admin_api, deal_id).status_code == 200
+
+
+def test_an_open_deal_cannot_be_archived(admin_api, pipeline, company):
+    deal_id = open_deal(admin_api, company)["id"]
+    refused = archive(admin_api, deal_id)
+    assert refused.status_code == 409 and refused.json()["error"] == "DEAL_OPEN"
+    assert Deal.objects.get(pk=deal_id).archived_at is None
+
+
+@pytest.mark.parametrize(
+    "write",
+    [
+        lambda api, deal_id: api.patch(api_url(f"deals/{deal_id}/"), {"title": "Renamed"}, "json"),
+        lambda api, deal_id: api.patch(api_url(f"deals/{deal_id}/"), {"owner_id": None}, "json"),
+        lambda api, deal_id: move(api, deal_id, kind="open"),
+        lambda api, deal_id: api.delete(api_url(f"deals/{deal_id}/")),
+    ],
+    ids=["update", "owner", "reopen", "delete"],
+)
+def test_an_archived_deal_takes_no_other_write(admin_api, pipeline, company, write):
+    deal_id = won_deal(admin_api, company)
+    archive(admin_api, deal_id)
+    refused = write(admin_api, deal_id)
+    assert refused.status_code == 409 and refused.json()["error"] == "DEAL_ARCHIVED"
+    deal = Deal.objects.select_related("stage").get(pk=deal_id)
+    assert (deal.title, deal.stage.key, deal.owner.username) == ("Shop audit", "won", "operator")
+    archive(admin_api, deal_id, "restore")
+    assert move(admin_api, deal_id, kind="open").status_code == 200
+
+
+def test_archive_and_restore_need_the_companies_area(customer_api, admin_api, pipeline, company):
+    deal_id = won_deal(admin_api, company)
+    assert archive(customer_api, deal_id).status_code == 403
+    assert archive(customer_api, deal_id, "restore").status_code == 403
+    assert archive(admin_api, 999999).status_code == 404
+
+
+def test_an_archived_deal_leaves_the_lists_the_board_and_the_counts(admin_api, pipeline, company):
+    kept, archived = won_deal(admin_api, company), won_deal(admin_api, company, title="Old sale")
+    archive(admin_api, archived)
+    assert list_ids(admin_api) == [kept]
+    assert list_ids(admin_api, archived="true") == [archived]
+    assert list_ids(admin_api, f"companies/{company.pk}/deals/") == [kept]
+    won = admin_api.get(api_url("deals/board/")).json()["results"][2]
+    assert won["count"] == 1 and [row["id"] for row in won["deals"]] == [kept]
+    assert admin_api.get(api_url(f"companies/{company.pk}/")).json()["deals"] == {"open": 0, "won": 1, "lost": 0}
+    assert admin_api.get(api_url(f"deals/{archived}/")).status_code == 200
+    assert admin_api.get(api_url(f"deals/{archived}/activities/")).json()["count"] == 3
+
+
+def test_the_archived_list_does_not_query_more(admin_api, pipeline, company):
+    won_deal(admin_api, company)
+    archive(admin_api, won_deal(admin_api, company, title="Old sale"))
+    with CaptureQueriesContext(connection) as others:
+        assert admin_api.get(api_url("deals/")).json()["count"] == 1
+    with CaptureQueriesContext(connection) as archived:
+        assert admin_api.get(api_url("deals/"), {"archived": "true"}).json()["count"] == 1
+    assert len(archived) == len(others)
+
+
+def test_the_funnel_still_counts_an_archived_deal_s_company(admin_api, pipeline, company):
+    deal_id = won_deal(admin_api, company)
+    before = admin_api.get(api_url("reports/funnel/")).json()
+    archive(admin_api, deal_id)
+    assert admin_api.get(api_url("reports/funnel/")).json() == before
