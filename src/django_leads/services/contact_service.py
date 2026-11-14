@@ -21,6 +21,7 @@ from django_leads.services import (
     activity_service,
     attribute_service,
     follow_up_service,
+    recipient_service,
     retention_service,
     suppression_service,
 )
@@ -248,10 +249,13 @@ def opt_out_address(email: str, channel_idx: str, *, actor: str) -> int:
 
 
 def flag_wrong_person(contact: Contact, *, actor: str) -> Contact:
-    """Set once by a `wrong_person` reply; the gate refuses the contact from then on."""
+    """Set once by a `wrong_person` reply; the gate refuses the contact from then on and its drafts waiting for
+    review are withdrawn."""
     if _stamp(contact, "wrong_person_at"):
         message = "contact flagged: wrong person"
         activity_service.record(contact.company, ActivityKind.NOTE, message, contact=contact, actor=actor)
+        reason = recipient_service.REFUSAL_SENTENCES["wrong_person"]
+        suppression_service.withdraw_drafts(contact.company.channel, contact.email, reason=reason)
     return contact
 
 

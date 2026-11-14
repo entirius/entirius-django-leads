@@ -411,7 +411,10 @@ class FunnelStage(BaseModel):
     key: str = Field(description="Stage key.", examples=["contacted"])
     label: str = Field(description="Label.", examples=["Contacted"])
     current: int = Field(description="Companies in the stage now.", examples=[4])
-    entered: int = Field(description="Moves into the stage in the period.", examples=[12])
+    entered: int = Field(
+        description="Moves into the stage in the period plus the companies created in the period that started there.",
+        examples=[12],
+    )
     left: int = Field(description="Moves out of the stage in the period.", examples=[8])
     mean_seconds: float | None = Field(description="Mean time in the stage of the moves out.", examples=[3600.0])
 

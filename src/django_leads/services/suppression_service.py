@@ -10,6 +10,7 @@ from typing import Any
 
 from django_communicator.enums import SuppressionKind, SuppressionScope, SuppressionSource
 from django_communicator.models import Channel as CommunicatorChannel
+from django_communicator.services import review_service
 from django_communicator.services import suppression_service as store
 
 from django_leads.models import Channel, Company
@@ -70,6 +71,13 @@ def refusals(channel: Channel, emails: list[str]) -> dict[str, str | None]:
     """`refusal` of every address, keyed by the address as given — three queries for any number."""
     target = communicator_channel(channel)
     return store.can_mail_many(target, emails) if target else dict.fromkeys(emails)
+
+
+def withdraw_drafts(channel: Channel, email: str, *, reason: str) -> None:
+    """Drafts to `email` waiting for review in the channel are rejected with `reason` (nobody may send them)."""
+    target = communicator_channel(channel)
+    if target and email:
+        review_service.withdraw(target, email, reason=reason)
 
 
 def explain(channel: Channel, email: str) -> dict[str, Any] | None:

@@ -3,7 +3,8 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 """communicator → leads: timeline, the event → stage map (first send, replies by class, finished sequences),
-do-not-contact (reviewer skips, confirmed opt-outs), hard bounces; the outreach gate on draft retries."""
+do-not-contact (reviewer skips, confirmed opt-outs), hard bounces; the outreach gate on draft retries and on every
+recipient check (approval, approval lists, delivery)."""
 
 import logging
 
@@ -15,6 +16,7 @@ from django_communicator.signals import (
     message_bounced,
     message_sent,
     optout_confirmed,
+    recipient_check,
     reply_received,
     sequence_finished,
 )
@@ -49,6 +51,7 @@ def connect() -> None:
     draft_retry_requested.connect(on_draft_retry_requested, dispatch_uid="django_leads.on_draft_retry_requested")
     optout_confirmed.connect(on_optout_confirmed, dispatch_uid="django_leads.on_optout_confirmed")
     message_bounced.connect(on_message_bounced, dispatch_uid="django_leads.on_message_bounced")
+    recipient_check.connect(on_recipient_check, dispatch_uid="django_leads.on_recipient_check")
 
 
 def handle_reply_received(sender, thread, reply, **kwargs) -> str | None:
@@ -98,6 +101,14 @@ def on_draft_retry_requested(sender, message, **kwargs) -> str | None:
     if reason:
         record_retry_blocked(company, contact, message, reason)
     return reason
+
+
+def on_recipient_check(sender, message, **kwargs) -> str | None:
+    """Synchronous: the sentence the outreach gate refuses the thread's recipient with, None for a thread about no
+    company of leads or an address that is no contact of it (unless the company is marked do not contact)."""
+    thread = message.thread
+    company = company_from_ref(thread.subject_ref)
+    return recipient_service.refusal_sentence(company, thread.recipient_email) if company else None
 
 
 def record_retry_blocked(company, contact, message, reason: str) -> None:

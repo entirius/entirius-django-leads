@@ -16,6 +16,15 @@ from django_leads.services import activity_service, suppression_service
 from django_leads.utils.prompts import prompt_messages
 
 PICK_KEY = "leads.pick_recipient"
+# What a reason of the outreach gate says when it refuses a message's recipient (`recipient_check`); communicator's own
+# codes (`suppressed`, `address_invalid`) are answered by communicator and `no_email` cannot hold for an address.
+REFUSAL_SENTENCES = {
+    "do_not_contact": "the company is marked do not contact",
+    "opted_out": "the contact opted out",
+    "anonymised": "the contact was anonymised",
+    "wrong_person": "the contact is flagged as the wrong person",
+    "no_legal_basis": "the contact has no legal basis for mail",
+}
 
 
 class PickRejected(Exception):
@@ -64,6 +73,17 @@ def mail_blocks(contacts: list[Contact]) -> dict[int, str]:
 def block_reason(contact: Contact) -> str | None:
     """The first reason of `block_reasons`, None when a draft may go to the contact."""
     return next(iter(block_reasons(contact)), None)
+
+
+def refusal_sentence(company: Company, email: str) -> str | None:
+    """Why the company refuses mail to `email`: the first reason of the contact with that address (case-insensitive)
+    as a sentence; a do-not-contact company refuses also without such a contact. None for any other address."""
+    contact = company.contacts.filter(email__iexact=email).order_by("pk").first()
+    if contact is None:
+        return REFUSAL_SENTENCES["do_not_contact"] if company.do_not_contact else None
+    contact.company = company
+    no_refusal = {contact.email: None}  # communicator asks `can_mail` itself
+    return next((REFUSAL_SENTENCES[r] for r in block_reasons(contact, no_refusal) if r in REFUSAL_SENTENCES), None)
 
 
 def eligible(contact: Contact) -> bool:
