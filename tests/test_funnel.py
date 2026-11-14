@@ -66,10 +66,35 @@ def test_per_stage_numbers(funnel):
     stages = by_key(funnel_service.funnel(funnel))
     assert list(stages) == ["new", "contacted", "won", "replied", "unresponsive"]
     pick = ("current", "entered", "left", "mean_seconds")
-    assert [stages["new"][name] for name in pick] == [1, 0, 2, 1.5 * DAY]
+    assert [stages["new"][name] for name in pick] == [1, 3, 2, 1.5 * DAY]  # created there: entered
     assert [stages["contacted"][name] for name in pick] == [1, 2, 1, 2 * DAY]
     assert [stages["replied"][name] for name in pick] == [1, 1, 0, None]
     assert [stages["won"][name] for name in pick] == [0, 0, 0, None]
+
+
+def test_a_company_created_without_a_move_entered_its_current_stage(channel):
+    make_company(channel, "solo.test", "fair", T0)
+    Company.objects.filter(domain="solo.test").update(stage=Stage.objects.get(key="contacted"))
+
+    stages = by_key(funnel_service.funnel(channel))
+
+    assert (stages["contacted"]["entered"], stages["new"]["entered"]) == (1, 0)
+
+
+def test_a_moved_company_entered_the_from_stage_of_its_earliest_move(channel):
+    company = make_company(channel, "moved.test", "fair", T0)
+    move(company, "contacted", T0 + timedelta(days=1))
+    move(company, "replied", T0 + timedelta(days=2))
+
+    stages = by_key(funnel_service.funnel(channel))
+
+    assert [stages[key]["entered"] for key in ("new", "contacted", "replied")] == [1, 1, 1]
+
+
+def test_only_companies_created_in_the_window_enter_by_creation(funnel):
+    stages = by_key(funnel_service.funnel(funnel, date_from=date(2026, 11, 2), date_to=date(2026, 11, 2)))
+
+    assert stages["new"]["entered"] == 1  # c.test; a and b were created the day before
 
 
 def test_companies_per_origin(funnel):
@@ -96,7 +121,7 @@ def test_date_window(funnel):
 def test_fixed_query_count(funnel, channel, django_assert_num_queries):
     for n in range(5):
         make_company(channel, f"more-{n}.test", "fair", T0)
-    with django_assert_num_queries(4):
+    with django_assert_num_queries(5):
         funnel_service.funnel(channel, origin="fair", date_from=date(2026, 11, 1))
 
 
