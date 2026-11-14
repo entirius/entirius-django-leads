@@ -236,10 +236,12 @@ stage with its rules, 0 when `run_rules` is off). The detail adds `report: [{row
 |---|---|---|---|
 | GET | `<channel_idx>/reports/funnel/` | `origin` (exact), `date_from`, `date_to` (`YYYY-MM-DD`, inclusive) | 200 `FunnelResponse` |
 
-`FunnelResponse` (area `leads.companies`), aggregated from `stage` activities in four queries: `transitions:
+`FunnelResponse` (area `leads.companies`), aggregated from `stage` activities in five queries: `transitions:
 [{from_stage, to_stage, count, mean_seconds}]` (moves in the period, mean time in the source stage — from the
 previous move or the company's creation), `stages: [{key, label, current, entered, left, mean_seconds}]` in pipeline
-order (`current` = companies there now, of the origin; `mean_seconds` over the moves out), `origins: [{origin,
+order (`current` = companies there now, of the origin; `entered` = moves in plus the companies created in the period
+that started there — the stage they are in without a move, else the `from` stage of their earliest move;
+`mean_seconds` over the moves out), `origins: [{origin,
 companies}]` (companies created in the period). Dates filter moves and creations by their local day.
 
 ## Rules and prompt profiles

@@ -4,6 +4,15 @@
 
 Released as 0.5.0.
 
+- **The outreach gate answers for the recipient.** A receiver of communicator's `recipient_check` refuses a message
+  about a company whose contact with the thread's address the gate refuses, as a sentence
+  (`recipient_service.REFUSAL_SENTENCES`, `refusal_sentence`); a do-not-contact company refuses also without such a
+  contact. No approval, approval list or delivery lets such a draft through.
+- **A wrong-person flag withdraws the address's waiting drafts** (`contact_service.flag_wrong_person`, communicator
+  `review_service.withdraw`).
+- **Funnel: a creation counts as entering the first stage.** `entered` of a stage adds the companies created in the
+  window that started there (no move: their current stage; else the `from` stage of their earliest move); five queries.
+
 - **What the screens no longer guess.** `ContactResponse.mail_block`: the first reason of the send check behind
   `mailable/` (`""` when the contact can be mailed), from the same `block_reasons`; a page of contacts (list, company
   card) asks communicator's `can_mail_many` once. `RuleRunResponse.company_name`, companies joined with the page.

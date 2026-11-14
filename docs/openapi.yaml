@@ -5648,7 +5648,7 @@ components:
           title: Current
           type: integer
         entered:
-          description: Moves into the stage in the period.
+          description: Moves into the stage in the period plus the companies created in the period that started there.
           examples:
           - 12
           title: Entered

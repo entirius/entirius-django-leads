@@ -169,6 +169,14 @@ basis, communicator's `explain` and the retention clock — a read, never the ga
 of those reasons as `mail_block` (`recipient_service.mail_blocks(contacts)`: the same `block_reasons` with
 communicator's `can_mail_many` asked once for the page), so a list badge and the dialog never disagree.
 
+The gate also answers communicator's `recipient_check` for every message about a company (approval, approval list,
+delivery): `recipient_service.refusal_sentence(company, email)` takes the contact with the thread's address
+(case-insensitive) and turns the first reason of `block_reasons` into a sentence (`REFUSAL_SENTENCES`: "the company
+is marked do not contact", "the contact opted out", "the contact was anonymised", "the contact is flagged as the
+wrong person", "the contact has no legal basis for mail"); a do-not-contact company refuses also an address that is
+no contact of it. `suppressed` and `address_invalid` are communicator's own answers and are not repeated. Two
+queries per message.
+
 ### Do not contact
 
 One writer each: `contact_service.opt_out(contact, reason=, actor=)` sets `opt_out_at` once (Activity `optout`) and
@@ -176,7 +184,9 @@ suppresses the address in communicator (source `manual`); `company_service.set_d
 actor=)` sets the flag (Activity `note`), suppresses the company's domain when turned on and removes that domain row
 (only the one leads wrote) when turned off. A confirmed opt-out from communicator opts out every contact with the
 address in its channel, or in every channel when communicator's suppression scope is `install`. A `wrong_person`
-reply sets `Contact.wrong_person_at`; the gate, the recipient pick and the rotation skip the contact.
+reply sets `Contact.wrong_person_at`; the gate, the recipient pick and the rotation skip the contact, and the
+address's drafts waiting for review are withdrawn (communicator `review_service.withdraw`, "the contact is flagged as
+the wrong person").
 
 The draft passes the company's `lead_type` as communicator's `audience`: one `template_key` per rule, the lead type
 picks the template variant — communicator's cascade (language, lead type) → (language, any) → (channel default
@@ -283,7 +293,7 @@ The sequence note is written only when the thread's sequence stopped at or after
 
 | Module | leads calls | leads receives |
 |---|---|---|
-| communicator | `compose(channel_idx, recipient, subject, body_text, subject_ref, author, mailbox_user_id, in_reply_to)` for a hand-written mail; `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>, mailbox_user_id=<owner id>, subject_label=<company name>)` — the only caller from leads (`compose` gets `subject_label` too); leads never writes a `Message` | `reply_received` (synchronous: communicator sends it after its commit) → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, sequence note, follow-up task, then a notification of the reply plan's severity (`none` = none) titled by communicator's `reply_title`: `Reply from <company> — <class words>` (`— Needs review` for a reply without a class flagged for a person, `Reply from <company>` without either); the receiver answers `REPLY_ALERTED` when it raised it, so communicator raises none — one bell entry per reply; `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce". Calls `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `can_mail_many` / `explain` / `scope` |
+| communicator | `compose(channel_idx, recipient, subject, body_text, subject_ref, author, mailbox_user_id, in_reply_to)` for a hand-written mail; `communicate(channel_idx, template_key, recipient, context, subject_ref="leads.Company:<id>", requires_review=True, audience=<lead_type>, mailbox_user_id=<owner id>, subject_label=<company name>)` — the only caller from leads (`compose` gets `subject_label` too); leads never writes a `Message` | `reply_received` (synchronous: communicator sends it after its commit) → Activity `reply` with the class, wrong-person flag, `reply:<class>` map event, sequence note, follow-up task, then a notification of the reply plan's severity (`none` = none) titled by communicator's `reply_title`: `Reply from <company> — <class words>` (`— Needs review` for a reply without a class flagged for a person, `Reply from <company>` without either); the receiver answers `REPLY_ALERTED` when it raised it, so communicator raises none — one bell entry per reply; `company_skipped` (reviewer) → `set_do_not_contact`, Activity `blocked`; `message_sent` → Activity `sent`, the first one `first_sent`; `sequence_finished` → map event, rotation task; `optout_confirmed` → `opt_out`; `message_bounced` (hard) → Activity `note` "address invalid: hard bounce"; `draft_retry_requested` (synchronous) → the gate's reason code; `recipient_check` (synchronous) → the gate's refusal as a sentence. Calls `review_service.withdraw` (wrong person); `suppression_service` `suppress_email` / `create_suppression` / `delete_suppression` / `can_mail` / `can_mail_many` / `explain` / `scope` |
 | agreements | `resolve_clause_set(channel_idx, legal_basis, language)` + `render_legal_footer` (contact language, else channel default); `LegalBasis` enum | — (a missing clause set → Activity `skipped: no clause set`, no draft) |
 | siteintel | `request_audit(domain, channel_idx, requested_by)` | `report_ready(audit, succeeded_sources)` → analysis task |
 | toolbox (`django_utils.toolbox`) | one completion per analysis (`AnalysisProfile` `leads.analysis`) and per `ai_pick` | — |
