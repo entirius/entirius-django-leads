@@ -4,6 +4,13 @@
 
 Released as 0.5.0.
 
+- **What the screens no longer guess.** `ContactResponse.mail_block`: the first reason of the send check behind
+  `mailable/` (`""` when the contact can be mailed), from the same `block_reasons`; a page of contacts (list, company
+  card) asks communicator's `can_mail_many` once. `RuleRunResponse.company_name`, companies joined with the page.
+  The import report no longer carries `ignored_column:<name>` rows: the names are in `ignored_columns` only. The reply
+  alert is titled by communicator's `reply_title`: a flagged reply without a class reads `Reply from <company> — Needs
+  review`.
+
 - **Words for the screens.** Every `communicate` / `compose` call passes `subject_label=<company name>`, so
   communicator's approval inbox names the company. The reply alert reads `Reply from <company> — <class words>`
   (`Reply from <company>` without a class; communicator's `reply_type_label`), and the `reply_received` receiver

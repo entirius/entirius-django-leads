@@ -72,7 +72,9 @@ reason, verified_at} | null}`), `retention {days, due_at, exempt_won}` (`due_at`
 | DELETE | `<channel_idx>/contacts/<id>/` | — | 204 — the contact was never used and is deleted; 200 `ContactResponse` — it was used and is anonymised instead |
 
 `ContactResponse`: `id, company_id, email, first_name, last_name, job_title, phone, language, is_primary, source,
-legal_basis, opt_out_at, anonymised_at, wrong_person_at, attributes`. Contact attributes are personal data: GDPR
+legal_basis, opt_out_at, anonymised_at, wrong_person_at, attributes, mail_block`. `mail_block` is the first reason of
+the send check behind `mailable/` (`recipient_service.block_reasons`: same codes, same order) why the contact cannot
+be mailed now, `""` when it can; a list page asks communicator for all its addresses at once. Contact attributes are personal data: GDPR
 export includes them, anonymisation and erasure clear them. `email` is set once: a contact without one may get it by PATCH (409
 `CONTACT_EXISTS` when the company already has it), a set email never changes (400). `legal_basis` is one of
 `consent`, `legitimate_interest`, `contract`; `consent` requires a non-blank `consent_ref` (≤ 255), recorded in the
@@ -224,7 +226,7 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
 skipped_count, row_count, size_bytes, created_by, created_at, run_rules, owner_id, rules_queued, ignored_columns, automation_started_count`
 (`rules_queued`: one rule evaluation per created company when `run_rules` is on, else 0; `ignored_columns`: header
-names of the file the import did not read; `automation_started_count`: companies of the batch that entered their first
+names of the file the import did not read, never repeated in `report`; `automation_started_count`: companies of the batch that entered their first
 stage with its rules, 0 when `run_rules` is off). The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
 
@@ -247,7 +249,7 @@ companies}]` (companies created in the period). Dates filter moves and creations
 | GET | `<channel_idx>/rules/` | — | 200 `{results: [RuleResponse]}` in evaluation order |
 | POST | `<channel_idx>/rules/` | `trigger` (`stage_entered`, `intel_ready`; required), `stage_id` (required for `stage_entered`), `action` (`communicate` default, `request_audit`, `score`), `template_key` (required for `communicate`), `contact_strategy` (`primary`, `ai_pick`), `require_hooks` (true), `require_email` (true), `cooldown_hours` (24, 0–8760), `is_active`, `order`, `conditions` (`[{field, op, value}]`, all must hold) | 201 `RuleResponse` |
 | GET / PATCH / DELETE | `<channel_idx>/rules/<id>/` | PATCH: any field of POST, null only for `stage_id` | 200 / 200 / 204 (runs deleted with the rule) |
-| GET | `<channel_idx>/rule-runs/` | `company` (id), paging | 200 `RuleRunListResponse` — `id, rule_id, company_id, fired_at, outcome (fired|skipped|blocked|cooldown, empty while claimed), detail` |
+| GET | `<channel_idx>/rule-runs/` | `company` (id), paging | 200 `RuleRunListResponse` — `id, rule_id, company_id, company_name, fired_at, outcome (fired|skipped|blocked|cooldown, empty while claimed), detail`; companies joined with the page |
 | GET | `<channel_idx>/analysis-profiles/` | — | 200 `{results: [{id, key, model, is_active}]}` |
 | POST | `<channel_idx>/analysis-profiles/` | `key` (default use: `leads.analysis`), `prompt_text`, `json_schema`, `model`, `is_active` | 201 profile with `prompt_text`, `json_schema` |
 | GET / PATCH / DELETE | `<channel_idx>/analysis-profiles/<id>/` | PATCH: any field, no nulls | 200 / 200 / 204 |

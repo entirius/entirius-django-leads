@@ -4729,6 +4729,12 @@ components:
           - role: buyer
           title: Attributes
           type: object
+        mail_block:
+          description: First reason of the send check (`mailable/`) why the contact cannot be mailed now; empty when it can.
+          examples:
+          - wrong_person
+          title: Mail Block
+          type: string
       required:
       - id
       - company_id
@@ -4745,6 +4751,7 @@ components:
       - anonymised_at
       - wrong_person_at
       - attributes
+      - mail_block
       title: ContactResponse
       type: object
     ContactStrategy:
@@ -7455,6 +7462,12 @@ components:
           - message 7 review_required
           title: Detail
           type: string
+        company_name:
+          description: Name of the company; empty when it has none.
+          examples:
+          - Example Shop
+          title: Company Name
+          type: string
       required:
       - id
       - rule_id
@@ -7462,6 +7475,7 @@ components:
       - fired_at
       - outcome
       - detail
+      - company_name
       title: RuleRunResponse
       type: object
     RuleTrigger:

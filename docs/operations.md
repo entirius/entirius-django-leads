@@ -73,8 +73,8 @@ Skipped rows (`{row, reason}`, at most `LEADS_IMPORT_REPORT_MAX`):
 | `bad_attribute:<key>` | an `attr.<key>` / `contact.attr.<key>` value the attribute's kind refuses |
 | `conflict` / `invalid_value` | the database rejected the row alone (integrity / data error) |
 
-Columns the import does not read (unknown names, attribute columns without an active definition) are listed once
-per batch as `{row: 1, reason: "ignored_column:<header>"}` (the header capped at 64 characters); the rows still
+Columns the import does not read (unknown names, attribute columns without an active definition) are named once
+per batch in `ignored_columns` (each header capped at 64 characters), never in the row report; the rows still
 import.
 
 File-level failures end the batch `failed` with `{row: 0, reason}` and never raise: `missing_header`, `csv_error`,
