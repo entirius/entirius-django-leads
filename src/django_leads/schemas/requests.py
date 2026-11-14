@@ -529,6 +529,7 @@ class DealListQuery(BaseModel):
     )
     close_from: date | None = Field(default=None, description="Expected close date on or after.")
     close_to: date | None = Field(default=None, description="Expected close date on or before.")
+    archived: bool = Field(default=False, description="true = only archived deals; false = only the others.")
     sort: str = Field(
         default="-created",
         description="expected_close_date, stage_entered_at, value_one_off, value_recurring or created; `-` for "

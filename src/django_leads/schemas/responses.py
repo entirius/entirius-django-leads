@@ -564,6 +564,9 @@ class DealResponse(BaseModel):
     expected_close_date: date | None = Field(description="Expected close date.", examples=["2026-12-31"])
     closed_at: datetime | None = Field(description="Entered a won or lost stage; null = open.", examples=[None])
     lost_reason: str = Field(description="Why it was lost; empty unless lost.", examples=[""])
+    archived_at: datetime | None = Field(
+        description="Archived (out of the lists and the board); null = not archived.", examples=[None]
+    )
     attributes: dict[str, Any] = Field(description="Deal attribute values by key.", examples=[{}])
     open_tasks: int = Field(description="Open tasks about the deal; 0 without the todo module.", examples=[1])
     subject_ref: str = Field(description="Reference for a task about the deal.", examples=["leads.Deal:7"])
@@ -584,7 +587,8 @@ class DealResponse(BaseModel):
             value_one_off=_money(deal.value_one_off), value_recurring=_money(deal.value_recurring),
             recurring_period=deal.recurring_period, currency=deal.currency.iso3 if deal.currency_id else None,
             expected_close_date=deal.expected_close_date, closed_at=deal.closed_at, lost_reason=deal.lost_reason,
-            attributes=deal.attributes, open_tasks=open_tasks, subject_ref=subject_ref, subject_label=subject_label,
+            archived_at=deal.archived_at, attributes=deal.attributes, open_tasks=open_tasks, subject_ref=subject_ref,
+            subject_label=subject_label,
             created_by=deal.created_by, created_at=deal.created_at, modified_at=deal.modified_at,
         )  # fmt: skip
 

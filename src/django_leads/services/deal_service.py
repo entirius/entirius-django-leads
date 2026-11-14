@@ -2,13 +2,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-"""Deals: the only writer of `Deal` — open, update (field whitelist), move through the deal stages, delete.
+"""Deals: the only writer of `Deal` — open, update (field whitelist), move through the deal stages, delete, archive and
+restore. An archived deal takes no other write until it is restored.
 
 Amounts are `Decimal` end to end, never negative, and never without a currency. The owner changes through
 `owner_service.set_deal_owner`, the stage only through `transition`; `company`, `closed_at` are never set from a dict.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from django.contrib.auth.models import AbstractBaseUser
@@ -62,6 +63,14 @@ class DealClosed(Exception):
     """A won or lost deal cannot be deleted."""
 
 
+class DealOpen(Exception):
+    """An open deal cannot be archived."""
+
+
+class DealArchived(Exception):
+    """An archived deal takes no write but `restore`."""
+
+
 def resolve_currency(code: str | None) -> Currency | None:
     """An ISO 4217 code of the platform's currencies; None clears."""
     if code is None:
@@ -97,7 +106,9 @@ def create(company: Company, fields: dict[str, Any], *, owner: AbstractBaseUser 
 
 @transaction.atomic
 def update(deal: Deal, updates: dict[str, Any], *, actor: str) -> Deal:
-    """Whitelisted fields only; `attributes` is merged (null removes a key). Activity `deal` "deal updated"."""
+    """Whitelisted fields only; `attributes` is merged (null removes a key). Activity `deal` "deal updated".
+    `DealArchived` for an archived deal, even with nothing to update."""
+    _refuse_archived(deal)
     if not updates:
         return deal
     values = dict(updates)
@@ -114,7 +125,9 @@ def update(deal: Deal, updates: dict[str, Any], *, actor: str) -> Deal:
 @transaction.atomic
 def transition(deal: Deal, stage: DealStage, *, actor: str, lost_reason: str = "") -> Deal:
     """Any stage to any stage of the channel. Won / lost set `closed_at`, lost needs a reason, leaving a closed stage
-    clears both. Activity `deal` "deal <from> -> <to>"; `deal_stage_changed` on commit. The same stage is a no-op."""
+    clears both. Activity `deal` "deal <from> -> <to>"; `deal_stage_changed` on commit. The same stage is a no-op.
+    `DealArchived` for an archived deal."""
+    _refuse_archived(deal)
     if stage.channel_id != deal.channel_id:
         raise ValueError("deal stage belongs to another channel")
     lost = stage.kind == DealStageKind.LOST
@@ -135,7 +148,8 @@ def transition(deal: Deal, stage: DealStage, *, actor: str, lost_reason: str = "
 @transaction.atomic
 def delete(deal: Deal, *, actor: str) -> None:
     """Open deals only (`DealClosed`); the timeline keeps "deal deleted: <title>" with the old id; the deal's open
-    tasks are cancelled."""
+    tasks are cancelled. `DealArchived` first for an archived deal."""
+    _refuse_archived(deal)
     if deal_stage_service.is_closed(deal.stage):
         raise DealClosed(f"deal {deal.pk} is {deal.stage.kind} — only an open deal can be deleted")
     task_bridge.cancel_about(deal.channel.idx, deal_ref(deal), reason=DEAL_DELETED)
@@ -144,18 +158,40 @@ def delete(deal: Deal, *, actor: str) -> None:
     deal.delete()
 
 
+@transaction.atomic
+def archive(deal: Deal, *, actor: str) -> Deal:
+    """Won or lost deals only (`DealOpen`); an archived deal stays as it is. Activity `deal`
+    "deal archived: <title>"."""
+    current = _locked(deal)
+    if not deal_stage_service.is_closed(current.stage):
+        raise DealOpen(f"deal {deal.pk} is open — only a won or lost deal can be archived")
+    if current.archived_at is None:
+        _set_archived(current, timezone.now(), actor, "archived")
+    return current
+
+
+@transaction.atomic
+def restore(deal: Deal, *, actor: str) -> Deal:
+    """Clears the archive mark; a deal that is not archived stays as it is. Activity `deal` "deal restored: <title>"."""
+    current = _locked(deal)
+    if current.archived_at is not None:
+        _set_archived(current, None, actor, "restored")
+    return current
+
+
 def list_deals(channel: Channel, *, sort: str = "-created", user_id: int | None = None, **filters: Any) -> QuerySet:
     """Filters: `stage` (key), `kind`, `owner` (me / none / id), `company` (id), `search` (title, company name or
-    domain), `close_from` / `close_to` (expected close date). `sort` must be in `SORT_FIELDS` (± prefix)."""
+    domain), `close_from` / `close_to` (expected close date), `archived` (only archived deals, else only the others).
+    `sort` must be in `SORT_FIELDS` (± prefix)."""
     deals = Deal.objects.filter(channel=channel).select_related(*RELATED)
     deals = owner_service.filter_by_owner(deals, filters.pop("owner", ""), user_id)
     return _filter(deals, **filters).order_by(_order(sort), "-id")
 
 
 def counts(company: Company) -> dict[str, int]:
-    """Deals of the company per stage kind, one query."""
+    """Deals of the company per stage kind, archived deals left out, one query."""
     kinds = {kind: Count("id", filter=Q(stage__kind=kind)) for kind in DealStageKind.values}
-    return Deal.objects.filter(company=company).aggregate(**kinds)
+    return Deal.objects.filter(company=company, archived_at__isnull=True).aggregate(**kinds)
 
 
 def subject_label(deal: Deal) -> str:
@@ -172,7 +208,9 @@ def _filter(
     search: str = "",
     close_from: date | None = None,
     close_to: date | None = None,
+    archived: bool = False,
 ) -> QuerySet:
+    deals = deals.filter(archived_at__isnull=not archived)
     lookups = {
         "stage__key": stage,
         "stage__kind": kind,
@@ -193,6 +231,23 @@ def _order(sort: str):
     if field is None:
         raise ValueError(f"unknown sort {sort!r}")
     return F(field).desc(nulls_last=True) if sort.startswith("-") else F(field).asc(nulls_last=True)
+
+
+def _locked(deal: Deal) -> Deal:
+    """The deal re-read under a row lock (`Deal.DoesNotExist` once deleted): an archive and a concurrent write never
+    interleave."""
+    return Deal.objects.select_for_update(of=("self",)).select_related("stage", "company").get(pk=deal.pk)
+
+
+def _refuse_archived(deal: Deal) -> None:
+    if _locked(deal).archived_at is not None:
+        raise DealArchived(f"deal {deal.pk} is archived — restore the deal first")
+
+
+def _set_archived(deal: Deal, archived_at: datetime | None, actor: str, verb: str) -> None:
+    deal.archived_at = archived_at
+    deal.save(update_fields=["archived_at", "modified_at"])
+    _record(deal, f"deal {verb}: {deal.title}", actor, event=f"deal_{verb}")
 
 
 def _assign(deal: Deal, fields: dict[str, Any]) -> None:

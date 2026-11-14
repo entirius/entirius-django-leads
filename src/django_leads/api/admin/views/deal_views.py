@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Admin API v2 — deals: list, board, create, detail, patch, delete, stage transition, timeline."""
+"""Admin API v2 — deals: list, board, create, detail, patch, delete, stage transition, archive, restore, timeline."""
 
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
@@ -60,6 +60,7 @@ LIST_PARAMETERS = [
     OpenApiParameter("search", str, description="Substring of the title or the company's name or domain."),
     OpenApiParameter("close_from", str, description="Expected close date on or after (YYYY-MM-DD)."),
     OpenApiParameter("close_to", str, description="Expected close date on or before (YYYY-MM-DD)."),
+    OpenApiParameter("archived", bool, description="true = only archived deals; default false = only the others."),
     OpenApiParameter(
         "sort",
         str,
@@ -96,6 +97,12 @@ def service_errors() -> Iterator[None]:
         raise Conflict(str(error), code="no_deal_stage") from None
     except deal_service.DealClosed as error:
         raise Conflict(str(error), code="deal_closed") from None
+    except deal_service.DealOpen as error:
+        raise Conflict(str(error), code="deal_open") from None
+    except deal_service.DealArchived as error:
+        raise Conflict(str(error), code="deal_archived") from None
+    except Deal.DoesNotExist:
+        raise NotFound("Deal not found.") from None
 
 
 class DealView(AdminView):
@@ -189,9 +196,9 @@ class DealDetailView(DealView):
         tags=_TAGS,
         summary="Update a deal",
         description="Stage moves through transition/; `attributes` is merged (null removes a key); `owner_id` sets the "
-        "owner (null clears it). A value needs a currency; amounts are never negative.",
+        "owner (null clears it). A value needs a currency; amounts are never negative. 409 for an archived deal.",
         request=DealUpdateRequest,
-        responses={200: DealResponse, **ERROR_RESPONSES},
+        responses={200: DealResponse, **ERROR_RESPONSES, 409: None},
     )
     def patch(self, request: Request, channel_idx: str, pk: int) -> Response:
         updates = parse(DealUpdateRequest, request.data).model_dump(exclude_unset=True)
@@ -207,7 +214,7 @@ class DealDetailView(DealView):
     @extend_schema(
         tags=_TAGS,
         summary="Delete an open deal",
-        description="409 for a won or lost deal.",
+        description="409 for a won, lost or archived deal.",
         responses={204: None, **ERROR_RESPONSES, 409: None},
     )
     def delete(self, request: Request, channel_idx: str, pk: int) -> Response:
@@ -222,7 +229,7 @@ class DealTransitionView(DealView):
         tags=_TAGS,
         summary="Move a deal to another deal stage",
         description="By `stage_key`, or by `kind` = the first stage of that kind (409 when the channel has none). A "
-        "lost stage needs `lost_reason` (400).",
+        "lost stage needs `lost_reason` (400). 409 for an archived deal.",
         request=DealTransitionRequest,
         responses={200: DealResponse, **ERROR_RESPONSES, 409: None},
     )
@@ -243,6 +250,37 @@ class DealTransitionView(DealView):
             return deal_stage_service.by_key(channel, body.stage_key)
         except deal_stage_service.MissingDealStage:
             raise NotFound("Deal stage not found.") from None
+
+
+class DealArchiveView(DealView):
+    @extend_schema(
+        tags=_TAGS,
+        summary="Archive a won or lost deal",
+        description="Out of the lists, the board and the company's counts; still in the reports and the timeline. 409 "
+        "for an open deal; an archived deal is returned as it is.",
+        request=None,
+        responses={200: DealResponse, **ERROR_RESPONSES, 409: None},
+    )
+    def post(self, request: Request, channel_idx: str, pk: int) -> Response:
+        channel = self.channel(channel_idx)
+        with service_errors():
+            deal = deal_service.archive(self.deal(channel, pk), actor=request.user.username)
+        return Response(self.one(channel, deal))
+
+
+class DealRestoreView(DealView):
+    @extend_schema(
+        tags=_TAGS,
+        summary="Restore an archived deal",
+        description="Back in the lists and the board; a deal that is not archived is returned as it is.",
+        request=None,
+        responses={200: DealResponse, **ERROR_RESPONSES},
+    )
+    def post(self, request: Request, channel_idx: str, pk: int) -> Response:
+        channel = self.channel(channel_idx)
+        with service_errors():
+            deal = deal_service.restore(self.deal(channel, pk), actor=request.user.username)
+        return Response(self.one(channel, deal))
 
 
 class DealActivityListView(DealView):

@@ -43,8 +43,10 @@ class Column:
 
 
 def board(channel: Channel, *, owner: str = "", user_id: int | None = None) -> list[Column]:
-    """`owner` as in the list (me / none / id). Three queries: stages, aggregates, the first deals."""
-    deals = owner_service.filter_by_owner(Deal.objects.filter(channel=channel), owner, user_id)
+    """`owner` as in the list (me / none / id); archived deals left out. Three queries: stages, aggregates, the first
+    deals."""
+    deals = Deal.objects.filter(channel=channel, archived_at__isnull=True)
+    deals = owner_service.filter_by_owner(deals, owner, user_id)
     columns = {stage.pk: Column(stage) for stage in deal_stage_service.list_stages(channel)}
     for row in _aggregates(deals):
         column = columns[row["stage_id"]]

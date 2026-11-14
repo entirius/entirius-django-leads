@@ -34,6 +34,8 @@ class Deal(BaseModel):
     expected_close_date = models.DateField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     lost_reason = models.CharField(max_length=255, blank=True, default="")
+    # Set by `deal_service.archive` (closed deals only): out of the lists, the board and the company's counts.
+    archived_at = models.DateTimeField(null=True, blank=True)
     # Values of the channel's deal `AttributeDefinition`s — written only through `attribute_service`.
     attributes = models.JSONField(default=dict, blank=True)
     created_by = models.CharField(max_length=128, default="system")
