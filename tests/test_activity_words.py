@@ -52,9 +52,9 @@ def test_a_hand_written_mail_names_the_company_on_the_thread(mailer, footer, sho
 # --- reply alert ------------------------------------------------------------------------------------------------
 
 
-def answers(company, intent: str = "not_now") -> list:
+def answers(company, intent: str = "not_now", needs_review: bool = False) -> list:
     responses = communicator_signals.reply_received.send_robust(
-        sender=Thread, thread=thread_of(company), reply=reply(intent)
+        sender=Thread, thread=thread_of(company), reply=reply(intent, needs_review=needs_review)
     )
     return [response for _, response in responses]
 
@@ -67,6 +67,11 @@ def test_the_reply_alert_names_the_company_and_the_class_and_answers_alerted(sho
 def test_a_reply_without_a_class_has_no_suffix(shop, notifications):  # noqa: F811
     answers(shop, intent="")
     assert list(Notification.objects.values_list("title", flat=True)) == [f"Reply from {shop.name}"]
+
+
+def test_a_flagged_reply_without_a_class_needs_review(shop, notifications):  # noqa: F811
+    answers(shop, intent="", needs_review=True)
+    assert list(Notification.objects.values_list("title", flat=True)) == [f"Reply from {shop.name} — Needs review"]
 
 
 def test_without_notifications_leads_does_not_answer_alerted(shop):
@@ -171,6 +176,7 @@ def test_the_import_report_names_ignored_columns(channel, definitions):  # noqa:
     batch = run(channel, "A,a-shop.pl,,,,,,,")
     body = ImportBatchResponse.of(batch).model_dump()
     assert body["ignored_columns"] == ["attr.gone", "shoe_size"] and body["automation_started_count"] == 0
+    assert batch.report == []  # the names are in `ignored_columns` only
 
 
 @pytest.mark.parametrize(("rules", "started"), [(True, 3), (False, 0)])

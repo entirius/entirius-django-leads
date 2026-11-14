@@ -463,7 +463,9 @@ def test_parked_thread_rotates_after_unresponsive_stage_added(shop, threads):
 
 def test_reply_received_moves_to_the_reply_stage_and_notifies(shop, django_capture_on_commit_callbacks):
     thread = SimpleNamespace(pk=5, subject_ref=f"leads.Company:{shop.pk}", recipient_email="OLA@example-shop-4.test")
-    reply = SimpleNamespace(pk=9, body_text="x" * 500, intent="", plan_applied={}, received_at=timezone.now())
+    reply = SimpleNamespace(
+        pk=9, body_text="x" * 500, intent="", needs_review=False, plan_applied={}, received_at=timezone.now()
+    )
     with mock.patch("django_leads.services.alert_service.alert") as alert:
         with django_capture_on_commit_callbacks(execute=True):
             communicator_signals.reply_received.send(sender=Thread, thread=thread, reply=reply)
@@ -487,7 +489,9 @@ def test_subject_ref_of_other_module_ignored(shop, ref, django_capture_on_commit
         communicator_signals.reply_received.send(
             sender=Thread,
             thread=thread,
-            reply=SimpleNamespace(pk=1, body_text="", intent="", plan_applied={}, received_at=timezone.now()),
+            reply=SimpleNamespace(
+                pk=1, body_text="", intent="", needs_review=False, plan_applied={}, received_at=timezone.now()
+            ),
         )
         communicator_signals.company_skipped.send(sender=None, subject_ref=ref)
     assert not Activity.objects.exists() and not Company.objects.filter(do_not_contact=True).exists()

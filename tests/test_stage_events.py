@@ -40,9 +40,10 @@ def thread_of(company: Company, email: str = "ola@example-shop-4.test") -> Simpl
     return SimpleNamespace(pk=5, subject_ref=f"leads.Company:{company.pk}", recipient_email=email)
 
 
-def reply(intent: str = "", notify: str | None = None) -> SimpleNamespace:
+def reply(intent: str = "", notify: str | None = None, needs_review: bool = False) -> SimpleNamespace:
     plan = {"notify": notify} if notify else {}
-    return SimpleNamespace(pk=9, body_text="Thanks", intent=intent, plan_applied=plan, received_at=timezone.now())
+    fields = {"intent": intent, "needs_review": needs_review, "plan_applied": plan, "received_at": timezone.now()}
+    return SimpleNamespace(pk=9, body_text="Thanks", **fields)
 
 
 def send_reply(company, intent: str = "", notify: str | None = None, capture=None) -> mock.MagicMock:

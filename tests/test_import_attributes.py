@@ -43,13 +43,10 @@ def test_two_attribute_columns_and_a_contact_column_are_imported(channel, defini
     assert Contact.objects.get().attributes == {"role": "buyer"}
 
 
-def test_ignored_headers_are_reported_once(channel, definitions):
+def test_ignored_headers_are_named_once_and_never_in_the_row_report(channel, definitions):
     batch = run(channel, "A,a-shop.pl,,,,,,,", "B,b-shop.pl,,,,,,,")
-    ignored = [entry for entry in batch.report if entry["row"] == 1]
-    assert ignored == [
-        {"row": 1, "reason": "ignored_column:attr.gone"},
-        {"row": 1, "reason": "ignored_column:shoe_size"},
-    ]
+    assert batch.ignored_columns == ["attr.gone", "shoe_size"]
+    assert batch.report == []
 
 
 def test_a_bad_attribute_value_skips_the_row(channel, definitions):
@@ -71,4 +68,4 @@ def test_ignored_headers_are_not_repeated_by_a_retry(channel, definitions):
     import_service.note_ignored_headers(batch, ["domain", "shoe_size"])
     import_service.note_ignored_headers(batch, ["domain", "shoe_size"])
     batch.refresh_from_db()
-    assert batch.report == [{"row": 1, "reason": "ignored_column:shoe_size"}]
+    assert batch.ignored_columns == ["shoe_size"] and batch.report == []
