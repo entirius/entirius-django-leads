@@ -6,8 +6,26 @@ groups:
     models:
       - Channel
       - Stage
+      - StageEventRule
       - Company
       - Contact
+  - name: deals
+    title: "Deals"
+    models:
+      - Channel
+      - Company
+      - Contact
+      - DealStage
+      - Deal
+      - Activity
+  - name: attributes
+    title: "Attributes & Scoring"
+    models:
+      - Channel
+      - AttributeDefinition
+      - Company
+      - Contact
+      - ScoringProfile
   - name: timeline
     title: "Activities & Imports"
     models:

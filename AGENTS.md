@@ -26,16 +26,26 @@ contacts, stages, rules, recipient selection, retention and GDPR. Table prefix `
 ```
 src/django_leads/
 ├── apps.py (connects receivers)  enums.py  settings.py (read at import)  urls.py  admin.py
-├── models/       channel stage company contact activity import_batch stage_rule rule_run claim
-│                 analysis_profile recipient_pick_profile erased_address
+├── models/       channel stage stage_event_rule company contact activity import_batch stage_rule rule_run claim
+│                 analysis_profile recipient_pick_profile erased_address lead_type attribute_definition
+│                 scoring_profile deal_stage deal
 ├── schemas/      requests.py  responses.py
 ├── api/admin/    urls.py  views/ _base (auth, paging, Conflict)  company  company_action  contact  stage
-│                 activity  import  rule  profile  gdpr  customer_link (accounts only)  test_views (development)
+│                 stage_event  activity  import  report  rule  profile  gdpr  attribute  scoring  channel
+│                 deal  deal_stage
+│                 customer_link (accounts only)
+│                 test_views (development)
 ├── services/     activity (only Activity writer)  company  contact  stage (transition_stage)  import  sweep
 │                 form  rule  recipient (outreach gate)  outreach (request_draft)  intel  rotation  claim
-│                 retention  gdpr  erased_address  config  customer_link  alert
-├── signals/      __init__ (stage_entered, contact_anonymised)  _deferred (after_commit)
+│                 retention  gdpr  erased_address  config  customer_link  alert  stage_event (the map)
+│                 suppression (communicator do-not-contact)  mailable  funnel  attribute (values)
+│                 fact (the one accessor)  condition  scoring  follow_up (tasks after a reply)
+│                 task_bridge (the only django_todo importer)  channel (settings)
+│                 deal_stage (sales pipeline)  deal (only Deal writer)  deal_board (columns, totals)
+│                 sequence_note (sequence stopped / paused after a reply or a hand-written mail)
+├── signals/      __init__ (stage_entered, contact_anonymised, deal_stage_changed)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge
+│                 todo_receivers (timeline, soft)
 ├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks   (queue leads_default)
 ├── gdpr/         hooks (leads' own)  protocol (GdprHooks)  registry (discover at call time)
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)
@@ -45,7 +55,7 @@ src/django_leads/
 
 Flow: import / form / manual → first stage → `transition_stage` → `stage_entered` → `rule_service` (claim under
 lock → pick → `request_draft` = gate + communicator draft) → `message_sent` / `reply_received` /
-`sequence_finished` → timeline, `on_reply` stage, rotation → retention anonymises idle contacts.
+`sequence_finished` → timeline, event → stage map, rotation → retention anonymises idle contacts.
 
 | Topic | Where |
 |---|---|

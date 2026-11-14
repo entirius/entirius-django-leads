@@ -12,10 +12,19 @@ from django_utils.toolbox.schemas import CompletionRequest
 
 from django_leads.enums import ActivityKind, ContactStrategy
 from django_leads.models import Company, Contact, RecipientPickProfile, StageRule
-from django_leads.services import activity_service
+from django_leads.services import activity_service, suppression_service
 from django_leads.utils.prompts import prompt_messages
 
 PICK_KEY = "leads.pick_recipient"
+# What a reason of the outreach gate says when it refuses a message's recipient (`recipient_check`); communicator's own
+# codes (`suppressed`, `address_invalid`) are answered by communicator and `no_email` cannot hold for an address.
+REFUSAL_SENTENCES = {
+    "do_not_contact": "the company is marked do not contact",
+    "opted_out": "the contact opted out",
+    "anonymised": "the contact was anonymised",
+    "wrong_person": "the contact is flagged as the wrong person",
+    "no_legal_basis": "the contact has no legal basis for mail",
+}
 
 
 class PickRejected(Exception):
@@ -23,20 +32,58 @@ class PickRejected(Exception):
 
 
 def candidates(company: Company) -> list[Contact]:
-    contacts = company.contacts.exclude(email="").filter(opt_out_at__isnull=True, anonymised_at__isnull=True)
+    contacts = company.contacts.exclude(email="").filter(
+        opt_out_at__isnull=True, anonymised_at__isnull=True, wrong_person_at__isnull=True
+    )
     return list(contacts.select_related("language").order_by("-is_primary", "pk"))
 
 
-def block_reason(contact: Contact) -> str | None:
-    """The outreach gate: why no draft may go to the contact (reason code), None when it may."""
+def block_reasons(contact: Contact, refusals: dict[str, str | None] | None = None) -> list[str]:
+    """The outreach gate: every reason no draft may go to the contact, in gate order; communicator's `can_mail` code
+    last (asked only for a contact with an email; looked up in `refusals` when a page asked for all its addresses)."""
     checks = (
         (contact.company.do_not_contact, "do_not_contact"),
         (not contact.email, "no_email"),
         (contact.opt_out_at is not None, "opted_out"),
         (contact.anonymised_at is not None, "anonymised"),
+        (contact.wrong_person_at is not None, "wrong_person"),
         (not contact.legal_basis, "no_legal_basis"),
     )
-    return next((reason for failed, reason in checks if failed), None)
+    reasons = [reason for failed, reason in checks if failed]
+    refusal = _refusal(contact, refusals) if contact.email else None
+    return [*reasons, refusal] if refusal else reasons
+
+
+def _refusal(contact: Contact, refusals: dict[str, str | None] | None) -> str | None:
+    if refusals is None:
+        return suppression_service.refusal(contact.company.channel, contact.email)
+    return refusals[contact.email]
+
+
+def mail_blocks(contacts: list[Contact]) -> dict[int, str]:
+    """The first reason of `block_reasons` per contact id, "" when it can be mailed — for contacts of one channel
+    with their company and its channel loaded: three queries for any number of contacts."""
+    if not contacts:
+        return {}
+    emails = [contact.email for contact in contacts if contact.email]
+    refusals = suppression_service.refusals(contacts[0].company.channel, emails)
+    return {contact.pk: next(iter(block_reasons(contact, refusals)), "") for contact in contacts}
+
+
+def block_reason(contact: Contact) -> str | None:
+    """The first reason of `block_reasons`, None when a draft may go to the contact."""
+    return next(iter(block_reasons(contact)), None)
+
+
+def refusal_sentence(company: Company, email: str) -> str | None:
+    """Why the company refuses mail to `email`: the first reason of the contact with that address (case-insensitive)
+    as a sentence; a do-not-contact company refuses also without such a contact. None for any other address."""
+    contact = company.contacts.filter(email__iexact=email).order_by("pk").first()
+    if contact is None:
+        return REFUSAL_SENTENCES["do_not_contact"] if company.do_not_contact else None
+    contact.company = company
+    no_refusal = {contact.email: None}  # communicator asks `can_mail` itself
+    return next((REFUSAL_SENTENCES[r] for r in block_reasons(contact, no_refusal) if r in REFUSAL_SENTENCES), None)
 
 
 def eligible(contact: Contact) -> bool:

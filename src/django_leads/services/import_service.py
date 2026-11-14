@@ -19,31 +19,42 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from django.contrib.auth.models import AbstractBaseUser
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import DatabaseError, DataError, IntegrityError, OperationalError, transaction
-from django.db.models import Model, Q
+from django.db.models import F, Model, Q
 from django_agreements.enums import LegalBasis
 from django_regional.models import Language
 
 from django_leads import settings as leads_settings
 from django_leads.connectors.base import ImportFailed
-from django_leads.connectors.csv import CsvConnector, parse_rows  # noqa: F401 — `parse_rows` kept importable here
-from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind, ImportStatus, LeadSource
-from django_leads.models import Activity, Channel, Company, Contact, ImportBatch, Stage
+from django_leads.connectors.csv import (  # noqa: F401 — `parse_rows` kept importable here
+    ATTRIBUTE_PREFIXES,
+    COLUMN_ALIASES,
+    CSV_COLUMNS,
+    CsvConnector,
+    parse_rows,
+)
+from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind, AttributeEntity, ImportStatus, LeadSource
+from django_leads.models import Activity, AttributeDefinition, Channel, Company, Contact, ImportBatch, Stage
 from django_leads.services import (
     activity_service,
+    attribute_service,
     company_service,
     contact_service,
     erased_address_service,
     lead_type_service,
+    owner_service,
     stage_service,
 )
+from django_leads.signals import stage_entered
 from django_leads.utils.domains import email_domain, registrable_domain
 from django_leads.utils.emails import normalize_email
 
 logger = logging.getLogger(__name__)
 
+HEADER_MAX_LENGTH = 64
 ERROR_CODES = {csv.Error: "csv_error", UnicodeDecodeError: "encoding_error", stage_service.NoStages: "no_stages"}
 
 
@@ -58,16 +69,55 @@ class Lookups:
     stage: Stage
     languages: dict[str, Language]
     lead_types: frozenset[str]
+    company_attributes: dict[str, AttributeDefinition] = field(default_factory=dict)
+    contact_attributes: dict[str, AttributeDefinition] = field(default_factory=dict)
 
 
-def create_batch(channel: Channel, filename: str, size_bytes: int, created_by: str) -> ImportBatch:
-    return ImportBatch.objects.create(channel=channel, filename=filename, size_bytes=size_bytes, created_by=created_by)
+def create_batch(
+    channel: Channel,
+    filename: str,
+    size_bytes: int,
+    created_by: str,
+    *,
+    run_rules: bool = False,
+    owner: AbstractBaseUser | None = None,
+) -> ImportBatch:
+    """`owner` (an assignable user, `owner_service.resolve_owner`) goes to created and to unowned matched companies."""
+    return ImportBatch.objects.create(
+        channel=channel,
+        filename=filename,
+        size_bytes=size_bytes,
+        created_by=created_by,
+        run_rules=run_rules,
+        owner=owner,
+    )
+
+
+def announce_created(batch: ImportBatch, companies: list[Company]) -> None:
+    """With `run_rules`, every created company enters its first stage: `stage_entered` once the chunk commits. A
+    rolled-back chunk or savepoint discards the callback, so nothing fires for rows that were not written."""
+    if not batch.run_rules or not companies:
+        return
+    transaction.on_commit(lambda: _enter_first_stage(batch, companies))
+
+
+def _enter_first_stage(batch: ImportBatch, companies: list[Company]) -> None:
+    for company in companies:
+        stage_entered.send(sender=Company, company=company, stage=company.stage)
+    started = F("automation_started_count") + len(companies)
+    ImportBatch.objects.filter(pk=batch.pk).update(automation_started_count=started)
+    batch.automation_started_count += len(companies)
 
 
 def build_lookups(channel: Channel) -> Lookups:
     languages = {language.iso2.lower(): language for language in Language.objects.all()}
-    lead_types = lead_type_service.active_codes(channel)
-    return Lookups(stage=stage_service.first_stage(channel), languages=languages, lead_types=lead_types)
+    return Lookups(
+        stage=stage_service.first_stage(channel),
+        languages=languages,
+        lead_types=lead_type_service.active_codes(channel),
+        company_attributes=attribute_service.active_definitions(channel, AttributeEntity.COMPANY),
+        contact_attributes=attribute_service.active_definitions(channel, AttributeEntity.CONTACT),
+    )
 
 
 def upload_path(batch_id: int) -> Path:
@@ -125,7 +175,9 @@ def run_file(batch: ImportBatch, path: Path) -> ImportBatch:
     batch.status = ImportStatus.RUNNING
     batch.save(update_fields=["status", "modified_at"])
     try:
-        candidates = CsvConnector(path).fetch_candidates(batch.channel)
+        connector = CsvConnector(path)
+        note_ignored_headers(batch, connector.header())
+        candidates = connector.fetch_candidates(batch.channel)
         apply_rows(batch, (asdict(candidate) for candidate in candidates))
     except OperationalError:
         raise
@@ -135,6 +187,30 @@ def run_file(batch: ImportBatch, path: Path) -> ImportBatch:
     batch.status = ImportStatus.DONE
     batch.save(update_fields=["status", "modified_at"])
     return batch
+
+
+def note_ignored_headers(batch: ImportBatch, header: list[str]) -> None:
+    """Every column the import does not read, once per batch, in `ignored_columns` (each name capped at 64
+    characters); the row report stays about rows. Attribute columns count as read only for active definitions of the
+    channel. A retry finds the names of its first attempt and adds none."""
+    if batch.ignored_columns:
+        return
+    known = {*CSV_COLUMNS, *COLUMN_ALIASES.values(), *_attribute_headers(batch.channel)}
+    names = dict.fromkeys(name[:HEADER_MAX_LENGTH] for name in header if name and name not in known)
+    ignored = list(names)[: leads_settings.LEADS_IMPORT_REPORT_MAX]
+    if not ignored:
+        return
+    batch.ignored_columns = ignored
+    batch.save(update_fields=["ignored_columns", "modified_at"])
+
+
+def _attribute_headers(channel: Channel) -> list[str]:
+    entities = {"attributes": AttributeEntity.COMPANY, "contact_attributes": AttributeEntity.CONTACT}
+    return [
+        f"{prefix}{key}"
+        for prefix, target in ATTRIBUTE_PREFIXES.items()
+        for key in attribute_service.active_definitions(channel, entities[target])
+    ]
 
 
 def apply_rows(batch: ImportBatch, rows: Iterable[dict[str, str]]) -> None:
@@ -200,12 +276,29 @@ def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any]
         "website": raw["website"],
         "lead_type": _row_lead_type(raw, lookups.lead_types),
         "industry": raw["industry"],
+        "origin": raw["origin"],
         "source": LeadSource.CSV,
+        "attributes": _row_attributes(raw.get("attributes") or {}, lookups.company_attributes),
     }
     _check_lengths(Company, company)
     if not (email or raw["first_name"] or raw["last_name"]):
         return company, None
-    return company, _contact_row(raw, email, legal_basis, lookups.languages)
+    return company, _contact_row(raw, email, legal_basis, lookups)
+
+
+def _row_attributes(cells: dict[str, str], definitions: dict[str, AttributeDefinition]) -> dict[str, Any]:
+    """Cells of active definitions, cleaned; blank cells and other keys are left out. A bad value skips the row
+    with `bad_attribute:<key>` (the key, never the value)."""
+    values = {}
+    for key, cell in cells.items():
+        definition = definitions.get(key)
+        if definition is None or not cell:
+            continue
+        try:
+            values[key] = attribute_service.clean_value(definition.kind, definition.options, cell)
+        except ValueError:
+            raise SkipRow(f"bad_attribute:{key}") from None
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _row_lead_type(raw: dict[str, str], lead_types: frozenset[str]) -> str:
@@ -213,12 +306,14 @@ def _row_lead_type(raw: dict[str, str], lead_types: frozenset[str]) -> str:
     return code if code in lead_types else UNKNOWN_LEAD_TYPE
 
 
-def _contact_row(raw: dict[str, str], email: str, legal_basis: str | None, languages: dict[str, Language]) -> dict:
+def _contact_row(raw: dict[str, str], email: str, legal_basis: str | None, lookups: Lookups) -> dict:
     """A contact without email is kept when it has a name (L-08)."""
     contact = {key: raw[key] for key in ("first_name", "last_name", "job_title", "phone")}
     _check_lengths(Contact, {**contact, "email": email})
-    language = languages.get(raw["language"].lower())
-    return {**contact, "email": email, "language": language, "legal_basis": legal_basis, "source": LeadSource.CSV}
+    language = lookups.languages.get(raw["language"].lower())
+    attributes = _row_attributes(raw.get("contact_attributes") or {}, lookups.contact_attributes)
+    fields = {"email": email, "language": language, "legal_basis": legal_basis, "attributes": attributes}
+    return {**contact, **fields, "source": LeadSource.CSV}
 
 
 def _row_email(raw: dict[str, str]) -> str:
@@ -271,6 +366,10 @@ def _apply_alone(batch: ImportBatch, line: int, company_row: dict, contact_row: 
 
 def _upsert_row(batch: ImportBatch, line: int, company_row: dict, contact_row: dict | None) -> tuple[int, str, str]:
     company, created = company_service.upsert_company(batch.channel, company_row)
+    if owner_service.adopt(company, batch.owner_id):
+        company.save(update_fields=[owner_service.OWNER, "modified_at"])
+    if created:
+        announce_created(batch, [company])
     contact = contact_service.upsert_contact(company, contact_row)[0] if contact_row else None
     message, data = "import created" if created else "import matched", {"row": line}
     activities = [
@@ -337,19 +436,23 @@ class _ChunkWriter:
         return kept
 
     def prefetch(self, prepared: list[tuple[int, dict, dict | None]]) -> None:
-        """The chunk's two selects: existing companies by domain, their contacts by email (or without one)."""
+        """The chunk's two selects: existing companies by domain, their contacts by email (or without one). Both are
+        locked (company first, the module's lock order) — the chunk writes their `attributes` JSON back whole."""
         domains = {company_row["domain"] for _, company_row, _ in prepared}
         emails = {contact_row["email"] for _, _, contact_row in prepared if contact_row}
-        existing = Company.objects.filter(channel=self.batch.channel, domain__in=domains)
+        existing = Company.objects.select_for_update().filter(channel=self.batch.channel, domain__in=domains)
         self.companies = {company.domain: company for company in existing}
         by_id = {company.pk: company for company in self.companies.values()}
         by_email = Q(email__in=emails - {""}) | Q(email="")
-        found = Contact.objects.filter(by_email, company__in=list(by_id)) if by_id and emails else []
+        contacts = Contact.objects.select_for_update().filter(by_email, company__in=list(by_id))
+        found = contacts if by_id and emails else []
         self.contacts = {contact_key(by_id[c.company_id].domain, c.email, c.first_name, c.last_name): c for c in found}
 
     def apply(self, line: int, company_row: dict, contact_row: dict | None) -> None:
         company, created = self._company(company_row)
         filled = [] if created else self._fill(company, company_row, company_service.FILL_FIELDS)
+        if owner_service.adopt(company, self.batch.owner_id):
+            self._mark_dirty(company)  # a created company is in `new`, never dirty
         contact = self._contact(company, contact_row, filled) if contact_row else None
         message = "import created" if created else "import matched"
         data = {"row": line, "filled": filled}
@@ -363,9 +466,10 @@ class _ChunkWriter:
         self.outcomes.append((line, "created" if created else "matched", ""))
 
     def flush(self) -> None:
-        self._write(Company, company_service.FILL_FIELDS)
-        self._write(Contact, (*contact_service.FILL_FIELDS, "legal_basis"))
+        self._write(Company, (*company_service.FILL_FIELDS, "attributes", owner_service.OWNER))
+        self._write(Contact, (*contact_service.FILL_FIELDS, "legal_basis", "attributes"))
         activity_service.record_many(self.activities)
+        announce_created(self.batch, [instance for instance in self.new if isinstance(instance, Company)])
 
     def _company(self, row: dict) -> tuple[Company, bool]:
         company = self.companies.get(row["domain"])
@@ -396,9 +500,13 @@ class _ChunkWriter:
 
     def _fill(self, instance: Any, row: dict, fields: tuple[str, ...]) -> list[str]:
         filled = company_service.fill_empty(instance, row, fields)
-        if filled and instance.pk and instance not in self.dirty:
-            self.dirty.append(instance)
+        if filled:
+            self._mark_dirty(instance)
         return filled
+
+    def _mark_dirty(self, instance: Any) -> None:
+        if instance.pk and instance not in self.dirty:
+            self.dirty.append(instance)
 
     def _write(self, model: type, fields: tuple[str, ...]) -> None:
         created = [instance for instance in self.new if isinstance(instance, model)]

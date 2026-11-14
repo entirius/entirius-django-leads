@@ -226,11 +226,309 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/assignable-users/:
+    get:
+      operationId: leads_assignable_users_list
+      description: Active staff users by name, at most 50; id, username and name only.
+      summary: Users who can own a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Substring of username or name.
+      tags:
+      - Leads Companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/attributes/:
+    get:
+      operationId: leads_attributes_list
+      summary: Attribute definitions of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: entity
+        schema:
+          type: string
+        description: company, contact or deal.
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_attributes_create
+      description: The key may not be a built-in fact name; options are required for select and multiselect.
+      summary: Define an attribute
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttributeDefinitionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/attributes/{id}/:
+    get:
+      operationId: api_leads_v2_admin_attributes_retrieve
+      summary: One attribute definition
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_attributes_partial_update
+      description: Entity and key are fixed; changing the kind is a 409 once a value is stored.
+      summary: Update an attribute definition
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Attributes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinitionUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinitionUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttributeDefinitionUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeDefinitionResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_attributes_destroy
+      description: 409 while values are stored — deactivate it instead.
+      summary: Delete an attribute definition
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/channel/:
+    get:
+      operationId: leads_channel_settings_retrieve
+      summary: Channel settings
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Channel
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelSettingsResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: leads_channel_settings_update
+      summary: Change channel settings
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Channel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChannelSettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelSettingsResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/:
     get:
       operationId: leads_companies_list
       summary: Companies of the channel
       parameters:
+      - in: query
+        name: attr.<key>
+        schema:
+          type: string
+        description: Exact value of an active company attribute with show_in_list (select, bool or text).
       - in: path
         name: channel_idx
         schema:
@@ -252,6 +550,16 @@ paths:
           type: string
         description: Lead type code of the channel, or UNKNOWN.
       - in: query
+        name: origin
+        schema:
+          type: string
+        description: Exact origin.
+      - in: query
+        name: owner
+        schema:
+          type: string
+        description: me = the caller's companies, none = without an owner, a user id; blank = any.
+      - in: query
         name: page
         schema:
           type: integer
@@ -265,10 +573,15 @@ paths:
           type: string
         description: Substring of name or domain.
       - in: query
+        name: segment
+        schema:
+          type: string
+        description: Score segment S1 … S4.
+      - in: query
         name: sort
         schema:
           type: string
-        description: name, domain, stage_entered_at, last_activity_at; `-` prefix.
+        description: name, domain, stage_entered_at, last_activity_at, score_points, owner__username; `-` prefix.
       - in: query
         name: stage
         schema:
@@ -295,7 +608,8 @@ paths:
           description: No response body
     post:
       operationId: api_leads_v2_admin_companies_create
-      description: The domain is stored registrable; an existing domain in the channel is a 409.
+      description: The domain is stored registrable; an existing domain in the channel is a 409. Without `owner_id` the requesting
+        user owns the company when they can own companies.
       summary: Create a company by hand
       parameters:
       - in: path
@@ -339,7 +653,7 @@ paths:
   /api/leads/v2/admin/{channel_idx}/companies/{id}/:
     get:
       operationId: api_leads_v2_admin_companies_retrieve
-      summary: One company with contacts and its last 20 activities
+      summary: One company with contacts, its last 20 activities and deal counts
       parameters:
       - in: path
         name: channel_idx
@@ -372,7 +686,9 @@ paths:
           description: No response body
     patch:
       operationId: api_leads_v2_admin_companies_partial_update
-      description: Stage, domain, hooks and customer link are not editable here.
+      description: Stage, domain, hooks, score and customer link are not editable here; `attributes` is merged (null removes
+        a key); `owner_id` sets the owner (null clears it). Turning do_not_contact on suppresses the company's domain in communicator;
+        turning it off removes that suppression.
       summary: Update editable company fields
       parameters:
       - in: path
@@ -419,7 +735,8 @@ paths:
     post:
       operationId: api_leads_v2_admin_companies_communicate_create
       description: No rule conditions or cooldown. 409 when the outreach gate refuses the contact (do_not_contact, opted_out,
-        anonymised, no_legal_basis) or no draft can be built (no clause set); 400 for a foreign or email-less contact.
+        anonymised, wrong_person, no_legal_basis, suppressed, address_invalid) or no draft can be built (no clause set); 400
+        for a foreign or email-less contact; 503 `AI_TOOLBOX_DISABLED` for an AI template while the toolbox is off.
       summary: Request a reviewable draft for a contact
       parameters:
       - in: path
@@ -465,6 +782,101 @@ paths:
           description: No response body
         '409':
           description: No response body
+        '503':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/compose/:
+    post:
+      operationId: api_leads_v2_admin_companies_compose_create
+      description: 'The outreach gate first: 409 `not_eligible` with the reason (one `blocked` activity). Then the legal footer
+        of the contact''s basis and language (409 `no_legal_basis`) and communicator''s compose from the owner''s mailbox,
+        approved by the caller and due now; it stops the thread''s sequence. 409 `communicator_channel_missing`; 400 for a
+        foreign or email-less contact, a reply of another company or another contact, a blank or too long text.'
+      summary: Send a hand-written mail to a contact
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComposeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ComposeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ComposeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/contacts/{contact_id}/mailable/:
+    get:
+      operationId: api_leads_v2_admin_companies_contacts_mailable_retrieve
+      description: 'Every reason of the outreach gate, the legal basis and its source, communicator''s suppression answer
+        and the retention clock. Read only: the gate itself runs when a draft is requested.'
+      summary: Why a contact may (not) be mailed
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: contact_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Companies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailableResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/create-customer/:
     post:
       operationId: api_leads_v2_admin_companies_create_customer_create
@@ -502,6 +914,48 @@ paths:
           description: No response body
         '409':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/deals/:
+    get:
+      operationId: leads_company_deals_list
+      summary: Deals of one company, newest first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/request-audit/:
     post:
       operationId: api_leads_v2_admin_companies_request_audit_create
@@ -535,6 +989,44 @@ paths:
         '403':
           description: No response body
         '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/{id}/score/:
+    post:
+      operationId: api_leads_v2_admin_companies_score_create
+      description: Stores score_points, score_segment and scored_at and writes the reasons to the timeline; 409 NO_SCORING_PROFILE
+        when the channel has no active profile.
+      summary: Score a company now
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
           description: No response body
   /api/leads/v2/admin/{channel_idx}/companies/{id}/transition/:
     post:
@@ -573,6 +1065,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompanyDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/assign/:
+    post:
+      operationId: api_leads_v2_admin_companies_assign_create
+      description: At most 200 companies, every one of the channel; each change is a timeline note.
+      summary: Set or clear the owner of many companies
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerAssignResponse'
           description: ''
         '400':
           description: No response body
@@ -784,6 +1318,666 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/deal-stages/:
+    get:
+      operationId: leads_deal_stages_list
+      summary: Deal stages of the channel in pipeline order
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Deal Stages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_deal_stages_create
+      description: 'Deals need at least one stage of each kind: a new deal starts in the first open stage.'
+      summary: Add a deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Deal Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealStageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DealStageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DealStageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deal-stages/{id}/:
+    get:
+      operationId: api_leads_v2_admin_deal_stages_retrieve
+      summary: One deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deal Stages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_deal_stages_partial_update
+      description: 409 on a key in use, or on a new kind while the stage holds deals.
+      summary: Update a deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deal Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDealStageUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDealStageUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDealStageUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealStageResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_deal_stages_destroy
+      description: 409 while deals sit in the stage — move them first.
+      summary: Delete a deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deal Stages
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/:
+    get:
+      operationId: leads_deals_list
+      summary: Deals of the channel
+      parameters:
+      - in: query
+        name: archived
+        schema:
+          type: boolean
+        description: true = only archived deals; default false = only the others.
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: close_from
+        schema:
+          type: string
+        description: Expected close date on or after (YYYY-MM-DD).
+      - in: query
+        name: close_to
+        schema:
+          type: string
+        description: Expected close date on or before (YYYY-MM-DD).
+      - in: query
+        name: company
+        schema:
+          type: integer
+        description: Company id.
+      - in: query
+        name: kind
+        schema:
+          type: string
+        description: open, won or lost.
+      - in: query
+        name: owner
+        schema:
+          type: string
+        description: me = the caller's companies, none = without an owner, a user id; blank = any.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Substring of the title or the company's name or domain.
+      - in: query
+        name: sort
+        schema:
+          type: string
+        description: expected_close_date, stage_entered_at, value_one_off, value_recurring, created; `-` prefix.
+      - in: query
+        name: stage
+        schema:
+          type: string
+        description: Deal stage key.
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_deals_create
+      description: Starts in the first open deal stage (409 without one). Without `owner_id` the company's owner owns it,
+        else the requesting user; without `currency` the channel default.
+      summary: Open a deal on a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Deals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DealCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DealCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/:
+    get:
+      operationId: api_leads_v2_admin_deals_retrieve
+      summary: One deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_deals_partial_update
+      description: Stage moves through transition/; `attributes` is merged (null removes a key); `owner_id` sets the owner
+        (null clears it). A value needs a currency; amounts are never negative. 409 for an archived deal.
+      summary: Update a deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDealUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDealUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDealUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_deals_destroy
+      description: 409 for a won, lost or archived deal.
+      summary: Delete an open deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/activities/:
+    get:
+      operationId: leads_deal_activities_list
+      summary: Timeline entries about the deal, newest first
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/archive/:
+    post:
+      operationId: api_leads_v2_admin_deals_archive_create
+      description: Out of the lists, the board and the company's counts; still in the reports and the timeline. 409 for an
+        open deal; an archived deal is returned as it is.
+      summary: Archive a won or lost deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/restore/:
+    post:
+      operationId: api_leads_v2_admin_deals_restore_create
+      description: Back in the lists and the board; a deal that is not archived is returned as it is.
+      summary: Restore an archived deal
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/{id}/transition/:
+    post:
+      operationId: api_leads_v2_admin_deals_transition_create
+      description: By `stage_key`, or by `kind` = the first stage of that kind (409 when the channel has none). A lost stage
+        needs `lost_reason` (400). 409 for an archived deal.
+      summary: Move a deal to another deal stage
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Deals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DealTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DealTransitionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/deals/board/:
+    get:
+      operationId: leads_deals_board
+      description: Count, totals per currency (recurring per month) and the first 25 deals of every stage.
+      summary: 'Deal board: one column per deal stage'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: owner
+        schema:
+          type: string
+        description: me = the caller's companies, none = without an owner, a user id; blank = any.
+      tags:
+      - Leads Deals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DealBoardResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/fields/:
+    get:
+      operationId: leads_fields_list
+      description: Built-in facts, then the active company attributes as attr.<key>, with kinds and options; entity=deal lists
+        the active deal attributes only.
+      summary: Facts rule conditions and scoring rules may name
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: entity
+        schema:
+          type: string
+        description: company (default) or deal.
+      tags:
+      - Leads Attributes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/imports/:
     get:
       operationId: leads_imports_list
@@ -841,6 +2035,15 @@ paths:
                 file:
                   type: string
                   format: binary
+                run_rules:
+                  type: boolean
+                  default: false
+                  description: Created companies enter their first stage with its rules (one evaluation each).
+                owner_id:
+                  type: integer
+                  description: Owner of created companies and of matched ones without an owner; absent = none.
+              required:
+              - file
       security:
       - jwtAuth: []
       responses:
@@ -1255,6 +2458,50 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/reports/funnel/:
+    get:
+      operationId: leads_reports_funnel
+      summary: Stage moves, per-stage counts and companies per origin
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: First day of moves and creations (YYYY-MM-DD).
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: Last day of moves and creations (YYYY-MM-DD).
+      - in: query
+        name: origin
+        schema:
+          type: string
+        description: Only companies of this origin.
+      tags:
+      - Leads Reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/rule-runs/:
     get:
       operationId: leads_rule_runs_list
@@ -1473,6 +2720,292 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/:
+    get:
+      operationId: leads_scoring_profiles_list
+      summary: Scoring profiles of the channel
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    post:
+      operationId: api_leads_v2_admin_scoring_profiles_create
+      description: Every rule and disqualifier must name a field of `fields/` with an op its kind takes (400).
+      summary: Add a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ScoringProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/scoring-profiles/{id}/:
+    get:
+      operationId: api_leads_v2_admin_scoring_profiles_retrieve
+      summary: One scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    patch:
+      operationId: api_leads_v2_admin_scoring_profiles_partial_update
+      summary: Update a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedScoringProfileUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringProfileResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+        '409':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_scoring_profiles_destroy
+      summary: Delete a scoring profile
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Leads Scoring
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/stage-events/:
+    get:
+      operationId: leads_stage_events_list
+      summary: Where each event moves a company (one entry per event)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Stage Events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageEventListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/stage-events/{event}/:
+    put:
+      operationId: api_leads_v2_admin_stage_events_update
+      description: A null target_stage_key keeps the stage (and stops reply:<class> falling back to reply).
+      summary: Set where one event moves a company
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: event
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Stage Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageEventRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageEventRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageEventRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageEventResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+    delete:
+      operationId: api_leads_v2_admin_stage_events_destroy
+      summary: 'Remove the event''s row: it moves nothing any more'
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: event
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Stage Events
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/stages/:
     get:
       operationId: leads_stages_list
@@ -1626,7 +3159,7 @@ paths:
           description: No response body
     delete:
       operationId: api_leads_v2_admin_stages_destroy
-      description: 409 while companies sit in the stage — move them first.
+      description: 409 while companies sit in the stage or a stage event targets it — move them or change the event first.
       summary: Delete a stage
       parameters:
       - in: path
@@ -1761,6 +3294,15 @@ paths:
                 file:
                   type: string
                   format: binary
+                run_rules:
+                  type: boolean
+                  default: false
+                  description: Created companies enter their first stage with its rules (one evaluation each).
+                owner_id:
+                  type: integer
+                  description: Owner of created companies and of matched ones without an owner; absent = none.
+              required:
+              - file
       security:
       - jwtAuth: []
       responses:
@@ -1968,6 +3510,14 @@ components:
           examples:
           - null
           title: Contact Id
+        deal_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Deal the entry is about; null = none or deleted.
+          examples:
+          - null
+          title: Deal Id
         kind:
           description: Activity kind.
           examples:
@@ -2004,12 +3554,42 @@ components:
       - id
       - company_id
       - contact_id
+      - deal_id
       - kind
       - message
       - data
       - actor
       - created_at
       title: ActivityResponse
+      type: object
+    AddressStatusState:
+      properties:
+        status:
+          description: unknown, valid, risky or invalid.
+          examples:
+          - invalid
+          title: Status
+          type: string
+        reason:
+          description: Why.
+          examples:
+          - hard_bounce
+          title: Reason
+          type: string
+        verified_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Checked.
+          examples:
+          - null
+          title: Verified At
+      required:
+      - status
+      - reason
+      - verified_at
+      title: AddressStatusState
       type: object
     AnalysisProfileDetailResponse:
       properties:
@@ -2143,6 +3723,204 @@ components:
       - is_active
       title: AnalysisProfileResponse
       type: object
+    AttributeDefinitionListResponse:
+      properties:
+        results:
+          description: Definitions by entity, then display order.
+          items:
+            $ref: '#/components/schemas/AttributeDefinitionResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: AttributeDefinitionListResponse
+      type: object
+    AttributeDefinitionRequest:
+      additionalProperties: false
+      properties:
+        entity:
+          $ref: '#/components/schemas/AttributeEntity'
+          description: company, contact or deal.
+          examples:
+          - company
+        key:
+          description: Slug.
+          examples:
+          - size
+          maxLength: 48
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_]*$
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Company size
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+        kind:
+          $ref: '#/components/schemas/AttributeKind'
+          description: text, number, bool, date, select, multiselect or url.
+        options:
+          description: Choices; required for the select kinds.
+          items:
+            $ref: '#/components/schemas/AttributeOption'
+          title: Options
+          type: array
+        required:
+          default: false
+          description: A value is required on create and may not be removed.
+          title: Required
+          type: boolean
+        order:
+          default: 0
+          description: Display order.
+          maximum: 32767
+          minimum: 0
+          title: Order
+          type: integer
+        show_in_list:
+          default: false
+          description: Shown and filterable in the company list.
+          title: Show In List
+          type: boolean
+        is_active:
+          default: true
+          description: Accepted in values, conditions, imports and templates.
+          title: Is Active
+          type: boolean
+      required:
+      - entity
+      - key
+      - label
+      - kind
+      title: AttributeDefinitionRequest
+      type: object
+    AttributeDefinitionResponse:
+      properties:
+        id:
+          description: Definition id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        entity:
+          description: company, contact or deal.
+          examples:
+          - company
+          title: Entity
+          type: string
+        key:
+          description: Slug; the key in `attributes`, `attr.<key>` as a fact.
+          examples:
+          - size
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Company size
+          title: Label
+          type: string
+        kind:
+          description: text, number, bool, date, select, multiselect or url.
+          examples:
+          - select
+          title: Kind
+          type: string
+        options:
+          description: Choices {value, label}.
+          examples:
+          - - label: S
+              value: s
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          title: Options
+          type: array
+        required:
+          description: Required on create and on a patch touching the key.
+          examples:
+          - false
+          title: Required
+          type: boolean
+        order:
+          description: Display order.
+          examples:
+          - 0
+          title: Order
+          type: integer
+        show_in_list:
+          description: Shown and filterable in the company list.
+          examples:
+          - true
+          title: Show In List
+          type: boolean
+        is_active:
+          description: Accepted in values, conditions, imports and templates.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - entity
+      - key
+      - label
+      - kind
+      - options
+      - required
+      - order
+      - show_in_list
+      - is_active
+      title: AttributeDefinitionResponse
+      type: object
+    AttributeEntity:
+      description: What a custom attribute describes.
+      enum:
+      - company
+      - contact
+      - deal
+      title: AttributeEntity
+      type: string
+    AttributeKind:
+      enum:
+      - text
+      - number
+      - bool
+      - date
+      - select
+      - multiselect
+      - url
+      title: AttributeKind
+      type: string
+    AttributeOption:
+      additionalProperties: false
+      properties:
+        value:
+          description: Stored value.
+          examples:
+          - micro
+          maxLength: 64
+          minLength: 1
+          title: Value
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Micro (1-9)
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+      required:
+      - value
+      - label
+      title: AttributeOption
+      type: object
     AuditRequestedResponse:
       properties:
         audit_id:
@@ -2161,6 +3939,44 @@ components:
       - audit_id
       - status
       title: AuditRequestedResponse
+      type: object
+    ChannelSettingsResponse:
+      properties:
+        idx:
+          description: Channel idx.
+          examples:
+          - default-europe
+          title: Idx
+          type: string
+        name:
+          description: Channel name.
+          examples:
+          - Default Europe
+          title: Name
+          type: string
+        default_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ISO 4217 of new deals; null = none.
+          examples:
+          - PLN
+          title: Default Currency
+        resume_days:
+          additionalProperties:
+            type: integer
+          description: Effective days until a follow-up task per reply class (not_now, out_of_office).
+          examples:
+          - not_now: 30
+            out_of_office: 7
+          title: Resume Days
+          type: object
+      required:
+      - idx
+      - name
+      - default_currency
+      - resume_days
+      title: ChannelSettingsResponse
       type: object
     CommunicateRequest:
       additionalProperties: false
@@ -2183,6 +3999,40 @@ components:
       - template_key
       - contact_id
       title: CommunicateRequest
+      type: object
+    CommunicatorAnswer:
+      properties:
+        email:
+          description: Normalised address.
+          examples:
+          - jan@example-shop-2.test
+          title: Email
+          type: string
+        refusal:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: suppressed, address_invalid or null.
+          examples:
+          - null
+          title: Refusal
+        suppressions:
+          description: Matching suppression rows.
+          items:
+            $ref: '#/components/schemas/SuppressionRow'
+          title: Suppressions
+          type: array
+        address_status:
+          anyOf:
+          - $ref: '#/components/schemas/AddressStatusState'
+          - type: 'null'
+          description: What communicator knows of the address.
+      required:
+      - email
+      - refusal
+      - suppressions
+      - address_status
+      title: CommunicatorAnswer
       type: object
     CompanyCreateRequest:
       additionalProperties: false
@@ -2222,6 +4072,21 @@ components:
           maxLength: 128
           title: Industry
           type: string
+        attributes:
+          additionalProperties: true
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
+          type: object
+        owner_id:
+          anyOf:
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); absent = the requesting user, null = no owner.
+          title: Owner Id
       required:
       - domain
       title: CompanyCreateRequest
@@ -2334,6 +4199,52 @@ components:
           examples:
           - null
           title: Last Activity At
+        origin:
+          description: Where the lead came from.
+          examples:
+          - fair
+          title: Origin
+          type: string
+        attributes:
+          additionalProperties: true
+          description: Company attribute values by key.
+          examples:
+          - size: micro
+          title: Attributes
+          type: object
+        score_points:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Points of the last scoring; null = never scored.
+          examples:
+          - 45
+          title: Score Points
+        score_segment:
+          description: S1 (best) … S4 of the last scoring; empty = never scored.
+          examples:
+          - S2
+          title: Score Segment
+          type: string
+        scored_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Last scored.
+          examples:
+          - null
+          title: Scored At
+        owner:
+          anyOf:
+          - $ref: '#/components/schemas/OwnerResponse'
+          - type: 'null'
+          description: Owner; null = none.
+          examples:
+          - null
+        deals:
+          $ref: '#/components/schemas/DealCounts'
+          description: Deals of the company per stage kind.
         contacts:
           description: Contacts of the company.
           items:
@@ -2346,6 +4257,13 @@ components:
             $ref: '#/components/schemas/ActivityResponse'
           title: Activities
           type: array
+        customer_name:
+          default: ''
+          description: Name of the linked customer; empty without accounts.
+          examples:
+          - Jan Kowalski
+          title: Customer Name
+          type: string
       required:
       - id
       - name
@@ -2364,6 +4282,13 @@ components:
       - customer_uid
       - rotation_count
       - last_activity_at
+      - origin
+      - attributes
+      - score_points
+      - score_segment
+      - scored_at
+      - owner
+      - deals
       - contacts
       - activities
       title: CompanyDetailResponse
@@ -2513,6 +4438,49 @@ components:
           examples:
           - null
           title: Last Activity At
+        origin:
+          description: Where the lead came from.
+          examples:
+          - fair
+          title: Origin
+          type: string
+        attributes:
+          additionalProperties: true
+          description: Company attribute values by key.
+          examples:
+          - size: micro
+          title: Attributes
+          type: object
+        score_points:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Points of the last scoring; null = never scored.
+          examples:
+          - 45
+          title: Score Points
+        score_segment:
+          description: S1 (best) … S4 of the last scoring; empty = never scored.
+          examples:
+          - S2
+          title: Score Segment
+          type: string
+        scored_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Last scored.
+          examples:
+          - null
+          title: Scored At
+        owner:
+          anyOf:
+          - $ref: '#/components/schemas/OwnerResponse'
+          - type: 'null'
+          description: Owner; null = none.
+          examples:
+          - null
       required:
       - id
       - name
@@ -2531,8 +4499,91 @@ components:
       - customer_uid
       - rotation_count
       - last_activity_at
+      - origin
+      - attributes
+      - score_points
+      - score_segment
+      - scored_at
+      - owner
       title: CompanyResponse
       type: object
+    ComposeRequest:
+      additionalProperties: false
+      properties:
+        contact_id:
+          description: Contact of the company.
+          examples:
+          - 102
+          title: Contact Id
+          type: integer
+        subject:
+          description: Subject.
+          examples:
+          - Our call on Tuesday
+          maxLength: 255
+          minLength: 1
+          title: Subject
+          type: string
+        body:
+          description: Plain-text body; the legal footer is added.
+          examples:
+          - Hello Ola, …
+          minLength: 1
+          title: Body
+          type: string
+        reply_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: A reply of a thread of this company the message answers.
+          examples:
+          - 31
+          title: Reply Id
+      required:
+      - contact_id
+      - subject
+      - body
+      title: ComposeRequest
+      type: object
+    Condition:
+      additionalProperties: false
+      description: Shape only — whether the field exists and takes the op is the service's call (`condition_service`).
+      properties:
+        field:
+          description: A fact name from `fields/`.
+          examples:
+          - attr.size
+          maxLength: 64
+          minLength: 1
+          title: Field
+          type: string
+        op:
+          $ref: '#/components/schemas/ConditionOp'
+          description: eq, ne, in, contains, gte, lte or empty.
+          examples:
+          - eq
+        value:
+          default: null
+          description: Compared value; a list for in, a bool for empty (default true).
+          title: Value
+      required:
+      - field
+      - op
+      title: Condition
+      type: object
+    ConditionOp:
+      description: Operators of rule conditions and scoring rules; which apply to which kind is `condition_service.OPS_BY_KIND`.
+      enum:
+      - eq
+      - ne
+      - in
+      - contains
+      - gte
+      - lte
+      - empty
+      title: ConditionOp
+      type: string
     ContactCreateRequest:
       additionalProperties: false
       properties:
@@ -2602,6 +4653,15 @@ components:
           default: null
           description: Where consent was given (document, call, form); required when legal_basis is consent.
           title: Consent Ref
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
       required:
       - company_id
       title: ContactCreateRequest
@@ -2733,6 +4793,28 @@ components:
           examples:
           - null
           title: Anonymised At
+        wrong_person_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Flagged by a wrong-person reply.
+          examples:
+          - null
+          title: Wrong Person At
+        attributes:
+          additionalProperties: true
+          description: Contact attribute values by key.
+          examples:
+          - role: buyer
+          title: Attributes
+          type: object
+        mail_block:
+          description: First reason of the send check (`mailable/`) why the contact cannot be mailed now; empty when it can.
+          examples:
+          - wrong_person
+          title: Mail Block
+          type: string
       required:
       - id
       - company_id
@@ -2747,6 +4829,9 @@ components:
       - legal_basis
       - opt_out_at
       - anonymised_at
+      - wrong_person_at
+      - attributes
+      - mail_block
       title: ContactResponse
       type: object
     ContactStrategy:
@@ -2766,6 +4851,597 @@ components:
       required:
       - customer_uid
       title: CustomerLinkResponse
+      type: object
+    DealBoardColumn:
+      properties:
+        stage:
+          $ref: '#/components/schemas/DealStageResponse'
+          description: The deal stage.
+        count:
+          description: Deals in the stage.
+          examples:
+          - 3
+          title: Count
+          type: integer
+        totals:
+          description: Totals per currency; never added across currencies.
+          items:
+            $ref: '#/components/schemas/DealTotal'
+          title: Totals
+          type: array
+        deals:
+          description: The first 25 deals, longest in the stage first.
+          items:
+            $ref: '#/components/schemas/DealResponse'
+          title: Deals
+          type: array
+      required:
+      - stage
+      - count
+      - totals
+      - deals
+      title: DealBoardColumn
+      type: object
+    DealBoardResponse:
+      properties:
+        results:
+          description: One column per deal stage in pipeline order.
+          items:
+            $ref: '#/components/schemas/DealBoardColumn'
+          title: Results
+          type: array
+      required:
+      - results
+      title: DealBoardResponse
+      type: object
+    DealCompany:
+      properties:
+        id:
+          description: Company id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        name:
+          description: Name.
+          examples:
+          - Example Shop
+          title: Name
+          type: string
+        domain:
+          description: Registrable domain.
+          examples:
+          - example-shop-2.test
+          title: Domain
+          type: string
+      required:
+      - id
+      - name
+      - domain
+      title: DealCompany
+      type: object
+    DealContact:
+      properties:
+        id:
+          description: Contact id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        name:
+          description: Full name; the email when the contact has no name.
+          examples:
+          - Jan Kowalski
+          title: Name
+          type: string
+      required:
+      - id
+      - name
+      title: DealContact
+      type: object
+    DealCounts:
+      properties:
+        open:
+          description: Open deals.
+          examples:
+          - 1
+          title: Open
+          type: integer
+        won:
+          description: Won deals.
+          examples:
+          - 0
+          title: Won
+          type: integer
+        lost:
+          description: Lost deals.
+          examples:
+          - 0
+          title: Lost
+          type: integer
+      required:
+      - open
+      - won
+      - lost
+      title: DealCounts
+      type: object
+    DealCreateRequest:
+      additionalProperties: false
+      properties:
+        company_id:
+          description: The company of the channel the deal is on.
+          examples:
+          - 100
+          minimum: 1
+          title: Company Id
+          type: integer
+        title:
+          description: What is sold; no personal data.
+          examples:
+          - Shop audit
+          maxLength: 255
+          minLength: 1
+          title: Title
+          type: string
+        contact_id:
+          anyOf:
+          - minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: A contact of the company.
+          title: Contact Id
+        owner_id:
+          anyOf:
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); absent = the company's owner, else the requesting user; null = none.
+          title: Owner Id
+        value_one_off:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '12000.00'
+          title: Value One Off
+        value_recurring:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '500.00'
+          title: Value Recurring
+        recurring_period:
+          $ref: '#/components/schemas/RecurringPeriod'
+          default: month
+          description: month or year.
+        currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 4217; absent = the channel default.
+          examples:
+          - PLN
+          title: Currency
+        expected_close_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Expected close date.
+          title: Expected Close Date
+        attributes:
+          additionalProperties: true
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
+          type: object
+      required:
+      - company_id
+      - title
+      title: DealCreateRequest
+      type: object
+    DealListResponse:
+      properties:
+        count:
+          description: Total matching rows.
+          examples:
+          - 1
+          title: Count
+          type: integer
+        next:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Next page URL.
+          examples:
+          - null
+          title: Next
+        previous:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Previous page URL.
+          examples:
+          - null
+          title: Previous
+        results:
+          description: Deals of the page.
+          items:
+            $ref: '#/components/schemas/DealResponse'
+          title: Results
+          type: array
+      required:
+      - count
+      - next
+      - previous
+      - results
+      title: DealListResponse
+      type: object
+    DealResponse:
+      properties:
+        id:
+          description: Deal id.
+          examples:
+          - 7
+          title: Id
+          type: integer
+        title:
+          description: What is sold.
+          examples:
+          - Shop audit
+          title: Title
+          type: string
+        company:
+          $ref: '#/components/schemas/DealCompany'
+          description: The company.
+        contact:
+          anyOf:
+          - $ref: '#/components/schemas/DealContact'
+          - type: 'null'
+          description: Contact; null = none.
+          examples:
+          - null
+        owner:
+          anyOf:
+          - $ref: '#/components/schemas/OwnerResponse'
+          - type: 'null'
+          description: Owner; null = none.
+          examples:
+          - null
+        stage:
+          $ref: '#/components/schemas/DealStageSummary'
+          description: Current deal stage.
+        stage_entered_at:
+          description: Entered the current stage.
+          examples:
+          - '2026-11-13T12:00:00Z'
+          format: date-time
+          title: Stage Entered At
+          type: string
+        value_one_off:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: One-off value, decimal string.
+          examples:
+          - '12000.00'
+          title: Value One Off
+        value_recurring:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Recurring value per period, decimal string.
+          examples:
+          - '500.00'
+          title: Value Recurring
+        recurring_period:
+          description: month or year.
+          examples:
+          - month
+          title: Recurring Period
+          type: string
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ISO 4217; null = none.
+          examples:
+          - PLN
+          title: Currency
+        expected_close_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Expected close date.
+          examples:
+          - '2026-12-31'
+          title: Expected Close Date
+        closed_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Entered a won or lost stage; null = open.
+          examples:
+          - null
+          title: Closed At
+        lost_reason:
+          description: Why it was lost; empty unless lost.
+          examples:
+          - ''
+          title: Lost Reason
+          type: string
+        archived_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Archived (out of the lists and the board); null = not archived.
+          examples:
+          - null
+          title: Archived At
+        attributes:
+          additionalProperties: true
+          description: Deal attribute values by key.
+          examples:
+          - {}
+          title: Attributes
+          type: object
+        open_tasks:
+          description: Open tasks about the deal; 0 without the todo module.
+          examples:
+          - 1
+          title: Open Tasks
+          type: integer
+        subject_ref:
+          description: Reference for a task about the deal.
+          examples:
+          - leads.Deal:7
+          title: Subject Ref
+          type: string
+        subject_label:
+          description: Label for a task about the deal.
+          examples:
+          - Example Shop — Shop audit
+          title: Subject Label
+          type: string
+        created_by:
+          description: Who opened it.
+          examples:
+          - anna
+          title: Created By
+          type: string
+        created_at:
+          description: Opened.
+          examples:
+          - '2026-11-13T12:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+        modified_at:
+          description: Last change.
+          examples:
+          - '2026-11-13T12:00:00Z'
+          format: date-time
+          title: Modified At
+          type: string
+      required:
+      - id
+      - title
+      - company
+      - contact
+      - owner
+      - stage
+      - stage_entered_at
+      - value_one_off
+      - value_recurring
+      - recurring_period
+      - currency
+      - expected_close_date
+      - closed_at
+      - lost_reason
+      - archived_at
+      - attributes
+      - open_tasks
+      - subject_ref
+      - subject_label
+      - created_by
+      - created_at
+      - modified_at
+      title: DealResponse
+      type: object
+    DealStageKind:
+      description: A deal is open until it enters a `won` or `lost` stage.
+      enum:
+      - open
+      - won
+      - lost
+      title: DealStageKind
+      type: string
+    DealStageListResponse:
+      properties:
+        results:
+          description: Deal stages in pipeline order.
+          items:
+            $ref: '#/components/schemas/DealStageResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: DealStageListResponse
+      type: object
+    DealStageRequest:
+      additionalProperties: false
+      properties:
+        key:
+          description: Slug.
+          examples:
+          - offer
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Offer sent
+          maxLength: 128
+          minLength: 1
+          title: Label
+          type: string
+        order:
+          default: 0
+          description: Position in the pipeline.
+          maximum: 32767
+          minimum: 0
+          title: Order
+          type: integer
+        kind:
+          $ref: '#/components/schemas/DealStageKind'
+          default: open
+          description: open, won or lost.
+      required:
+      - key
+      - label
+      title: DealStageRequest
+      type: object
+    DealStageResponse:
+      properties:
+        id:
+          description: Deal stage id.
+          examples:
+          - 10
+          title: Id
+          type: integer
+        key:
+          description: Slug.
+          examples:
+          - offer
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Offer sent
+          title: Label
+          type: string
+        order:
+          description: Position in the pipeline.
+          examples:
+          - 10
+          title: Order
+          type: integer
+        kind:
+          description: open, won or lost.
+          examples:
+          - open
+          title: Kind
+          type: string
+      required:
+      - id
+      - key
+      - label
+      - order
+      - kind
+      title: DealStageResponse
+      type: object
+    DealStageSummary:
+      properties:
+        key:
+          description: Slug.
+          examples:
+          - offer
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Offer sent
+          title: Label
+          type: string
+        kind:
+          description: open, won or lost.
+          examples:
+          - open
+          title: Kind
+          type: string
+      required:
+      - key
+      - label
+      - kind
+      title: DealStageSummary
+      type: object
+    DealTotal:
+      properties:
+        currency:
+          description: ISO 4217.
+          examples:
+          - PLN
+          title: Currency
+          type: string
+        one_off:
+          description: Sum of one-off values, decimal string.
+          examples:
+          - '24000.00'
+          title: One Off
+          type: string
+        recurring:
+          description: Sum of recurring values per month (a yearly value counts as a twelfth), decimal string.
+          examples:
+          - '1000.00'
+          title: Recurring
+          type: string
+      required:
+      - currency
+      - one_off
+      - recurring
+      title: DealTotal
+      type: object
+    DealTransitionRequest:
+      additionalProperties: false
+      description: Name the target stage by `stage_key`, or by `kind` = its first stage of that kind.
+      properties:
+        stage_key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Target deal stage key.
+          title: Stage Key
+        kind:
+          anyOf:
+          - $ref: '#/components/schemas/DealStageKind'
+          - type: 'null'
+          default: null
+          description: 'open, won or lost: the first stage of the kind.'
+        lost_reason:
+          default: ''
+          description: Required for a lost stage; no personal data.
+          maxLength: 255
+          title: Lost Reason
+          type: string
+      title: DealTransitionRequest
       type: object
     DevAnonymiseRequest:
       additionalProperties: false
@@ -2864,6 +5540,39 @@ components:
       - rotated
       title: DevRotateResponse
       type: object
+    Disqualifier:
+      additionalProperties: false
+      properties:
+        field:
+          description: A fact name from `fields/`.
+          examples:
+          - attr.size
+          maxLength: 64
+          minLength: 1
+          title: Field
+          type: string
+        op:
+          $ref: '#/components/schemas/ConditionOp'
+          description: eq, ne, in, contains, gte, lte or empty.
+          examples:
+          - eq
+        value:
+          default: null
+          description: Compared value; a list for in, a bool for empty (default true).
+          title: Value
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - Too small
+          maxLength: 128
+          title: Label
+          type: string
+      required:
+      - field
+      - op
+      title: Disqualifier
+      type: object
     DraftResponse:
       properties:
         message_id:
@@ -2882,6 +5591,215 @@ components:
       - message_id
       - status
       title: DraftResponse
+      type: object
+    FieldListResponse:
+      properties:
+        results:
+          description: Built-in facts, then active company attributes; with entity=deal the active deal attributes.
+          items:
+            $ref: '#/components/schemas/FieldResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: FieldListResponse
+      type: object
+    FieldOptionResponse:
+      properties:
+        value:
+          examples:
+          - red
+          title: Value
+          type: string
+        label:
+          examples:
+          - Red
+          title: Label
+          type: string
+      required:
+      - value
+      - label
+      title: FieldOptionResponse
+      type: object
+    FieldResponse:
+      description: '`GET fields/` item — one writable field of the adapter''s catalog (contract A3 § 2).'
+      properties:
+        key:
+          examples:
+          - meta_title
+          title: Key
+          type: string
+        label:
+          examples:
+          - Meta title
+          title: Label
+          type: string
+        type:
+          description: text | html | select | multiselect
+          examples:
+          - text
+          title: Type
+          type: string
+        max_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          examples:
+          - 60
+          title: Max Length
+        translatable:
+          default: true
+          title: Translatable
+          type: boolean
+        options:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/FieldOptionResponse'
+            type: array
+          - type: 'null'
+          default: null
+          title: Options
+        options_truncated:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          title: Options Truncated
+      required:
+      - key
+      - label
+      - type
+      title: FieldResponse
+      type: object
+    FunnelOrigin:
+      properties:
+        origin:
+          description: Origin; empty = none recorded.
+          examples:
+          - fair
+          title: Origin
+          type: string
+        companies:
+          description: Companies created in the period.
+          examples:
+          - 20
+          title: Companies
+          type: integer
+      required:
+      - origin
+      - companies
+      title: FunnelOrigin
+      type: object
+    FunnelResponse:
+      properties:
+        transitions:
+          description: Stage moves in the period, most frequent first.
+          items:
+            $ref: '#/components/schemas/FunnelTransition'
+          title: Transitions
+          type: array
+        stages:
+          description: Every stage in pipeline order.
+          items:
+            $ref: '#/components/schemas/FunnelStage'
+          title: Stages
+          type: array
+        origins:
+          description: Companies per origin, most first.
+          items:
+            $ref: '#/components/schemas/FunnelOrigin'
+          title: Origins
+          type: array
+      required:
+      - transitions
+      - stages
+      - origins
+      title: FunnelResponse
+      type: object
+    FunnelStage:
+      properties:
+        key:
+          description: Stage key.
+          examples:
+          - contacted
+          title: Key
+          type: string
+        label:
+          description: Label.
+          examples:
+          - Contacted
+          title: Label
+          type: string
+        current:
+          description: Companies in the stage now.
+          examples:
+          - 4
+          title: Current
+          type: integer
+        entered:
+          description: Moves into the stage in the period plus the companies created in the period that started there.
+          examples:
+          - 12
+          title: Entered
+          type: integer
+        left:
+          description: Moves out of the stage in the period.
+          examples:
+          - 8
+          title: Left
+          type: integer
+        mean_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time in the stage of the moves out.
+          examples:
+          - 3600.0
+          title: Mean Seconds
+      required:
+      - key
+      - label
+      - current
+      - entered
+      - left
+      - mean_seconds
+      title: FunnelStage
+      type: object
+    FunnelTransition:
+      properties:
+        from_stage:
+          description: Stage key left.
+          examples:
+          - new
+          title: From Stage
+          type: string
+        to_stage:
+          description: Stage key entered.
+          examples:
+          - contacted
+          title: To Stage
+          type: string
+        count:
+          description: Moves.
+          examples:
+          - 12
+          title: Count
+          type: integer
+        mean_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Mean time in the source stage.
+          examples:
+          - 86400.0
+          title: Mean Seconds
+      required:
+      - from_stage
+      - to_stage
+      - count
+      - mean_seconds
+      title: FunnelTransition
       type: object
     GdprEraseResponse:
       properties:
@@ -3017,6 +5935,42 @@ components:
           format: date-time
           title: Created At
           type: string
+        run_rules:
+          description: Created companies enter their first stage with its rules.
+          examples:
+          - false
+          title: Run Rules
+          type: boolean
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Owner given to created and unowned matched companies.
+          examples:
+          - null
+          title: Owner Id
+        rules_queued:
+          default: 0
+          description: 'Rule evaluations queued: one per created company with run_rules.'
+          examples:
+          - 0
+          title: Rules Queued
+          type: integer
+        ignored_columns:
+          description: Header names of the file that were not imported.
+          examples:
+          - - fax
+            - notes_old
+          items:
+            type: string
+          title: Ignored Columns
+          type: array
+        automation_started_count:
+          description: Companies of the batch whose first-stage rules ran; 0 when run_rules is off.
+          examples:
+          - 0
+          title: Automation Started Count
+          type: integer
         report:
           description: Skipped rows (row number and reason code, no row values), capped at LEADS_IMPORT_REPORT_MAX.
           items:
@@ -3035,6 +5989,10 @@ components:
       - size_bytes
       - created_by
       - created_at
+      - run_rules
+      - owner_id
+      - ignored_columns
+      - automation_started_count
       - report
       title: ImportBatchDetailResponse
       type: object
@@ -3144,6 +6102,42 @@ components:
           format: date-time
           title: Created At
           type: string
+        run_rules:
+          description: Created companies enter their first stage with its rules.
+          examples:
+          - false
+          title: Run Rules
+          type: boolean
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Owner given to created and unowned matched companies.
+          examples:
+          - null
+          title: Owner Id
+        rules_queued:
+          default: 0
+          description: 'Rule evaluations queued: one per created company with run_rules.'
+          examples:
+          - 0
+          title: Rules Queued
+          type: integer
+        ignored_columns:
+          description: Header names of the file that were not imported.
+          examples:
+          - - fax
+            - notes_old
+          items:
+            type: string
+          title: Ignored Columns
+          type: array
+        automation_started_count:
+          description: Companies of the batch whose first-stage rules ran; 0 when run_rules is off.
+          examples:
+          - 0
+          title: Automation Started Count
+          type: integer
       required:
       - id
       - source
@@ -3156,6 +6150,10 @@ components:
       - size_bytes
       - created_by
       - created_at
+      - run_rules
+      - owner_id
+      - ignored_columns
+      - automation_started_count
       title: ImportBatchResponse
       type: object
     ImportReportEntry:
@@ -3274,6 +6272,153 @@ components:
       - contract
       title: LegalBasis
       type: string
+    LegalBasisState:
+      properties:
+        value:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: GDPR legal basis; null when none.
+          examples:
+          - legitimate_interest
+          title: Value
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: admin, import or form; null when never recorded.
+          examples:
+          - import
+          title: Source
+        set_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: When it was recorded.
+          examples:
+          - '2026-11-01T10:00:00Z'
+          title: Set At
+      required:
+      - value
+      - source
+      - set_at
+      title: LegalBasisState
+      type: object
+    MailableResponse:
+      properties:
+        eligible:
+          description: The outreach gate lets a draft go to the contact.
+          examples:
+          - false
+          title: Eligible
+          type: boolean
+        reasons:
+          description: Every refusal, in gate order.
+          examples:
+          - - opted_out
+            - suppressed
+          items:
+            type: string
+          title: Reasons
+          type: array
+        legal_basis:
+          $ref: '#/components/schemas/LegalBasisState'
+          description: Legal basis and where it came from.
+        communicator:
+          anyOf:
+          - $ref: '#/components/schemas/CommunicatorAnswer'
+          - type: 'null'
+          description: Suppression answer; null without an email.
+        retention:
+          $ref: '#/components/schemas/RetentionState'
+          description: Retention clock of the company.
+      required:
+      - eligible
+      - reasons
+      - legal_basis
+      - communicator
+      - retention
+      title: MailableResponse
+      type: object
+    OwnerAssignRequest:
+      additionalProperties: false
+      properties:
+        company_ids:
+          description: Companies of the channel, at most 200.
+          examples:
+          - - 1
+          items:
+            type: integer
+          minItems: 1
+          title: Company Ids
+          type: array
+        owner_id:
+          anyOf:
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
+          - type: 'null'
+          description: Owner (an assignable user); null clears the owner.
+          examples:
+          - 7
+          title: Owner Id
+      required:
+      - company_ids
+      - owner_id
+      title: OwnerAssignRequest
+      type: object
+    OwnerAssignResponse:
+      properties:
+        updated:
+          description: Companies whose owner changed.
+          examples:
+          - 3
+          title: Updated
+          type: integer
+      required:
+      - updated
+      title: OwnerAssignResponse
+      type: object
+    OwnerListResponse:
+      properties:
+        results:
+          description: Active staff users by name, at most 50.
+          items:
+            $ref: '#/components/schemas/OwnerResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: OwnerListResponse
+      type: object
+    OwnerResponse:
+      description: A staff user as leads shows one — no e-mail, no roles.
+      properties:
+        id:
+          description: User id.
+          examples:
+          - 7
+          title: Id
+          type: integer
+        username:
+          description: Username.
+          examples:
+          - anna
+          title: Username
+          type: string
+        name:
+          description: Full name; empty when the user has none.
+          examples:
+          - Anna Nowak
+          title: Name
+          type: string
+      required:
+      - id
+      - username
+      - name
+      title: OwnerResponse
+      type: object
     PatchedAnalysisProfileUpdateRequest:
       additionalProperties: false
       properties:
@@ -3319,6 +6464,87 @@ components:
           description: Used by the analysis.
           title: Is Active
       title: AnalysisProfileUpdateRequest
+      type: object
+    PatchedAttributeDefinitionUpdateRequest:
+      additionalProperties: false
+      description: Entity and key are fixed after create; the kind only while no value is stored.
+      properties:
+        label:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Label.
+          title: Label
+        kind:
+          anyOf:
+          - $ref: '#/components/schemas/AttributeKind'
+          - type: 'null'
+          default: null
+          description: Refused (409) once a value is stored.
+        options:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/AttributeOption'
+            type: array
+          - type: 'null'
+          default: null
+          description: Choices of the select kinds.
+          title: Options
+        required:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Required on create and on a patch touching the key.
+          title: Required
+        order:
+          anyOf:
+          - maximum: 32767
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: Display order.
+          title: Order
+        show_in_list:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Shown and filterable in the company list.
+          title: Show In List
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: Accepted in values, conditions, imports and templates.
+          title: Is Active
+      title: AttributeDefinitionUpdateRequest
+      type: object
+    PatchedChannelSettingsRequest:
+      additionalProperties: false
+      properties:
+        default_currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 4217 of new deals; null clears it.
+          examples:
+          - PLN
+          title: Default Currency
+        resume_days:
+          anyOf:
+          - $ref: '#/components/schemas/ResumeDays'
+          - type: 'null'
+          default: null
+          description: Replaces the channel's values; a key left out or null uses the default, null resets all.
+      title: ChannelSettingsRequest
       type: object
     PatchedCompanyUpdateRequest:
       additionalProperties: false
@@ -3381,6 +6607,32 @@ components:
           default: null
           description: Reference in an external system.
           title: External Ref
+        origin:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          default: null
+          description: Where the lead came from.
+          title: Origin
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
+        owner_id:
+          anyOf:
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); null clears the owner.
+          title: Owner Id
       title: CompanyUpdateRequest
       type: object
     PatchedContactUpdateRequest:
@@ -3456,7 +6708,141 @@ components:
           default: null
           description: Where consent was given (document, call, form); required when legal_basis is consent.
           title: Consent Ref
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
       title: ContactUpdateRequest
+      type: object
+    PatchedDealStageUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_]+$
+            type: string
+          - type: 'null'
+          default: null
+          description: Slug.
+          title: Key
+        label:
+          anyOf:
+          - maxLength: 128
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: Label.
+          title: Label
+        order:
+          anyOf:
+          - maximum: 32767
+            minimum: 0
+            type: integer
+          - type: 'null'
+          default: null
+          description: Position in the pipeline.
+          title: Order
+        kind:
+          anyOf:
+          - $ref: '#/components/schemas/DealStageKind'
+          - type: 'null'
+          default: null
+          description: open, won or lost; fixed while the stage holds deals.
+      title: DealStageUpdateRequest
+      type: object
+    PatchedDealUpdateRequest:
+      additionalProperties: false
+      properties:
+        title:
+          anyOf:
+          - maxLength: 255
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          description: What is sold; no personal data.
+          title: Title
+        contact_id:
+          anyOf:
+          - minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: A contact of the company; null clears it.
+          title: Contact Id
+        owner_id:
+          anyOf:
+          - maximum: 2147483647
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Owner (an assignable user); null clears the owner.
+          title: Owner Id
+        value_one_off:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '12000.00'
+          title: Value One Off
+        value_recurring:
+          anyOf:
+          - decimal_places: 2
+            max_digits: 14
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          default: null
+          description: Decimal string with at most 2 decimals; null = none. Needs a currency.
+          examples:
+          - '500.00'
+          title: Value Recurring
+        recurring_period:
+          anyOf:
+          - $ref: '#/components/schemas/RecurringPeriod'
+          - type: 'null'
+          default: null
+          description: month or year.
+        currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          description: ISO 4217; null clears it.
+          title: Currency
+        expected_close_date:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          default: null
+          description: Expected close date; null clears it.
+          title: Expected Close Date
+        attributes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          description: Custom attribute values by key (active definitions of the channel); on update a partial patch, null
+            removes a key.
+          title: Attributes
+      title: DealUpdateRequest
       type: object
     PatchedLeadTypeUpdateRequest:
       additionalProperties: false
@@ -3551,7 +6937,7 @@ components:
           - $ref: '#/components/schemas/RuleAction'
           - type: 'null'
           default: null
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           anyOf:
           - maxLength: 128
@@ -3605,7 +6991,61 @@ components:
           default: null
           description: Evaluation order.
           title: Order
+        conditions:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/Condition'
+            type: array
+          - type: 'null'
+          default: null
+          description: All must hold, else the run is skipped.
+          title: Conditions
       title: RuleUpdateRequest
+      type: object
+    PatchedScoringProfileUpdateRequest:
+      additionalProperties: false
+      properties:
+        key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_.]+$
+            type: string
+          - type: 'null'
+          default: null
+          title: Key
+        thresholds:
+          anyOf:
+          - $ref: '#/components/schemas/Thresholds'
+          - type: 'null'
+          default: null
+          description: S <= M <= L.
+        rules:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ScoringRule'
+            type: array
+          - type: 'null'
+          default: null
+          description: Points per matching condition.
+          title: Rules
+        disqualifiers:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/Disqualifier'
+            type: array
+          - type: 'null'
+          default: null
+          description: A match forces S4.
+          title: Disqualifiers
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          description: The first active profile by key is used.
+          title: Is Active
+      title: ScoringProfileUpdateRequest
       type: object
     PatchedStageUpdateRequest:
       additionalProperties: false
@@ -3651,13 +7091,6 @@ components:
           default: null
           description: No further stages after this one.
           title: Is Terminal
-        on_reply:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          default: null
-          description: Companies move here when a contact replies.
-          title: On Reply
       title: StageUpdateRequest
       type: object
     ProfileDetailResponse:
@@ -3748,36 +7181,121 @@ components:
       title: ProfileRequest
       type: object
     ProfileResponse:
-      description: List shape — the prompt is never listed.
+      description: '`GET/PUT profile/?channel=` — one scope''s own data (blank channel = the instance).'
       properties:
-        id:
-          description: Profile id.
+        channel:
+          description: Blank = the whole instance, else a channel overlay
           examples:
-          - 100
-          title: Id
+          - ''
+          title: Channel
+          type: string
+        data:
+          additionalProperties: true
+          examples:
+          - brand:
+              differentiators:
+              - Made to order
+              text: We build modular sofas.
+          title: Data
+          type: object
+        version:
+          description: 0 = never saved
+          examples:
+          - 3
+          title: Version
           type: integer
-        key:
-          description: Profile key.
+        schema_version:
           examples:
-          - leads.analysis
-          title: Key
-          type: string
-        model:
-          description: Toolbox model.
-          examples:
-          - fake-chat
-          title: Model
-          type: string
+          - 1
+          title: Schema Version
+          type: integer
+        updated_by_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Updated By Id
+        modified_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Modified At
       required:
-      - id
-      - key
-      - model
+      - channel
+      - data
+      - version
+      - schema_version
+      - updated_by_id
+      - modified_at
       title: ProfileResponse
+      type: object
+    RecurringPeriod:
+      enum:
+      - month
+      - year
+      title: RecurringPeriod
+      type: string
+    ResumeDays:
+      additionalProperties: false
+      properties:
+        not_now:
+          anyOf:
+          - maximum: 365
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Days until "Come back" after not now; null = 30.
+          examples:
+          - 30
+          title: Not Now
+        out_of_office:
+          anyOf:
+          - maximum: 365
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: null
+          description: Days until "Try again" after an absence without a return date; null = 7.
+          examples:
+          - 7
+          title: Out Of Office
+      title: ResumeDays
+      type: object
+    RetentionState:
+      properties:
+        days:
+          description: Idle days before anonymisation.
+          examples:
+          - 180
+          title: Days
+          type: integer
+        due_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Anonymised after, unless active again.
+          examples:
+          - null
+          title: Due At
+        exempt_won:
+          description: 'The company sits in a won stage: never anonymised.'
+          examples:
+          - false
+          title: Exempt Won
+          type: boolean
+      required:
+      - days
+      - due_at
+      - exempt_won
+      title: RetentionState
       type: object
     RuleAction:
       enum:
       - request_audit
       - communicate
+      - score
       title: RuleAction
       type: string
     RuleListResponse:
@@ -3812,7 +7330,7 @@ components:
         action:
           $ref: '#/components/schemas/RuleAction'
           default: communicate
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
         template_key:
           default: ''
           description: Communicator template; for communicate.
@@ -3852,6 +7370,12 @@ components:
           minimum: 0
           title: Order
           type: integer
+        conditions:
+          description: All must hold, else the run is skipped.
+          items:
+            $ref: '#/components/schemas/Condition'
+          title: Conditions
+          type: array
       required:
       - trigger
       title: RuleRequest
@@ -3879,7 +7403,7 @@ components:
           - 102
           title: Stage Id
         action:
-          description: request_audit or communicate.
+          description: request_audit, communicate or score.
           examples:
           - communicate
           title: Action
@@ -3926,6 +7450,17 @@ components:
           - 0
           title: Order
           type: integer
+        conditions:
+          description: 'All must hold: {field, op, value}.'
+          examples:
+          - - field: attr.size
+              op: eq
+              value: s
+          items:
+            additionalProperties: true
+            type: object
+          title: Conditions
+          type: array
       required:
       - id
       - trigger
@@ -3938,6 +7473,7 @@ components:
       - cooldown_hours
       - is_active
       - order
+      - conditions
       title: RuleResponse
       type: object
     RuleRunListResponse:
@@ -4016,6 +7552,12 @@ components:
           - message 7 review_required
           title: Detail
           type: string
+        company_name:
+          description: Name of the company; empty when it has none.
+          examples:
+          - Example Shop
+          title: Company Name
+          type: string
       required:
       - id
       - rule_id
@@ -4023,6 +7565,7 @@ components:
       - fired_at
       - outcome
       - detail
+      - company_name
       title: RuleRunResponse
       type: object
     RuleTrigger:
@@ -4031,6 +7574,305 @@ components:
       - intel_ready
       title: RuleTrigger
       type: string
+    ScoreReason:
+      properties:
+        field:
+          description: Fact the rule named.
+          examples:
+          - lead_type
+          title: Field
+          type: string
+        kind:
+          description: rule or disqualifier.
+          examples:
+          - rule
+          title: Kind
+          type: string
+        points:
+          description: Points it added (0 for a disqualifier).
+          examples:
+          - 30
+          title: Points
+          type: integer
+        label:
+          description: Label of the rule.
+          examples:
+          - Retailer
+          title: Label
+          type: string
+      required:
+      - field
+      - kind
+      - points
+      - label
+      title: ScoreReason
+      type: object
+    ScoreResponse:
+      properties:
+        segment:
+          description: S1 (best) … S4.
+          examples:
+          - S2
+          title: Segment
+          type: string
+        points:
+          description: Sum of the matching rules.
+          examples:
+          - 45
+          title: Points
+          type: integer
+        disqualified:
+          description: A disqualifier matched (S4).
+          examples:
+          - false
+          title: Disqualified
+          type: boolean
+        reasons:
+          description: Reasons as text.
+          examples:
+          - - 'Retailer: +30'
+          items:
+            type: string
+          title: Reasons
+          type: array
+        reasons_structured:
+          description: Reasons as data.
+          items:
+            $ref: '#/components/schemas/ScoreReason'
+          title: Reasons Structured
+          type: array
+        profile_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Profile used.
+          examples:
+          - 100
+          title: Profile Id
+      required:
+      - segment
+      - points
+      - disqualified
+      - reasons
+      - reasons_structured
+      - profile_id
+      title: ScoreResponse
+      type: object
+    ScoringProfileListResponse:
+      properties:
+        results:
+          description: Profiles by key.
+          items:
+            $ref: '#/components/schemas/ScoringProfileResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ScoringProfileListResponse
+      type: object
+    ScoringProfileRequest:
+      additionalProperties: false
+      properties:
+        key:
+          default: leads.scoring
+          description: Profile key.
+          maxLength: 64
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_.]+$
+          title: Key
+          type: string
+        thresholds:
+          $ref: '#/components/schemas/Thresholds'
+          description: S <= M <= L.
+        rules:
+          description: Points per matching condition.
+          items:
+            $ref: '#/components/schemas/ScoringRule'
+          title: Rules
+          type: array
+        disqualifiers:
+          description: A match forces S4.
+          items:
+            $ref: '#/components/schemas/Disqualifier'
+          title: Disqualifiers
+          type: array
+        is_active:
+          default: true
+          description: The first active profile by key is used.
+          title: Is Active
+          type: boolean
+      required:
+      - thresholds
+      title: ScoringProfileRequest
+      type: object
+    ScoringProfileResponse:
+      properties:
+        id:
+          description: Profile id.
+          examples:
+          - 100
+          title: Id
+          type: integer
+        key:
+          description: Profile key.
+          examples:
+          - leads.scoring
+          title: Key
+          type: string
+        thresholds:
+          additionalProperties:
+            type: integer
+          description: S <= M <= L.
+          examples:
+          - L: 70
+            M: 40
+            S: 20
+          title: Thresholds
+          type: object
+        rules:
+          description: '{field, op, value, points, label}.'
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Rules
+          type: array
+        disqualifiers:
+          description: '{field, op, value, label}.'
+          examples:
+          - []
+          items:
+            additionalProperties: true
+            type: object
+          title: Disqualifiers
+          type: array
+        is_active:
+          description: The first active profile by key is used.
+          examples:
+          - true
+          title: Is Active
+          type: boolean
+      required:
+      - id
+      - key
+      - thresholds
+      - rules
+      - disqualifiers
+      - is_active
+      title: ScoringProfileResponse
+      type: object
+    ScoringRule:
+      additionalProperties: false
+      properties:
+        field:
+          description: A fact name from `fields/`.
+          examples:
+          - attr.size
+          maxLength: 64
+          minLength: 1
+          title: Field
+          type: string
+        op:
+          $ref: '#/components/schemas/ConditionOp'
+          description: eq, ne, in, contains, gte, lte or empty.
+          examples:
+          - eq
+        value:
+          default: null
+          description: Compared value; a list for in, a bool for empty (default true).
+          title: Value
+        points:
+          description: Added when the condition holds.
+          examples:
+          - 30
+          maximum: 1000
+          minimum: -1000
+          title: Points
+          type: integer
+        label:
+          default: ''
+          description: Reason shown in the timeline.
+          examples:
+          - Retailer
+          maxLength: 128
+          title: Label
+          type: string
+      required:
+      - field
+      - op
+      - points
+      title: ScoringRule
+      type: object
+    StageEventListResponse:
+      properties:
+        results:
+          description: One entry per event.
+          items:
+            $ref: '#/components/schemas/StageEventResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: StageEventListResponse
+      type: object
+    StageEventRequest:
+      additionalProperties: false
+      properties:
+        target_stage_key:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            type: string
+          - type: 'null'
+          description: Stage the event moves to; null keeps the stage.
+          examples:
+          - replied
+          title: Target Stage Key
+        forward_only:
+          default: true
+          description: Move only to a stage of a higher order.
+          title: Forward Only
+          type: boolean
+      required:
+      - target_stage_key
+      title: StageEventRequest
+      type: object
+    StageEventResponse:
+      properties:
+        event:
+          description: first_sent, reply, reply:<class> or sequence_finished.
+          examples:
+          - reply
+          title: Event
+          type: string
+        target_stage_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Stage it moves to; null keeps the stage.
+          examples:
+          - replied
+          title: Target Stage Key
+        forward_only:
+          description: Moves only to a stage of a higher order.
+          examples:
+          - true
+          title: Forward Only
+          type: boolean
+        configured:
+          description: A row exists; false = the event moves nothing.
+          examples:
+          - true
+          title: Configured
+          type: boolean
+      required:
+      - event
+      - target_stage_key
+      - forward_only
+      - configured
+      title: StageEventResponse
+      type: object
     StageKind:
       enum:
       - open
@@ -4087,11 +7929,6 @@ components:
           description: No further stages after this one.
           title: Is Terminal
           type: boolean
-        on_reply:
-          default: false
-          description: Companies move here when a contact replies.
-          title: On Reply
-          type: boolean
       required:
       - key
       - label
@@ -4135,12 +7972,6 @@ components:
           - false
           title: Is Terminal
           type: boolean
-        on_reply:
-          description: Target on a reply.
-          examples:
-          - false
-          title: On Reply
-          type: boolean
       required:
       - id
       - key
@@ -4148,8 +7979,82 @@ components:
       - order
       - kind
       - is_terminal
-      - on_reply
       title: StageResponse
+      type: object
+    SuppressionRow:
+      properties:
+        id:
+          description: Suppression id.
+          examples:
+          - 3
+          title: Id
+          type: integer
+        kind:
+          description: email, domain or email_token.
+          examples:
+          - email
+          title: Kind
+          type: string
+        source:
+          description: Who suppressed it.
+          examples:
+          - manual
+          title: Source
+          type: string
+        reason:
+          description: Free text.
+          examples:
+          - ''
+          title: Reason
+          type: string
+        scope:
+          description: channel or install.
+          examples:
+          - channel
+          title: Scope
+          type: string
+        created_at:
+          description: Created.
+          examples:
+          - '2026-11-01T10:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+      required:
+      - id
+      - kind
+      - source
+      - reason
+      - scope
+      - created_at
+      title: SuppressionRow
+      type: object
+    Thresholds:
+      additionalProperties: false
+      properties:
+        S:
+          description: Points from which a company is S3.
+          examples:
+          - 20
+          title: S
+          type: integer
+        M:
+          description: Points from which a company is S2.
+          examples:
+          - 40
+          title: M
+          type: integer
+        L:
+          description: Points from which a company is S1.
+          examples:
+          - 70
+          title: L
+          type: integer
+      required:
+      - S
+      - M
+      - L
+      title: Thresholds
       type: object
     TransitionRequest:
       additionalProperties: false
@@ -4171,3 +8076,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY

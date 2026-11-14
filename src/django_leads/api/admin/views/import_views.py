@@ -10,8 +10,10 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView
+from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView, parse
+from django_leads.api.admin.views.owner_views import owner_or_400
 from django_leads.models import ImportBatch
+from django_leads.schemas.requests import UploadOptions
 from django_leads.schemas.responses import ImportBatchDetailResponse, ImportBatchListResponse, ImportBatchResponse
 from django_leads.services import import_service
 from django_leads.tasks import enqueue_import
@@ -19,7 +21,22 @@ from django_leads.tasks import enqueue_import
 _TAGS = ["Leads Imports"]
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 UPLOAD_SCHEMA = {
-    "multipart/form-data": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}}
+    "multipart/form-data": {
+        "type": "object",
+        "properties": {
+            "file": {"type": "string", "format": "binary"},
+            "run_rules": {
+                "type": "boolean",
+                "default": False,
+                "description": "Created companies enter their first stage with its rules (one evaluation each).",
+            },
+            "owner_id": {
+                "type": "integer",
+                "description": "Owner of created companies and of matched ones without an owner; absent = none.",
+            },
+        },
+        "required": ["file"],
+    }
 }
 
 
@@ -48,7 +65,7 @@ class ImportListView(AdminView):
     )
     def get(self, request: Request, channel_idx: str) -> Response:
         batches = ImportBatch.objects.filter(channel=self.channel(channel_idx)).defer("report")
-        return self.paginated(request, batches, ImportBatchResponse.model_validate)
+        return self.paginated(request, batches, ImportBatchResponse.of)
 
     @extend_schema(
         tags=_TAGS,
@@ -57,11 +74,20 @@ class ImportListView(AdminView):
         responses={202: ImportBatchResponse, **ERROR_RESPONSES},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
+        options = parse(UploadOptions, request.data.dict())
         filename, content, size_bytes = read_upload(request)
-        batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
+        owner = owner_or_400(options.owner_id)
+        batch = import_service.create_batch(
+            self.channel(channel_idx),
+            filename,
+            size_bytes,
+            request.user.username,
+            run_rules=options.run_rules,
+            owner=owner,
+        )
         import_service.store_upload(batch.pk, content)
         transaction.on_commit(lambda: enqueue_import(batch.pk))
-        return Response(ImportBatchResponse.model_validate(batch).model_dump(mode="json"), status=202)
+        return Response(ImportBatchResponse.of(batch).model_dump(mode="json"), status=202)
 
 
 class ImportDetailView(AdminView):
@@ -74,4 +100,4 @@ class ImportDetailView(AdminView):
     )
     def get(self, request: Request, channel_idx: str, pk: int) -> Response:
         batch = self.get_in(ImportBatch.objects.filter(channel=self.channel(channel_idx)), pk, "Import batch")
-        return Response(ImportBatchDetailResponse.model_validate(batch).model_dump(mode="json"))
+        return Response(ImportBatchDetailResponse.of(batch).model_dump(mode="json"))

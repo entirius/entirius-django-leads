@@ -29,7 +29,7 @@ class ReadOnlyAdmin(admin.ModelAdmin):
 class StageInline(admin.TabularInline):
     model = Stage
     extra = 0
-    fields = ("order", "key", "label", "kind", "is_terminal", "on_reply")
+    fields = ("order", "key", "label", "kind", "is_terminal")
 
 
 class LeadTypeInline(admin.TabularInline):
@@ -60,7 +60,16 @@ class CompanyAdmin(admin.ModelAdmin):
     list_display = ("name", "domain", "channel", "stage", "source", "do_not_contact", "last_activity_at")
     list_filter = ("channel", "stage", "source", "do_not_contact")
     search_fields = ("name", "domain")
-    readonly_fields = ("domain", "stage", "stage_entered_at", "hooks", "customer_uid", "last_activity_at")
+    # `do_not_contact` has one writer (`company_service.set_do_not_contact`, which also suppresses the domain).
+    readonly_fields = (
+        "domain",
+        "stage",
+        "stage_entered_at",
+        "hooks",
+        "customer_uid",
+        "last_activity_at",
+        "do_not_contact",
+    )
     inlines = [ContactInline]
 
     def has_add_permission(self, request) -> bool:

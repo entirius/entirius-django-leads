@@ -17,7 +17,6 @@ class Stage(BaseModel):
     order = models.PositiveSmallIntegerField(default=0)
     kind = models.CharField(max_length=16, choices=StageKind.choices, default=StageKind.OPEN)
     is_terminal = models.BooleanField(default=False)
-    on_reply = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["order"]

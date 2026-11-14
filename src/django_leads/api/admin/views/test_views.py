@@ -69,9 +69,7 @@ class DevEvaluateView(DevelopmentView):
         runs = rule_service.evaluate_rules(
             company, body.trigger, stage=stage if body.trigger == RuleTrigger.STAGE_ENTERED else None
         )
-        return Response(
-            DevEvaluateResponse(runs=[RuleRunResponse.model_validate(run) for run in runs]).model_dump(mode="json")
-        )
+        return Response(DevEvaluateResponse(runs=[RuleRunResponse.of(run) for run in runs]).model_dump(mode="json"))
 
 
 class DevRotateNowView(DevelopmentView):
@@ -101,7 +99,7 @@ class DevImportNowView(DevelopmentView):
         filename, content, size_bytes = read_upload(request)
         batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
         batch = import_service.run_content(batch, content)
-        return Response(ImportBatchDetailResponse.model_validate(batch).model_dump(mode="json"))
+        return Response(ImportBatchDetailResponse.of(batch).model_dump(mode="json"))
 
 
 class DevAnonymiseNowView(DevelopmentView):

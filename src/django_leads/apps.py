@@ -25,9 +25,11 @@ class DjangoLeadsConfig(AppConfig):
             contact_forms_bridge,
             leads_receivers,
             siteintel_receivers,
+            todo_receivers,
         )
 
         contact_forms_bridge.connect()
         leads_receivers.connect()
         siteintel_receivers.connect()
         communicator_receivers.connect()
+        todo_receivers.connect()

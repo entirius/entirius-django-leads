@@ -11,13 +11,21 @@ from typing import Any
 
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
+from django.utils import timezone
 from django_agreements.enums import LegalBasis
 from django_communicator.models import Thread
 
-from django_leads.enums import ActivityKind
+from django_leads.enums import ActivityKind, AttributeEntity
 from django_leads.models import Activity, Channel, Company, Contact
-from django_leads.services import activity_service, retention_service
-from django_leads.services.company_service import fill_empty
+from django_leads.services import (
+    activity_service,
+    attribute_service,
+    follow_up_service,
+    recipient_service,
+    retention_service,
+    suppression_service,
+)
+from django_leads.services.company_service import ATTRIBUTES, fill_empty
 from django_leads.services.outreach_service import subject_ref
 from django_leads.utils.emails import normalize_email
 
@@ -43,7 +51,8 @@ class ConsentRefRequired(ValueError):
 
 def build_contact(company: Company, row: dict[str, Any]) -> Contact:
     values = {field: row[field] for field in FILL_FIELDS if row.get(field) not in (None, "")}
-    return Contact(company=company, email=normalize_email(row.get("email", "")), source=row["source"], **values)
+    email, attributes = normalize_email(row.get("email", "")), row.get(ATTRIBUTES) or {}
+    return Contact(company=company, email=email, source=row["source"], attributes=attributes, **values)
 
 
 def find_contact(company: Company, row: dict[str, Any]) -> Contact | None:
@@ -116,7 +125,9 @@ def admin_consent_ref(actor: str, basis: str | None, consent_ref: str | None) ->
 
 
 def create_contact(company: Company, row: dict[str, Any], *, actor: str, consent_ref: str | None = None) -> Contact:
-    contact = build_contact(company, row)
+    """Attributes are cleaned with required keys enforced (`InvalidAttribute`)."""
+    attributes = attribute_service.initial(company.channel, AttributeEntity.CONTACT, row.get(ATTRIBUTES) or {})
+    contact = build_contact(company, {**row, ATTRIBUTES: attributes})
     contact.is_primary = bool(row.get("is_primary"))
     try:
         with transaction.atomic():
@@ -132,16 +143,15 @@ def create_contact(company: Company, row: dict[str, Any], *, actor: str, consent
 
 
 def update_contact(contact: Contact, updates: dict[str, Any], *, actor: str, consent_ref: str | None = None) -> Contact:
+    """`attributes` is a partial patch merged by `attribute_service` (a null key is removed)."""
+    updates = dict(updates)
+    patch = updates.pop(ATTRIBUTES, None)
     invalid = set(updates) - EDITABLE_FIELDS
     if invalid:
         raise ValueError(f"fields not editable: {sorted(invalid)}")
-    if "email" in updates:
-        updates = {**updates, "email": _first_email(contact, updates["email"])}
-    fields = {field: value for field, value in updates.items() if field != "legal_basis"}
-    for field, value in fields.items():
-        setattr(contact, field, value)
     try:
         with transaction.atomic():
+            fields = _set_fields(contact, updates, patch)
             contact.save(update_fields=[*fields, "modified_at"])
             _keep_one_primary(contact)
     except IntegrityError:
@@ -151,6 +161,19 @@ def update_contact(contact: Contact, updates: dict[str, Any], *, actor: str, con
         ref = admin_consent_ref(actor, basis, consent_ref)
         set_legal_basis(contact, basis, source="admin", consent_ref=ref, actor=actor)
     return contact
+
+
+def _set_fields(contact: Contact, updates: dict[str, Any], patch: dict[str, Any] | None) -> list[str]:
+    """Sets everything but the legal basis on the instance; returns the fields to save."""
+    if "email" in updates:
+        updates = {**updates, "email": _first_email(contact, updates["email"])}
+    fields = {field: value for field, value in updates.items() if field != "legal_basis"}
+    for field, value in fields.items():
+        setattr(contact, field, value)
+    if patch is not None:
+        channel = contact.company.channel
+        fields[ATTRIBUTES] = attribute_service.apply_locked(contact, channel, AttributeEntity.CONTACT, patch)
+    return list(fields)
 
 
 def _first_email(contact: Contact, email: str) -> str:
@@ -201,6 +224,54 @@ def remove_contact(contact: Contact, *, actor: str) -> Contact | None:
     return None
 
 
+def opt_out(contact: Contact, *, reason: str, actor: str) -> Contact:
+    """The only writer of `opt_out_at`: set once (Activity `optout`), and the address suppressed in communicator."""
+    if not _stamp(contact, "opt_out_at"):
+        return contact
+    data = {"reason": reason}
+    activity_service.record(contact.company, ActivityKind.OPTOUT, "opted out", contact=contact, data=data, actor=actor)
+    if contact.email:
+        suppression_service.suppress_address(contact.company.channel, contact.email, reason=reason)
+    follow_up_service.cancel_resume(contact, follow_up_service.OPTED_OUT)
+    return contact
+
+
+def opt_out_address(email: str, channel_idx: str, *, actor: str) -> int:
+    """A confirmed opt-out from communicator: every contact with the address in the channel, or in every channel
+    when suppressions hold install-wide. Returns the contacts opted out now."""
+    contacts = Contact.objects.filter(email=normalize_email(email), opt_out_at__isnull=True)
+    if not suppression_service.install_wide():
+        contacts = contacts.filter(company__channel__idx=channel_idx)
+    found = list(contacts.select_related("company__channel"))
+    for contact in found:
+        opt_out(contact, reason="optout_confirmed", actor=actor)
+    return len(found)
+
+
+def flag_wrong_person(contact: Contact, *, actor: str) -> Contact:
+    """Set once by a `wrong_person` reply; the gate refuses the contact from then on and its drafts waiting for
+    review are withdrawn."""
+    if _stamp(contact, "wrong_person_at"):
+        message = "contact flagged: wrong person"
+        activity_service.record(contact.company, ActivityKind.NOTE, message, contact=contact, actor=actor)
+        reason = recipient_service.REFUSAL_SENTENCES["wrong_person"]
+        suppression_service.withdraw_drafts(contact.company.channel, contact.email, reason=reason)
+    return contact
+
+
+def _stamp(contact: Contact, field: str) -> bool:
+    """Sets an empty timestamp field in one conditional update; False when it was already set."""
+    now = timezone.now()
+    updated = Contact.objects.filter(pk=contact.pk, **{f"{field}__isnull": True}).update(
+        **{field: now}, modified_at=now
+    )
+    if updated:
+        setattr(contact, field, now)
+    return bool(updated)
+
+
 def list_contacts(channel: Channel, company_id: int | None = None) -> QuerySet[Contact]:
-    contacts = Contact.objects.filter(company__channel=channel).select_related("language").order_by("id")
+    contacts = (
+        Contact.objects.filter(company__channel=channel).select_related("language", "company__channel").order_by("id")
+    )
     return contacts.filter(company_id=company_id) if company_id else contacts

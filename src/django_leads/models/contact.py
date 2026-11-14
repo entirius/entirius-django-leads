@@ -27,6 +27,10 @@ class Contact(BaseModel):
     consent_ref = models.IntegerField(null=True, blank=True)
     opt_out_at = models.DateTimeField(null=True, blank=True)
     anonymised_at = models.DateTimeField(null=True, blank=True)
+    # Set by a `wrong_person` reply; the outreach gate refuses the contact from then on.
+    wrong_person_at = models.DateTimeField(null=True, blank=True)
+    # Values of the channel's contact `AttributeDefinition`s (personal data: cleared by anonymisation).
+    attributes = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-is_primary", "last_name", "first_name"]

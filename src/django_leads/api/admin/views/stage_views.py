@@ -78,7 +78,7 @@ class StageDetailView(AdminView):
     @extend_schema(
         tags=_TAGS,
         summary="Delete a stage",
-        description="409 while companies sit in the stage — move them first.",
+        description="409 while companies sit in the stage or a stage event targets it — move them or change the event first.",
         responses={204: None, **ERROR_RESPONSES, 409: None},
     )
     def delete(self, request: Request, channel_idx: str, pk: int) -> Response:

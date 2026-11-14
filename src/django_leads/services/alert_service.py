@@ -8,6 +8,7 @@ import functools
 import logging
 
 from django_leads.models import Company
+from django_leads.services import owner_service
 from django_leads.settings import LEADS_NOTIFY_ROLE
 
 logger = logging.getLogger(__name__)
@@ -23,10 +24,11 @@ def _notifications_available() -> bool:
     return True
 
 
-def alert(company: Company, *, severity: str, title: str, body: str = "") -> None:
-    """Never raises: a missing notifications channel is logged."""
+def alert(company: Company, *, severity: str, title: str, body: str = "") -> bool:
+    """To the company's owner when it has one, else to everyone with the role; True when the notification was
+    raised. Never raises: a missing notifications channel is logged."""
     if not _notifications_available():
-        return
+        return False
     from django_notifications.services.notify_service import notify
 
     try:
@@ -37,6 +39,9 @@ def alert(company: Company, *, severity: str, title: str, body: str = "") -> Non
             subject_ref=f"leads.Company:{company.pk}",
             title=title,
             body=body,
+            recipient_user_id=owner_service.alert_recipient_id(company),
         )
     except Exception:
         logger.exception("leads: notification for company %s failed", company.pk)
+        return False
+    return True

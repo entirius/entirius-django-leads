@@ -6,17 +6,19 @@
 
 from dataclasses import dataclass
 
+from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 from django_agreements.models import Channel as AgreementsChannel
 from django_agreements.services.clause_set_service import ClauseSetMissing, render_legal_footer, resolve_clause_set
 from django_communicator.enums import MessageStatus
-from django_communicator.models import Message, Thread
+from django_communicator.models import Message, Reply, Thread
+from django_communicator.services import compose_service
 from django_communicator.services.communicate_service import LegalFooterRequiredError, RecipientData, communicate
 from django_utils.toolbox import ToolboxDisabledError
 
 from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
-from django_leads.services import activity_service, recipient_service
+from django_leads.services import activity_service, fact_service, recipient_service, sequence_note_service
 
 SKIPPED_TOOLBOX_DISABLED = "skipped: AI toolbox disabled"
 CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", "hooks")
@@ -24,6 +26,10 @@ CONTEXT_FIELDS = ("domain", "lead_type", "industry", "description", "platform", 
 
 def subject_ref(company: Company) -> str:
     return f"leads.Company:{company.pk}"
+
+
+class NoLegalBasis(Exception):
+    """No legal footer for the contact: no clause set of its legal basis and language, or an empty footer."""
 
 
 @dataclass(frozen=True)
@@ -48,7 +54,7 @@ def request_draft(
             if reason:
                 return _blocked(company, contact, reason, actor)
             message = _communicate(company, contact, template_key, thread)
-            _record_draft(company, contact, message, template_key, actor)
+            _record_draft(company, contact, message, actor, template_key=template_key)
     except (ClauseSetMissing, AgreementsChannel.DoesNotExist):
         return _skipped(company, contact, "skipped: no clause set", actor)
     except LegalFooterRequiredError:
@@ -72,23 +78,57 @@ def _blocked(company: Company, contact: Contact, reason: str, actor: str) -> Blo
     return Blocked(reason)
 
 
+def compose_message(
+    company: Company, contact: Contact, *, subject: str, body: str, actor: AbstractBaseUser, reply: Reply | None = None
+) -> Message | Blocked:
+    """A hand-written message from the owner's mailbox: the locks and the gate of `request_draft` (a refusal →
+    Activity `blocked`), the legal footer of the contact's basis and language, then communicator's `compose`.
+    Raises `NoLegalBasis`, and communicator's `Channel.DoesNotExist`, `ComposeError` and `ThreadMismatchError`."""
+    username = actor.get_username()
+    try:
+        with transaction.atomic():
+            company, contact = _lock(company, contact)
+            if reason := recipient_service.block_reason(contact):
+                return _blocked(company, contact, reason, username)
+            message = compose_service.compose(
+                channel_idx=company.channel.idx, recipient=_recipient(company, contact), subject=subject,
+                body_text=body, subject_ref=subject_ref(company), author=actor, mailbox_user_id=company.owner_id,
+                in_reply_to=reply, subject_label=company.name,
+            )  # fmt: skip
+            _record_composed(company, contact, message, username)
+    except (ClauseSetMissing, AgreementsChannel.DoesNotExist, LegalFooterRequiredError):
+        raise NoLegalBasis from None
+    return message
+
+
+def reply_of(company: Company, reply_id: int) -> Reply | None:
+    """The reply when it belongs to a thread of the company, else None."""
+    return Reply.objects.select_related("thread").filter(pk=reply_id, thread__subject_ref=subject_ref(company)).first()
+
+
 def _communicate(company: Company, contact: Contact, template_key: str, thread: Thread | None) -> Message:
-    language = _language_code(company, contact)
     return communicate(
         channel_idx=company.channel.idx,
         template_key=template_key,
-        recipient=RecipientData(
-            email=contact.email,
-            first_name=contact.first_name,
-            last_name=contact.last_name,
-            language=language,
-            legal_footer=_legal_footer(company, contact, language),
-        ),
+        recipient=_recipient(company, contact),
         context=_context(company, contact),
         subject_ref=subject_ref(company),
         requires_review=True,
         thread=thread,
         audience=company.lead_type,  # the template's lead-type variant, else its any-audience default
+        mailbox_user_id=company.owner_id,  # the owner's mailbox, else the channel default
+        subject_label=company.name,
+    )
+
+
+def _recipient(company: Company, contact: Contact) -> RecipientData:
+    language = _language_code(company, contact)
+    return RecipientData(
+        email=contact.email,
+        first_name=contact.first_name,
+        last_name=contact.last_name,
+        language=language,
+        legal_footer=_legal_footer(company, contact, language),
     )
 
 
@@ -105,17 +145,64 @@ def _legal_footer(company: Company, contact: Contact, language: str) -> str:
     return render_legal_footer(clause_set, recipient_email=contact.email)
 
 
+class BlankMissing(dict):
+    """`{attr[key]}` of a key without a value renders empty instead of failing the render."""
+
+    def __missing__(self, key: str) -> str:
+        return ""
+
+
 def _context(company: Company, contact: Contact) -> dict:
     fields = {field: getattr(company, field) for field in CONTEXT_FIELDS}
     people = {"job_title": contact.job_title, "first_name": contact.first_name, "last_name": contact.last_name}
-    return {"company_name": company.name, "website": company.website or company.domain, **fields, **people}
+    facts = fact_service.facts(company, contact)
+    attributes = {
+        "attr": _renderable(fact_service.attributes_of(facts, fact_service.ATTR_PREFIX)),
+        "contact_attr": _renderable(fact_service.attributes_of(facts, fact_service.CONTACT_ATTR_PREFIX)),
+    }
+    return {
+        "company_name": company.name,
+        "website": company.website or company.domain,
+        **fields,
+        **people,
+        **attributes,
+    }
 
 
-def _record_draft(company: Company, contact: Contact, message: Message, template_key: str, actor: str) -> None:
-    data = {"message_id": message.pk, "status": message.status, "template_key": template_key}
-    activity_service.record(
-        company, ActivityKind.DRAFT, f"draft {message.status}", contact=contact, data=data, actor=actor
-    )
+def _renderable(values: dict) -> BlankMissing:
+    """Every active key is present (empty without a value); a multiselect renders as a comma-separated list."""
+    return BlankMissing({key: _text(value) for key, value in values.items()})
+
+
+def _text(value: object) -> str:
+    if value is None:
+        return ""
+    return ", ".join(value) if isinstance(value, list) else str(value)
+
+
+def _record_composed(company: Company, contact: Contact, message: Message, actor: str) -> None:
+    """Activity `draft` "written by hand" (event `composed`), then the note of the sequence it stopped."""
+    extra = {"event": "composed", "thread_id": message.thread_id}
+    _record_draft(company, contact, message, actor, text="written by hand", extra=extra)
+    since = message.created_at
+    sequence_note_service.record(company, contact, thread_id=message.thread_id, since=since, actor=actor)
+
+
+def _record_draft(
+    company: Company,
+    contact: Contact,
+    message: Message,
+    actor: str,
+    *,
+    template_key: str = "",
+    text: str = "",
+    extra: dict | None = None,
+) -> None:
+    """Activity `draft` (`draft <status>`, or the given text) with the message id; a suppressed message also
+    `blocked`."""
+    data = {"message_id": message.pk, "status": message.status, "template_key": template_key, **(extra or {})}
+    text = text or f"draft {message.status}"
+    activity_service.record(company, ActivityKind.DRAFT, text, contact=contact, data=data, actor=actor)
     if message.status == MessageStatus.SUPPRESSED:
         activity_service.record(
             company, ActivityKind.BLOCKED, "suppressed by communicator", contact=contact, actor=actor

@@ -13,7 +13,7 @@ from django.utils import timezone
 from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind, StageKind
 from django_leads.models import Activity, Channel, Company, Contact
-from django_leads.services import activity_service, erased_address_service
+from django_leads.services import activity_service, erased_address_service, follow_up_service, task_bridge
 from django_leads.services.outreach_service import subject_ref
 from django_leads.signals import contact_anonymised
 from django_leads.utils.emails import anonymised_address, email_hash
@@ -21,10 +21,14 @@ from django_leads.utils.emails import anonymised_address, email_hash
 PERSONAL_FIELDS = ("first_name", "last_name", "job_title", "phone")
 
 
+def retention_days(channel: Channel) -> int:
+    return channel.retention_days or leads_settings.LEADS_RETENTION_DAYS
+
+
 def select_inactive_contacts(channel: Channel, *, as_of: datetime) -> QuerySet[Contact]:
     """Contacts not yet anonymised at companies of the channel idle since the cutoff (never in a `won` stage),
     without an Activity of their own after it."""
-    cutoff = as_of - timedelta(days=channel.retention_days or leads_settings.LEADS_RETENTION_DAYS)
+    cutoff = as_of - timedelta(days=retention_days(channel))
     companies = Company.objects.filter(channel=channel, last_activity_at__lt=cutoff).exclude(stage__kind=StageKind.WON)
     recent = Activity.objects.filter(contact=OuterRef("pk"), created_at__gte=cutoff)
     contacts = Contact.objects.filter(company__in=companies, anonymised_at__isnull=True).exclude(Exists(recent))
@@ -32,9 +36,10 @@ def select_inactive_contacts(channel: Channel, *, as_of: datetime) -> QuerySet[C
 
 
 def anonymise_contact(contact: Contact, *, actor: str = "retention") -> Contact:
-    """Email → token (remembered in `ErasedAddress`), name, job title and phone cleared; Activity `anonymised` with the
-    hash; `contact_anonymised` on commit. The row is re-read under a lock: a contact already anonymised (by a
-    concurrent erase or retention run) is returned unchanged, so the Activity and the signal happen once."""
+    """Email → token (remembered in `ErasedAddress`), name, job title, phone and attributes cleared; the open "come
+    back" task cancelled, the free text of the contact's tasks erased and the contact taken off its deals; Activity `anonymised` with the hash;
+    `contact_anonymised` on commit. The row is re-read under a lock: a contact already anonymised (by a concurrent
+    erase or retention run) is returned unchanged, so the Activity and the signal happen once."""
     with transaction.atomic():
         locked = Contact.objects.select_for_update(of=("self",)).select_related("company").get(pk=contact.pk)
         if locked.anonymised_at is None:
@@ -48,9 +53,13 @@ def _pseudonymise(contact: Contact, actor: str) -> None:
     contact.email = anonymised_address(original) if original else ""
     for name in PERSONAL_FIELDS:
         setattr(contact, name, "")
+    contact.attributes = {}
     contact.anonymised_at = timezone.now()
-    contact.save(update_fields=["email", *PERSONAL_FIELDS, "anonymised_at", "modified_at"])
+    contact.save(update_fields=["email", *PERSONAL_FIELDS, "attributes", "anonymised_at", "modified_at"])
+    contact.deals.update(contact=None)  # a deal is company data: it stays, without the person
     erased_address_service.remember(original)
+    follow_up_service.cancel_resume(contact, follow_up_service.ANONYMISED)
+    task_bridge.scrub(contact)
     activity_service.record(
         contact.company, ActivityKind.ANONYMISED, "contact anonymised", contact=contact,
         data={"email_hash": hashed}, actor=actor,

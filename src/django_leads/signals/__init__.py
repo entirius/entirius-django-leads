@@ -11,3 +11,5 @@ stage_entered = Signal()
 # Sent on commit when a contact is anonymised. Args: email_hash (sha256 of the normalised old address),
 # anonymised_email (the token now stored), subject_ref ("leads.Company:<id>") — never the original email.
 contact_anonymised = Signal()
+# Sent on commit by `deal_service.transition` on a real stage change. Args: deal, previous (DealStage), stage.
+deal_stage_changed = Signal()

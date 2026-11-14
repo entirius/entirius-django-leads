@@ -9,12 +9,19 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_leads.api.admin.views._base import ERROR_RESPONSES, PAGE_PARAMETERS, AdminView, Conflict, parse
+from django_leads.api.admin.views._base import (
+    ERROR_RESPONSES,
+    PAGE_PARAMETERS,
+    AdminPagination,
+    AdminView,
+    Conflict,
+    parse,
+)
 from django_leads.enums import LeadSource
 from django_leads.models import Company, Contact
 from django_leads.schemas.requests import ContactCreateRequest, ContactListQuery, ContactUpdateRequest
 from django_leads.schemas.responses import ContactListResponse, ContactResponse
-from django_leads.services import contact_service
+from django_leads.services import attribute_service, contact_service, recipient_service
 
 _TAGS = ["Leads Contacts"]
 TEXT_FIELDS = ("first_name", "last_name", "job_title", "phone")
@@ -30,6 +37,16 @@ def resolve_language(values: dict) -> dict:
     return {**values, "language": language}
 
 
+def contact_rows(contacts: list[Contact]) -> list[dict]:
+    """Contacts of one channel as the API shows them, `mail_block` asked for all of them at once."""
+    blocks = recipient_service.mail_blocks(contacts)
+    return [ContactResponse.of(contact, blocks[contact.pk]).model_dump(mode="json") for contact in contacts]
+
+
+def contact_body(contact: Contact) -> dict:
+    return contact_rows([contact])[0]
+
+
 class ContactListView(AdminView):
     access_area = "leads.companies"
 
@@ -43,7 +60,9 @@ class ContactListView(AdminView):
     def get(self, request: Request, channel_idx: str) -> Response:
         query = parse(ContactListQuery, request.query_params.dict())
         contacts = contact_service.list_contacts(self.channel(channel_idx), company_id=query.company)
-        return self.paginated(request, contacts, ContactResponse.of)
+        paginator = AdminPagination()
+        page = paginator.paginate_queryset(contacts, request, view=self)
+        return paginator.get_paginated_response(contact_rows(page))
 
     @extend_schema(
         tags=_TAGS,
@@ -62,7 +81,9 @@ class ContactListView(AdminView):
             contact = contact_service.create_contact(company, row, actor=request.user.username, consent_ref=consent_ref)
         except contact_service.ContactExists as error:
             raise Conflict(str(error), code="contact_exists") from None
-        return Response(ContactResponse.of(contact).model_dump(mode="json"), status=201)
+        except attribute_service.InvalidAttribute as error:
+            raise ValidationError({"attributes": [str(error)]}) from None
+        return Response(contact_body(contact), status=201)
 
 
 class ContactDetailView(AdminView):
@@ -74,7 +95,7 @@ class ContactDetailView(AdminView):
 
     @extend_schema(tags=_TAGS, summary="One contact", responses={200: ContactResponse, **ERROR_RESPONSES})
     def get(self, request: Request, channel_idx: str, pk: int) -> Response:
-        return Response(ContactResponse.of(self.contact(channel_idx, pk)).model_dump(mode="json"))
+        return Response(contact_body(self.contact(channel_idx, pk)))
 
     @extend_schema(
         tags=_TAGS,
@@ -85,7 +106,7 @@ class ContactDetailView(AdminView):
     )
     def patch(self, request: Request, channel_idx: str, pk: int) -> Response:
         updates = parse(ContactUpdateRequest, request.data).model_dump(mode="json", exclude_unset=True)
-        if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "email", "is_primary")):
+        if any(updates.get(field, "") is None for field in (*TEXT_FIELDS, "email", "is_primary", "attributes")):
             raise ValidationError({"detail": ["null is only allowed for language and legal_basis"]})
         consent_ref = updates.pop("consent_ref", None)
         try:
@@ -97,9 +118,11 @@ class ContactDetailView(AdminView):
             )
         except contact_service.EmailImmutable as error:
             raise ValidationError({"email": [str(error)]}) from None
+        except attribute_service.InvalidAttribute as error:
+            raise ValidationError({"attributes": [str(error)]}) from None
         except contact_service.ContactExists as error:
             raise Conflict(str(error), code="contact_exists") from None
-        return Response(ContactResponse.of(contact).model_dump(mode="json"))
+        return Response(contact_body(contact))
 
     @extend_schema(
         tags=_TAGS,
@@ -112,4 +135,4 @@ class ContactDetailView(AdminView):
         anonymised = contact_service.remove_contact(self.contact(channel_idx, pk), actor=request.user.username)
         if anonymised is None:
             return Response(status=204)
-        return Response(ContactResponse.of(anonymised).model_dump(mode="json"))
+        return Response(contact_body(anonymised))

@@ -45,6 +45,9 @@ class ActivityKind(models.TextChoices):
     LEGAL_BASIS_CONFLICT = "legal_basis_conflict", "Legal basis conflict"
     INTEL = "intel", "Intel"
     INTEL_EMPTY = "intel_empty", "Intel empty"
+    SCORE = "score", "Score"
+    TASK = "task", "Task"
+    DEAL = "deal", "Deal"
 
 
 class ImportStatus(models.TextChoices):
@@ -62,6 +65,7 @@ class RuleTrigger(models.TextChoices):
 class RuleAction(models.TextChoices):
     REQUEST_AUDIT = "request_audit", "Request audit"
     COMMUNICATE = "communicate", "Communicate"
+    SCORE = "score", "Score"
 
 
 class ContactStrategy(models.TextChoices):
@@ -76,6 +80,21 @@ class RuleOutcome(models.TextChoices):
     COOLDOWN = "cooldown", "Cooldown"
 
 
+class StageEvent(models.TextChoices):
+    """Events of the event → stage map; `reply:<class>` falls back to `reply` (`stage_event_service`)."""
+
+    FIRST_SENT = "first_sent", "First mail sent"
+    REPLY = "reply", "Reply"
+    REPLY_INTERESTED = "reply:interested", "Reply: interested"
+    REPLY_NOT_NOW = "reply:not_now", "Reply: not now"
+    REPLY_NOT_INTERESTED = "reply:not_interested", "Reply: not interested"
+    REPLY_OUT_OF_OFFICE = "reply:out_of_office", "Reply: out of office"
+    REPLY_WRONG_PERSON = "reply:wrong_person", "Reply: wrong person"
+    REPLY_UNSUBSCRIBE = "reply:unsubscribe", "Reply: unsubscribe"
+    REPLY_UNCLEAR = "reply:unclear", "Reply: unclear"
+    SEQUENCE_FINISHED = "sequence_finished", "Sequence finished"
+
+
 class ClaimState(models.TextChoices):
     """Lifecycle of a claim around a paid call: `retry` waits for the next rotation or intel retry, `failed` is final."""
 
@@ -83,3 +102,55 @@ class ClaimState(models.TextChoices):
     DONE = "done", "Done"
     RETRY = "retry", "Retry"
     FAILED = "failed", "Failed"
+
+
+class DealStageKind(models.TextChoices):
+    """A deal is open until it enters a `won` or `lost` stage."""
+
+    OPEN = "open", "Open"
+    WON = "won", "Won"
+    LOST = "lost", "Lost"
+
+
+class RecurringPeriod(models.TextChoices):
+    MONTH = "month", "Month"
+    YEAR = "year", "Year"
+
+
+class AttributeEntity(models.TextChoices):
+    """What a custom attribute describes."""
+
+    COMPANY = "company", "Company"
+    CONTACT = "contact", "Contact"
+    DEAL = "deal", "Deal"
+
+
+class AttributeKind(models.TextChoices):
+    TEXT = "text", "Text"
+    NUMBER = "number", "Number"
+    BOOL = "bool", "Yes / no"
+    DATE = "date", "Date"
+    SELECT = "select", "Select"
+    MULTISELECT = "multiselect", "Multi-select"
+    URL = "url", "URL"
+
+
+class ConditionOp(models.TextChoices):
+    """Operators of rule conditions and scoring rules; which apply to which kind is `condition_service.OPS_BY_KIND`."""
+
+    EQ = "eq", "Equals"
+    NE = "ne", "Not equal"
+    IN = "in", "One of"
+    CONTAINS = "contains", "Contains"
+    GTE = "gte", "At least"
+    LTE = "lte", "At most"
+    EMPTY = "empty", "Empty"
+
+
+class ScoreSegment(models.TextChoices):
+    """S1 is the best segment, S4 the worst (and every disqualified company)."""
+
+    S1 = "S1", "S1"
+    S2 = "S2", "S2"
+    S3 = "S3", "S3"
+    S4 = "S4", "S4"

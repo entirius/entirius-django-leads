@@ -104,6 +104,7 @@ CELERY_BEAT_SCHEDULE = {
 |---|---|---|
 | `contact-forms` | `entirius-django-contact-forms` | no form bridge; the sweep skips form retries |
 | `notifications` | `entirius-django-notifications` | replies and failed analyses are logged only (one warning per process) |
+| — (`entirius-django-todo` next to leads; the extra `todo` comes with its first PyPI release) | `django_todo` in `INSTALLED_APPS` | replies create no tasks, closed tasks write no timeline, GDPR exports list no tasks |
 | — (`django_accounts` in the host) | — | `companies/<id>/create-customer/` is not routed and its module never imported |
 
 Connectors are entry points in the group `leads_connectors`; the package registers `csv` and `twenty` (interface
@@ -112,10 +113,10 @@ only). Another package adds its own by declaring an entry point in that group.
 ## Bootstrap order
 
 ```
-manage.py migrate                        # 0001–0006
+manage.py migrate                        # 0001–0010
 # Django admin: create a Channel (idx = the channel of communicator, agreements and siteintel) with its stages
 #   — the lowest `order` is where new companies enter; one stage with kind=unresponsive for rotation;
-#   one stage with on_reply=True to move replying companies
+# admin API: stage-events/ — where first_sent, replies (by class) and finished sequences move a company
 # admin API: analysis-profiles/ (key leads.analysis), recipient-profiles/ (key leads.pick_recipient), rules/
 manage.py leads_import_csv --channel <idx> --file leads.csv --sync   # first import, no worker needed
 ```

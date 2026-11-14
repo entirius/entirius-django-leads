@@ -1,7 +1,7 @@
 
 [project]
 name = "entirius-django-leads"
-version = "0.4.0"
+version = "0.5.0"
 description = "Leads and B2B pipeline module for Entirius: companies, contacts, stages, rules and recipient selection"
 keywords = ["django", "leads", "crm", "b2b", "sales-pipeline", "gdpr", "ecommerce", "entirius"]
 classifiers = [
@@ -49,6 +49,9 @@ dev  = ["ruff", "pre-commit"]
 contact-forms = ["entirius-django-contact-forms"]
 # Soft dependency: reply and analysis failures notify sales admins only when django_notifications is installed.
 notifications = ["entirius-django-notifications>=0.1.0"]
+# Soft dependency django_todo (replies become tasks, tasks show in the timeline): the extra
+# `todo = ["entirius-django-todo>=0.1.0"]` lands with the first todo release on PyPI — a requirement PyPI cannot
+# resolve breaks `uv lock`. Until then the host installs entirius-django-todo next to leads.
 test = [
     "pytest",
     "pytest-django",

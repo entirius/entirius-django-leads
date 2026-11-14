@@ -19,7 +19,7 @@ item below: the rule, then where it is enforced.
 - **`transition_stage` is the only stage change.** Setting `company.stage` directly skips the timeline and
   `stage_entered`, so no rule runs. Django admin keeps `stage` read-only and cannot add companies for that reason.
 - **Leads never writes a communicator `Message` or a contact_forms `Lead`** — drafts go through `communicate()`,
-  submissions are only read.
+  hand-written mail through `compose()`, submissions are only read.
 - **`utils/emails` token functions are copied, not imported,** into communicator and agreements. A change here
   without the copies breaks suppression; `tests/test_retention.py` pins all three.
 
@@ -43,10 +43,27 @@ item below: the rule, then where it is enforced.
 - **`legal_basis` is never filled by `fill_empty`** — only `propose_legal_basis` (import, form) or `set_legal_basis`
   (operator). `consent` without a `consent_ref` raises `ConsentRefRequired`.
 
+## Attributes, conditions and scoring
+
+- **`attributes` is written only through `attribute_service`** (`initial`, `apply`, `fill_missing`, the import's
+  `clean_value`). It is never in an `EDITABLE_FIELDS` whitelist and never set from a request dict.
+- **Decisions read facts, not columns.** Rule conditions, scoring and the template context go through
+  `fact_service.facts`; a new built-in fact is added there (`BUILTIN_KINDS`), never read ad hoc.
+- **A condition naming an unknown field is refused at save** (`condition_service.check_all`), never at run time. A
+  definition deactivated later reads as an empty fact — the condition then fails (only `ne` / `empty` hold).
+- **`attributes` is merged on the locked row.** A patch re-reads the JSON under `select_for_update`
+  (`attribute_service.apply_locked`), and the import chunk locks the companies and contacts it prefetches (company
+  first) because `bulk_update` writes the JSON back whole.
+- **The list filter is a containment lookup** (`attributes__contains`) so the GIN index serves it; an
+  `attributes__<key>` lookup would scan.
+
 ## Rules, gate and paid calls
 
-- **The outreach gate runs only inside `outreach_service.request_draft`,** on locked company then contact rows. A new
-  outreach path calls `request_draft`; it never checks `block_reason` itself and never calls `communicate()`.
+- **The outreach gate runs only inside `outreach_service.request_draft` and `compose_message`,** on locked company
+  then contact rows. A new outreach path calls one of them; it never checks `block_reason` itself and never calls
+  `communicate()` or `compose()`.
+- **Only `services/task_bridge.py` (and `signals/`) import `django_todo`.** Every bridge call is a no-op without it;
+  a new caller goes through the bridge, so the module stays optional.
 - **Lock order is company, then contact** everywhere. The reverse deadlocks against a concurrent draft.
 - **No toolbox call inside a transaction or under a row lock** (`test_no_toolbox_call_inside_atomic`). Claims are
   committed before the paid call and completed after it.
@@ -62,18 +79,43 @@ item below: the rule, then where it is enforced.
   the rules twice (cooldown still applies to fired runs).
 - **`StageRule.require_legal_basis` has no effect** and is not exposed by the API — the gate is the only legal-basis
   decision.
-- **A company created by an import does not send `stage_entered`.** Its first-stage rules run only after a transition
-  or through `test/evaluate/`.
+- **An import fires first-stage rules only with `run_rules`.** Without it a created company sends no `stage_entered`
+  (rules run after a transition or through `test/evaluate/`). With it every created company costs one
+  `evaluate_rules` task, sent after its chunk commits: a rolled-back chunk or bulk write fires nothing, a matched row
+  never fires, a redelivered event is deduped by `event`.
+- **`opt_out_at` and `do_not_contact` have one writer each** (`contact_service.opt_out`,
+  `company_service.set_do_not_contact`); a direct write skips the communicator suppression. `do_not_contact` is not in
+  `update_company`'s whitelist.
+- **A stage moves on an event only through the map** (`stage_event_service.apply` → `transition_stage`); it never
+  leaves `won` / `lost`. There is no `Stage.on_reply` any more.
 - **Profile prompts and rendered prompts never reach logs, Activity data or API lists.** Company and site values go
   into prompts only wrapped by `utils/prompts.as_data`.
+
+## Deals
+
+- **Company stages and deal stages are different tables and services.** Never reuse `Stage` / `stage_service` for a
+  deal, and never move a company when a deal is won — the company's stage map stays independent.
+- **`deal_service.transition` is the only deal stage change;** `owner_service.set_deal_owner` the only owner change.
+  `stage`, `owner`, `company` and `closed_at` are never in the update whitelist.
+- **Amounts are `Decimal` end to end** and strings in the API; a JSON number is refused (it would pass through a
+  float). Totals are grouped by currency — never add two currencies, never sum amounts in Python.
+- **The board and the lists must not query per deal or per stage:** `select_related` of company, contact, owner,
+  stage and currency; one aggregate for totals, one windowed query for the first 25 deals per stage, one query for
+  open tasks (`task_bridge.open_counts`). `test_deals.py` compares query counts.
+- **No personal data in deal titles or lost reasons.** GDPR erasure scrubs contacts and their tasks, never deals; a
+  contact anonymised or deleted only clears `Deal.contact`.
+- **`deal_service.update` saves only the patched columns** (`update_fields`). A full `save()` of a deal loaded
+  before a concurrent transition writes the old stage back.
 
 ## Receivers
 
 - **Every receiver defers with `signals/_deferred.after_commit` and never raises into the sender,** with
   `dispatch_uid="django_leads.<name>"`. A receiver that raises would roll back a communicator send or a form
-  submission.
-- **Only `subject_ref` `leads.Company:<int>` belongs to leads** (`utils/refs.company_from_ref`); other modules' threads
-  share the signals.
+  submission. The one exception is `reply_received`: communicator sends it after its own commit with `send_robust`
+  and reads the answer, so `handle_reply_received` runs at once, catches and logs every error itself and answers
+  `REPLY_ALERTED` only when its alert went out — answer it before the alert and a failed alert leaves no bell entry.
+- **Only `subject_ref` `leads.Company:<int>` and `leads.Deal:<int>` belong to leads** (`utils/refs`); other modules'
+  threads and tasks share the signals. A deal's task is written on the deal's company, only for the deal's channel.
 - **GDPR hooks are discovered at call time** (`gdpr/registry.discover`), never in `ready()`. A `gdpr` module missing
   either hook raises `ImproperlyConfigured` on the first export or erase, not at boot.
 

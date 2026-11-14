@@ -10,11 +10,12 @@ from django.db import IntegrityError, transaction
 from django.db.models import Model, QuerySet
 
 from django_leads.models import AnalysisProfile, Channel, RecipientPickProfile, RuleRun, Stage, StageRule
+from django_leads.services import condition_service
 
 RULE_FIELDS = frozenset(
     {
         "trigger", "stage_id", "action", "template_key", "contact_strategy", "require_hooks",
-        "require_email", "cooldown_hours", "is_active", "order",
+        "require_email", "cooldown_hours", "is_active", "order", "conditions",
     }
 )  # fmt: skip
 PROFILE_FIELDS = {
@@ -32,15 +33,18 @@ def list_rules(channel: Channel) -> QuerySet[StageRule]:
 
 
 def list_rule_runs(channel: Channel, company_id: int | None = None) -> QuerySet[RuleRun]:
-    runs = RuleRun.objects.filter(rule__channel=channel)
+    runs = RuleRun.objects.filter(rule__channel=channel).select_related("company")
     return runs.filter(company_id=company_id) if company_id else runs
 
 
 def save_rule(rule: StageRule, fields: dict[str, Any]) -> StageRule:
-    """Raises ValueError (field not editable, unknown stage) and Django ValidationError (`clean()`)."""
+    """Raises ValueError (field not editable, unknown stage, a condition on an unknown field or with an op its kind
+    does not take) and Django ValidationError (`clean()`)."""
     _check(fields, RULE_FIELDS)
     if fields.get("stage_id") and not Stage.objects.filter(pk=fields["stage_id"], channel_id=rule.channel_id).exists():
         raise ValueError("stage not found in this channel")
+    if "conditions" in fields:
+        fields = {**fields, "conditions": condition_service.check_all(rule.channel, fields["conditions"])}
     for field, value in fields.items():
         setattr(rule, field, value)
     rule.full_clean(exclude=["channel"])

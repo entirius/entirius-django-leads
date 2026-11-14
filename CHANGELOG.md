@@ -1,5 +1,155 @@
 # Changelog
 
+## Unreleased
+
+Released as 0.5.0.
+
+- **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
+  `POST deals/<id>/archive/` (won or lost only, 409 `deal_open`) and `POST deals/<id>/restore/`, both idempotent,
+  with Activity `deal` "deal archived: <title>" / "deal restored: <title>" (`event` `deal_archived` /
+  `deal_restored`). An archived deal is left out of `deals/`, `companies/<id>/deals/`, the board and the company
+  card's counts; `deals/?archived=true` lists only the archived ones. It takes no update, transition or delete until
+  restored (409 `deal_archived`). The funnel is unchanged.
+
+- **The outreach gate answers for the recipient.** A receiver of communicator's `recipient_check` refuses a message
+  about a company whose contact with the thread's address the gate refuses, as a sentence
+  (`recipient_service.REFUSAL_SENTENCES`, `refusal_sentence`); a do-not-contact company refuses also without such a
+  contact. No approval, approval list or delivery lets such a draft through.
+- **A wrong-person flag withdraws the address's waiting drafts** (`contact_service.flag_wrong_person`, communicator
+  `review_service.withdraw`).
+- **Funnel: a creation counts as entering the first stage.** `entered` of a stage adds the companies created in the
+  window that started there (no move: their current stage; else the `from` stage of their earliest move); five queries.
+
+- **What the screens no longer guess.** `ContactResponse.mail_block`: the first reason of the send check behind
+  `mailable/` (`""` when the contact can be mailed), from the same `block_reasons`; a page of contacts (list, company
+  card) asks communicator's `can_mail_many` once. `RuleRunResponse.company_name`, companies joined with the page.
+  The import report no longer carries `ignored_column:<name>` rows: the names are in `ignored_columns` only. The reply
+  alert is titled by communicator's `reply_title`: a flagged reply without a class reads `Reply from <company> — Needs
+  review`.
+
+- **Words for the screens.** Every `communicate` / `compose` call passes `subject_label=<company name>`, so
+  communicator's approval inbox names the company. The reply alert reads `Reply from <company> — <class words>`
+  (`Reply from <company>` without a class; communicator's `reply_type_label`), and the `reply_received` receiver
+  now runs synchronously and answers `REPLY_ALERTED` when it raised it: communicator raises none, one bell entry per
+  reply. Activities of the CRM features carry their parts in `data` (`event`, ids, titles, stage names, owner name;
+  `concept.md` § Activity data); stored messages are unchanged. New: Activity `task` "reopened: <title>" and Activity
+  `note` "sequence stopped" / "sequence paused [until <date>]" after a reply or a hand-written mail that ended a
+  running sequence. `ImportBatch.ignored_columns` and `automation_started_count` (migration `0015`), both in the
+  import batch response. `__version__` 0.5.0 matches `pyproject.toml`; a test keeps them equal.
+
+- **Deals** (migration `0014`). A second level next to the company stages: one sales pipeline per channel
+  (`DealStage`: `key`, `label`, `order`, `kind` `open | won | lost`) and `Deal` on a company — owner, one-off and
+  recurring value (`Decimal(14, 2)`, `month` / `year`), currency (FK `django_regional.Currency`), expected close date,
+  `closed_at`, `lost_reason`, deal attributes, `created_by`. `deal_service` is the only writer: create (first open
+  stage; owner = the company's owner, else the creator; currency = `Channel.default_currency`), update (whitelist;
+  `stage`, `owner`, `company`, `closed_at` never), transition (any stage to any stage; won / lost set `closed_at`,
+  lost needs a reason, reopening clears both; signal `deal_stage_changed` on commit), delete (open deals only; their
+  open tasks are cancelled). Anonymising a contact takes it off its deals.
+  Every change is an Activity `deal` on the company timeline with `Activity.deal` set. A won deal does not move the
+  company's stage.
+- **Deals API** (area `leads.companies`): `deals/` (filters `stage`, `kind`, `owner`, `company`, `search`,
+  `close_from`, `close_to`; sort allowlist), `deals/board/` (columns per stage, totals per currency with the recurring
+  value per month, first 25 deals; constant query count), `deals/<id>/`, `deals/<id>/transition/` (`stage_key` or
+  `kind`; 400 without a lost reason, 409 `no_deal_stage`), `deals/<id>/activities/`, `companies/<id>/deals/`; the
+  company card gains `deals {open, won, lost}`. Deal stages under `deal-stages/` (area `leads.settings`; 409 while in
+  use). Amounts travel as decimal strings; a JSON number is refused.
+- **Deal attributes and fields.** Attribute definitions of entity `deal` now hold values; `fields/?entity=deal`
+  lists them. `Channel.default_currency` in `GET` / `PATCH channel/`.
+- **Tasks about deals.** `subject_ref = leads.Deal:<id>` (`utils/refs.deal_ref` / `deal_from_ref`); the timeline
+  receivers write those tasks on the deal's company with the deal set; deal responses carry `subject_ref`,
+  `subject_label` ("<company> — <title>") and `open_tasks`. The interested-reply task gets the note "Open a deal on
+  this company" — no deal is opened automatically. `ActivityResponse` gains `deal_id`.
+
+- **Tasks from replies** (soft dependency `django_todo`; `services/task_bridge.py` is its only importer, every call
+  a no-op without it). A reply creates at most one task for the company's owner (none or deactivated → unowned),
+  about `leads.Company:<id>`, naming `leads.Contact:<id>`: needs review or no class → "Read the reply"; `interested`
+  → "Interested: answer and open a deal"; `not_now` → "Come back: <contact>" the day after the return date, else in
+  `resume_days["not_now"]` (30); `out_of_office` without a return date → "Try again: <contact>" in
+  `resume_days["out_of_office"]` (7); `wrong_person` → "Find the right person". Dedup keys `reply:<id>`,
+  `resume:<contact id>`, `wrong:<contact id>`. A newer reply, an opt-out and an anonymisation cancel the contact's
+  open "come back" task. A failing task creation is logged; the reply stays recorded.
+- **Channel settings.** `Channel.resume_days` (JSON, migration `0013`) and `GET` / `PATCH channel/` (area
+  `leads.settings`) with the effective days per class.
+- **Tasks in the timeline.** Activity kind `task` (migration `0013`): "task: <title>" when a person creates a task
+  about a company, "done: <title> — <outcome>" / "cancelled: <title>" when one closes; `data = {task_id, kind,
+  status}` and the task's contact.
+- **Writing by hand.** `POST companies/<id>/compose/` `{contact_id, subject, body, reply_id?}` →
+  `outreach_service.compose_message`: the locks and gate of `request_draft` (409 `not_eligible`, one `blocked`
+  activity), the legal footer of the contact's basis and language (409 `no_legal_basis`), then communicator's
+  `compose()` from the owner's mailbox, answering the given reply of this company. Activity `draft` "written by hand".
+- **GDPR.** Erasure and anonymisation erase the free text of the contact's tasks (`task_service.scrub`); the export
+  lists them under `Task`.
+- **Packaging.** The `todo` extra (`entirius-django-todo>=0.1.0`) is added once todo 0.1.0 is on PyPI — until then
+  the host installs it next to leads; the suite runs the task tests when `django_todo` is importable.
+
+- **Company owner.** `Company.owner` (FK user, `SET_NULL`, index `(channel, owner)`) and `ImportBatch.owner`
+  (migration `0012`) — the module's first user FK, so it now reads `AUTH_USER_MODEL`. Written only by
+  `owner_service` (never in `EDITABLE_FIELDS`), every change an Activity `note` "owner: <username | none>". API:
+  `GET assignable-users/?search=` (active staff by name, ≤ 50, `{id, username, name}` only; service users of access
+  applications left out), `owner_id` on company create (default: the requesting user when assignable) and patch (null clears),
+  `POST companies/assign/` `{company_ids (≤ 200), owner_id | null}` → `{updated}`; company list filter
+  `owner=me|none|<id>`, sort `owner__username` (unowned last either way), response `owner {id, username, name} | null` (joined, no N+1).
+  Import: multipart `owner_id` → created companies and matched ones without an owner.
+- **Alerts and drafts follow the owner.** `alert_service.alert` passes the owner as `recipient_user_id` (the
+  owner only; unowned or a deactivated owner = the role as before) — needs entirius-django-notifications 0.3.0; `request_draft` (rules,
+  rotation, manual) passes `mailbox_user_id=company.owner_id` to `communicate()`. Raise the notifications pin to
+  `>=0.3.0` with the communicator one at release.
+
+- **Custom attributes.** `AttributeDefinition(channel, entity, key, label, kind, options, required, order,
+  show_in_list, is_active)`, entity `company | contact | deal`, kind `text | number | bool | date | select |
+  multiselect | url`; values in `Company.attributes` / `Contact.attributes` (JSON), validated and normalised only by
+  `attribute_service`. A key may not shadow a built-in fact; the kind is fixed once a value is stored; a definition
+  in use is deactivated, not deleted. API `attributes/` (CRUD, area `leads.settings`); company and contact create /
+  patch take `attributes` (patch merges, `null` removes a key, `required` enforced on create and on a patch touching
+  the key). Company list filter `attr.<key>=<value>` for `show_in_list` select / bool / text attributes, served by a
+  GIN index on `Company.attributes` (migration `0011`).
+- **One accessor of facts.** `fact_service.facts(company, contact=None)` (built-ins plus `attr.<key>` and
+  `contact.attr.<key>`) feeds rule conditions, scoring and the template context; `GET fields/` describes them with
+  kinds and options.
+- **Rule conditions.** `StageRule.conditions` = `[{field, op, value}]`, ops `eq`, `ne`, `in`, `contains`, `gte`,
+  `lte`, `empty`, all must hold; checked at save against `fields/`. Evaluated after the cooldown and before the
+  action: a failing condition is a `skipped` run with Activity `skipped: condition <field>` and starts no cooldown.
+  `require_hooks` / `require_email` stay.
+- **Scoring.** `ScoringProfile(channel, key, thresholds, rules, disqualifiers, is_active)`; points ≥ L → `S1`, ≥ M →
+  `S2`, ≥ S → `S3`, else `S4`, a disqualifier forces `S4`. The result is stored on the company (`score_points`,
+  `score_segment`, `scored_at`) and written to the timeline (Activity `score`, reasons as text and data). API
+  `scoring-profiles/` (CRUD, area `leads.settings`), `POST companies/<id>/score/` (409 `NO_SCORING_PROFILE`), rule
+  action `score`, company list filter `segment` and sort `score_points` (never-scored last).
+- Templates: the draft context adds `attr` and `contact_attr` (`{attr[key]}`; a key without a value renders empty).
+- Import: `attr.<key>` / `contact.attr.<key>` columns for active definitions (a bad value skips the row with
+  `bad_attribute:<key>`, a matched row gets missing keys only); every column the import does not read is reported
+  once as `{row: 1, reason: "ignored_column:<header>"}`. `CandidateRow` gains `attributes` / `contact_attributes`.
+- GDPR: contact attributes are personal data — exported with the contact, cleared by anonymisation and erasure.
+
+- **Release order:** this release needs entirius-django-communicator 0.5.0 (reply classes and `plan_applied`,
+  `message_bounced`, `suppression_service.can_mail` / `explain` / `scope`). Raise the `entirius-django-communicator`
+  pin to `>=0.5.0` when releasing this module, once 0.5.0 is on PyPI — leads imports that API directly.
+- **The event → stage map replaces `Stage.on_reply`** (breaking for API clients). `StageEventRule(channel, event,
+  target_stage, forward_only)`; events `first_sent`, `reply`, `reply:<class>`, `sequence_finished`. `reply:<class>`
+  falls back to `reply`, a null target keeps the stage, no row moves nothing; a move never leaves a `won` / `lost`
+  stage and, with `forward_only` (default), only goes to a higher `order`. Migrations `0008`–`0010`: every
+  `on_reply` stage becomes a `reply` row (`forward_only=false`, the old behaviour) plus a `reply:out_of_office` row
+  that keeps the stage; the reverse restores the flag. `on_reply` is gone from stage requests and responses. API
+  `stage-events/` (list, `PUT`, `DELETE`; area `leads.settings`).
+- Replies: Activity `reply` carries the class (`reply received: <class>`), the alert takes the reply plan's
+  severity (`none` = no alert). A `wrong_person` reply sets `Contact.wrong_person_at` (Activity `note`); the gate,
+  the recipient pick and the rotation skip that contact. A finished sequence may move the stage before the rotation.
+- **Do not contact has one writer each.** `contact_service.opt_out` sets `opt_out_at` and suppresses the address in
+  communicator; `company_service.set_do_not_contact` (also behind `PATCH companies/<id>/` and the reviewer's skip)
+  suppresses the company's domain and removes it when turned off. A confirmed opt-out from communicator opts out
+  the contacts with the address in its channel, or in every channel under the `install` suppression scope. A hard
+  bounce leaves Activity `note` "address invalid: hard bounce".
+- Gate: `recipient_service.block_reasons` lists every refusal (`do_not_contact`, `no_email`, `opted_out`,
+  `anonymised`, `wrong_person`, `no_legal_basis`, then communicator's `suppressed` / `address_invalid`).
+  `GET companies/<id>/contacts/<contact_id>/mailable/` explains it with the legal basis, communicator's answer and
+  the retention clock.
+- **Import `run_rules`** (multipart field, default off; `leads_import_csv --run-rules`): every created company
+  enters its first stage with `stage_entered` after its chunk commits — one `evaluate_rules` task each, shown as
+  `rules_queued` on the batch. `ImportBatch.run_rules`.
+- `Company.origin` (free text, ≤ 64): CSV column `origin` (fills an empty origin), editable, list filter `origin`.
+  `GET reports/funnel/?origin=&date_from=&date_to=`: stage moves with mean time in the source stage, per-stage
+  current / entered / left / mean time, companies per origin — aggregated by the database in four queries.
+
 ## 0.4.0 — 2026-10-12
 
 - **Toolbox switched off (`AI_TOOLBOX_ENABLED = False`).** Nothing fails and nothing alerts. An intel analysis is
