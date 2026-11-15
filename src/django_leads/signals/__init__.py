@@ -13,3 +13,7 @@ stage_entered = Signal()
 contact_anonymised = Signal()
 # Sent on commit by `deal_service.transition` on a real stage change. Args: deal, previous (DealStage), stage.
 deal_stage_changed = Signal()
+# Sent on commit when a company has no contact left that may be mailed, because its contact turned out to be the
+# wrong person or opted out — someone may look for another person (django_prospecting does). Args: subject_ref
+# ("leads.Company:<id>"), channel_idx, company_name, domain, reason ("wrong_person" | "opted_out").
+contact_needed = Signal()

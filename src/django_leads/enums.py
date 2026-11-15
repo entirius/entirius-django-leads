@@ -21,6 +21,7 @@ class LeadSource(models.TextChoices):
     FORM = "form", "Contact form"
     MANUAL = "manual", "Manual"
     CONNECTOR = "connector", "Connector"
+    PROSPECTING = "prospecting", "Prospecting"
 
 
 class ActivityKind(models.TextChoices):
