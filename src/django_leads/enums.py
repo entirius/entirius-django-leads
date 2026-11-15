@@ -21,6 +21,7 @@ class LeadSource(models.TextChoices):
     FORM = "form", "Contact form"
     MANUAL = "manual", "Manual"
     CONNECTOR = "connector", "Connector"
+    PROSPECTING = "prospecting", "Prospecting"
 
 
 class ActivityKind(models.TextChoices):
@@ -49,6 +50,7 @@ class ActivityKind(models.TextChoices):
     TASK = "task", "Task"
     DEAL = "deal", "Deal"
     SETTINGS = "settings", "Settings"
+    POTENTIAL = "potential", "Potential"
 
 
 class ImportStatus(models.TextChoices):
@@ -155,3 +157,11 @@ class ScoreSegment(models.TextChoices):
     S2 = "S2", "S2"
     S3 = "S3", "S3"
     S4 = "S4", "S4"
+
+
+class Potential(models.TextChoices):
+    """How the conversation with a company goes (`potential_service`); "" = not written to yet (no dot)."""
+
+    GREEN = "green", "Green"
+    ORANGE = "orange", "Orange"
+    RED = "red", "Red"

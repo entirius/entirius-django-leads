@@ -30,6 +30,7 @@ urlpatterns = [
     path("companies/assign/", owner.OwnerAssignView.as_view(), name="admin-leads-companies-assign"),
     path("companies/<int:pk>/", company.CompanyDetailView.as_view(), name="admin-leads-company"),
     path("companies/<int:pk>/transition/", company.CompanyTransitionView.as_view(), name="admin-leads-transition"),
+    path("companies/<int:pk>/potential/", company.CompanyPotentialView.as_view(), name="admin-leads-company-potential"),
     path("companies/<int:pk>/score/", scoring.CompanyScoreView.as_view(), name="admin-leads-company-score"),
     path("companies/<int:pk>/communicate/", action.CompanyCommunicateView.as_view(), name="admin-leads-communicate"),
     path("companies/<int:pk>/compose/", action.CompanyComposeView.as_view(), name="admin-leads-compose"),

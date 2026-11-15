@@ -43,10 +43,12 @@ src/django_leads/
 │                 task_bridge (the only django_todo importer)  channel (settings)
 │                 deal_stage (sales pipeline)  deal (only Deal writer)  deal_board (columns, totals)
 │                 sequence_note (sequence stopped / paused after a reply or a hand-written mail)
+│                 potential (the potential dot: rules, events, daily sweep, manual colour)
 ├── signals/      __init__ (stage_entered, contact_anonymised, deal_stage_changed)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge
 │                 todo_receivers (timeline, soft)
-├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks   (queue leads_default)
+├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks  potential_tasks
+│                 (queue leads_default)
 ├── gdpr/         hooks (leads' own)  protocol (GdprHooks)  registry (discover at call time)
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)
 ├── utils/        domains (registrable_domain)  emails (normalize, hash, token)  prompts  refs

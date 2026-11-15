@@ -5,6 +5,7 @@
 from django_leads.tasks.history_tasks import purge_history
 from django_leads.tasks.import_tasks import enqueue_import, fail_stale_import_batches, import_csv, import_form_lead
 from django_leads.tasks.intel_tasks import analyse_intel, retry_failed_analyses
+from django_leads.tasks.potential_tasks import refresh_channel_potential, refresh_potential
 from django_leads.tasks.retention_tasks import anonymise_inactive
 from django_leads.tasks.rotation_tasks import rotate_thread, rotate_unresponsive
 from django_leads.tasks.rule_tasks import evaluate_rules

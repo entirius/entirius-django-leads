@@ -139,6 +139,9 @@ def create_contact(company: Company, row: dict[str, Any], *, actor: str, consent
     if basis := row.get("legal_basis"):
         ref = admin_consent_ref(actor, basis, consent_ref)
         set_legal_basis(contact, basis, source="admin", consent_ref=ref, actor=actor)
+    from django_leads.services import potential_service
+
+    potential_service.on_event(company)  # a new person to mail ends "looking for another person"
     return contact
 
 
@@ -233,6 +236,9 @@ def opt_out(contact: Contact, *, reason: str, actor: str) -> Contact:
     if contact.email:
         suppression_service.suppress_address(contact.company.channel, contact.email, reason=reason)
     follow_up_service.cancel_resume(contact, follow_up_service.OPTED_OUT)
+    from django_leads.services import potential_service
+
+    potential_service.on_event(contact.company)
     return contact
 
 
