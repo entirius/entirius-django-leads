@@ -10,8 +10,8 @@ How to connect a terminal, Claude Code or ChatGPT: `README.md` § Connect from t
 ## What it does
 
 - **Day plan** — the salesperson's open tasks overdue and due today (django-todo), the drafts waiting for review and
-  the replies waiting for a person (django-communicator), the companies due to come back (`potential_service` of
-  leads); the same work as the Today screen, numbered.
+  the replies waiting for a person (django-communicator); the same work as the Today screen, numbered. A company
+  coming back is a task ("Come back", created by leads), so it is in the first list.
 - **Tools** — `get_day_plan`, `close_task`, `create_task`, `add_note`, `move_deal`, `mark_do_not_contact`,
   `approve_draft`, `list_proposals`, `confirm_proposal`, `reject_proposal`.
 - **Confirmation first** for what cannot be undone: a lost deal, Do not contact, sending a draft. Those tools store a
@@ -95,8 +95,7 @@ src/django_ai_crm/
 
 ## Tests
 
-`tests/ai_crm/` (PostgreSQL, `django_todo` and `django_access` installed — `tests/conftest.py` leaves the folder out
-without them). Its conftest switches on the access gate (`enforce`), measures the day in `Europe/Warsaw` and runs
+`tests/ai_crm/` (`django_todo` and `django_access` come with the `test` extra; PostgreSQL in CI, sqlite works too). Its conftest switches on the access gate (`enforce`), measures the day in `Europe/Warsaw` and runs
 `transaction.on_commit` at once (leads writes the task timeline on commit).
 
 | File | Covers |

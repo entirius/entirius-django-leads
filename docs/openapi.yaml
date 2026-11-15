@@ -39,8 +39,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
+                $ref: '#/components/schemas/ChatResponse'
           description: ''
         '400':
           description: No response body
@@ -97,8 +96,8 @@ paths:
   /api/ai-crm/v2/admin/{channel_idx}/plan/:
     get:
       operationId: ai_crm_plan
-      description: The caller's overdue and today tasks, the drafts and replies waiting, the companies due to come back —
-        numbered in order, as the Today screen; `text` is the same as numbered lines.
+      description: The caller's overdue and today tasks (a company coming back is a task) and the drafts and replies waiting
+        — numbered in order, as the Today screen; `text` is the same as numbered lines.
       summary: The caller's day plan
       parameters:
       - in: path
@@ -126,8 +125,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
+                $ref: '#/components/schemas/PlanResponse'
           description: ''
         '400':
           description: No response body
@@ -158,8 +156,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
+                $ref: '#/components/schemas/ProposalListResponse'
           description: ''
         '400':
           description: No response body
@@ -191,8 +188,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
+                $ref: '#/components/schemas/ToolListResponse'
           description: ''
         '400':
           description: No response body
@@ -245,8 +241,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
+                $ref: '#/components/schemas/ToolResultResponse'
           description: ''
         '503':
           description: No response body
@@ -4123,8 +4118,8 @@ paths:
           description: No response body
     post:
       operationId: prospecting_searches_create
-      description: Runs in the worker. A company with a queued search gets that one; over the company limit the search is
-        `refused`.
+      description: Runs in the worker. Name and domain come from the leads company `subject_ref` of this channel (400 otherwise).
+        A company with a queued search gets that one; over the company limit the search is `refused`.
       summary: Look for new people at a company
       parameters:
       - in: path
@@ -9369,22 +9364,8 @@ components:
           minLength: 1
           title: Subject Ref
           type: string
-        company_name:
-          maxLength: 255
-          minLength: 1
-          title: Company Name
-          type: string
-        domain:
-          examples:
-          - example.com
-          maxLength: 253
-          minLength: 3
-          title: Domain
-          type: string
       required:
       - subject_ref
-      - company_name
-      - domain
       title: SearchCreateRequest
       type: object
     SearchHit:
@@ -9726,6 +9707,246 @@ components:
       - stage_key
       title: TransitionRequest
       type: object
+    ChatResponse:
+      properties:
+        reply:
+          title: Reply
+          type: string
+        results:
+          items:
+            $ref: '#/components/schemas/ToolResultResponse'
+          title: Results
+          type: array
+        used_model:
+          title: Used Model
+          type: boolean
+        proposals:
+          items:
+            $ref: '#/components/schemas/ProposalResponse'
+          title: Proposals
+          type: array
+        plan:
+          $ref: '#/components/schemas/PlanResponse'
+      required:
+      - reply
+      - results
+      - used_model
+      - proposals
+      - plan
+      title: ChatResponse
+      type: object
+    PlanItemResponse:
+      properties:
+        n:
+          description: 'Number in the plan, 1-based: what the salesperson says in the chat.'
+          title: N
+          type: integer
+        type:
+          allOf:
+          - $ref: '#/components/schemas/TypeEnum'
+          title: Type
+        task_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Task Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Title
+        kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Kind
+        due_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Due At
+        overdue:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          default: null
+          title: Overdue
+        subject_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Subject Ref
+        subject_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Subject Label
+        company_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Company Id
+        count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Count
+      required:
+      - n
+      - type
+      title: PlanItemResponse
+      type: object
+    PlanResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/PlanItemResponse'
+          title: Items
+          type: array
+        upcoming_7d:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Open tasks due in the next 7 days; null without django_todo.
+          title: Upcoming 7D
+        generated_at:
+          title: Generated At
+          type: string
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Numbered lines for a chat or a terminal (not in a chat turn).
+          title: Text
+      required:
+      - items
+      - upcoming_7d
+      - generated_at
+      title: PlanResponse
+      type: object
+    ProposalListResponse:
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/ProposalResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ProposalListResponse
+      type: object
+    ProposalResponse:
+      properties:
+        id:
+          title: Id
+          type: integer
+        tool:
+          title: Tool
+          type: string
+        arguments:
+          additionalProperties: true
+          title: Arguments
+          type: object
+        summary:
+          title: Summary
+          type: string
+        source:
+          title: Source
+          type: string
+        status:
+          title: Status
+          type: string
+        created_at:
+          title: Created At
+          type: string
+      required:
+      - id
+      - tool
+      - arguments
+      - summary
+      - source
+      - status
+      - created_at
+      title: ProposalResponse
+      type: object
+    ToolListResponse:
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/ToolSpecResponse'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ToolListResponse
+      type: object
+    ToolResultResponse:
+      description: '`status`: done | proposed | rejected | failed | error (chat only: a refused call, with its `code`).'
+      properties:
+        tool:
+          title: Tool
+          type: string
+        status:
+          title: Status
+          type: string
+        message:
+          title: Message
+          type: string
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Code
+        data:
+          additionalProperties: true
+          title: Data
+          type: object
+        proposal:
+          anyOf:
+          - $ref: '#/components/schemas/ProposalResponse'
+          - type: 'null'
+          default: null
+          description: The proposal made, when status is proposed.
+      required:
+      - tool
+      - status
+      - message
+      title: ToolResultResponse
+      type: object
+    ToolSpecResponse:
+      properties:
+        name:
+          title: Name
+          type: string
+        description:
+          title: Description
+          type: string
+        inputSchema:
+          additionalProperties: true
+          title: Inputschema
+          type: object
+      required:
+      - name
+      - description
+      - inputSchema
+      title: ToolSpecResponse
+      type: object
+    TypeEnum:
+      enum:
+      - task
+      - drafts
+      - replies
+      type: string
   securitySchemes:
     jwtAuth:
       type: http

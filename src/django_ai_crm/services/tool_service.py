@@ -152,7 +152,7 @@ TOOLS: dict[str, Tool] = {
         Tool(
             "get_day_plan",
             "The salesperson's work for today, in order: their overdue and today tasks, drafts waiting for review, "
-            "replies waiting for a person, companies due to come back. Items are numbered (n).",
+            "replies waiting for a person. Items are numbered (n).",
             args.DayPlanArgs,
             _day_plan,
         ),
