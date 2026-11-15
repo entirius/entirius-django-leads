@@ -73,6 +73,9 @@ class CompanyListQuery(BaseModel):
     origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.", examples=["fair"])
     segment: ScoreSegment | None = Field(default=None, description="Score segment filter (S1 best … S4).")
     owner: str = Field(default="", pattern=OWNER_FILTER_PATTERN, description=OWNER_FILTER_DESCRIPTION, examples=["me"])
+    mine_first: bool = Field(
+        default=False, description="The caller's own companies first, then the rest; `sort` orders within each part."
+    )
 
     @field_validator("sort")
     @classmethod
