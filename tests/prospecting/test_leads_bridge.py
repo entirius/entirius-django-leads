@@ -29,3 +29,16 @@ def test_contact_needed_receiver_starts_a_search(fixed_provider, django_capture_
     search = PeopleSearch.objects.get(subject_ref=SUBJECT)
     assert (search.reason, search.requested_by, search.status) == ("wrong_person", "leads", "done")
     assert search.candidates.count() == 3
+
+
+def test_a_hard_bounce_reason_starts_a_search(fixed_provider, django_capture_on_commit_callbacks):
+    from django_prospecting.models import PeopleSearch
+
+    with django_capture_on_commit_callbacks(execute=True):
+        leads_receivers.on_contact_needed(
+            sender=None, subject_ref=SUBJECT, channel_idx=CHANNEL_IDX, company_name="Example Shop",
+            domain="example-shop.test", reason="hard_bounce",
+        )  # fmt: skip
+    search = PeopleSearch.objects.get(subject_ref=SUBJECT)
+    assert (search.reason, search.status) == ("hard_bounce", "done")
+    search.full_clean()  # the reason is a declared choice
