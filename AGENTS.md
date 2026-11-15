@@ -1,14 +1,17 @@
 # AGENTS.md
 
-entirius-django-leads (Django app `django_leads`) — leads and B2B pipeline module of Entirius: companies,
-contacts, stages, rules, recipient selection, retention and GDPR. Table prefix `django_leads_`.
+entirius-django-leads — leads and B2B pipeline module of Entirius. One distribution, two Django apps:
+`django_leads` (companies, contacts, stages, rules, recipient selection, retention and GDPR; table prefix
+`django_leads_`), and the optional `django_ai_crm`, enabled only when listed in `INSTALLED_APPS` (a salesperson's
+day plan and an agent over REST API v2 and MCP, for the CMS, the terminal, Claude Code and ChatGPT; `django_ai_crm_`,
+`api/ai-crm/v2/`).
 
 ## Commands
 
 | Command | Meaning |
 |---|---|
 | `make install` | `uv sync --all-extras` |
-| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` |
+| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` (`tests/ai_crm/` needs it, plus todo and access) |
 | `make check` / `fix` | ruff lint + format (+ canonical `.gitleaks.toml` guard) |
 
 ## Conventions
@@ -16,7 +19,11 @@ contacts, stages, rules, recipient selection, retention and GDPR. Table prefix `
 - English only; MPL-2.0 header on every `.py` (`insert-license`); no Claude/AI attribution in commits or PRs.
 - Layered: `models/` · `services/` (all logic, field whitelists) · `schemas/` · `api/admin/` (thin views) ·
   `signals/` · `tasks/`. No logic in models or views.
-- Never rename the package, the app label or the table prefix; never edit a released migration.
+- Never rename a package, an app label or a table prefix; never edit a released migration.
+- `django_leads` never imports `django_ai_crm`: leads works without it. It reaches leads only through its public
+  services, lazily, behind `apps.is_installed("django_leads")` (`django_ai_crm/services/crm.py`).
+- One version: `django_ai_crm.__version__` is `django_leads.__version__` (munin reports the app with it); one
+  CHANGELOG, one release.
 - Access: areas live on the AppConfig (`access_areas`, `access_route_rules`), every admin view carries
   `access_area`; a new admin route without one fails `tests/test_access_ownership.py`.
 - Git flow: `develop` + `master`, PRs, semver tag on `master`. Do not commit by default — the operator decides.
@@ -53,6 +60,14 @@ src/django_leads/
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)
 ├── utils/        domains (registrable_domain)  emails (normalize, hash, token)  prompts  refs
 └── management/commands/  leads_import_csv  leads_gdpr
+
+src/django_ai_crm/        (optional app; docs/ai-crm.md)
+├── apps.py (area ai_crm.agent)  enums.py  settings.py (AI_CRM_*, read lazily)  urls.py  admin.py
+├── models/       proposal
+├── schemas/      requests.py  tools.py (arguments of every tool = MCP inputSchema)
+├── api/admin/    views/ _base  agent (plan, tools, proposals, chat)  mcp (JSON-RPC, streamable HTTP)
+└── services/     caller (actor, permissions)  crm (the only importer of todo / leads / communicator)  plan
+                  tool (every change)  proposal (irreversible actions)  chat (commands + toolbox)  mcp  texts
 ```
 
 Flow: import / form / manual → first stage → `transition_stage` → `stage_entered` → `rule_service` (claim under
@@ -62,6 +77,8 @@ lock → pick → `request_draft` = gate + communicator draft) → `message_sent
 | Topic | Where |
 |---|---|
 | A setting's name, default, meaning; Celery queue and beat | `docs/install.md` |
+| The AI CRM app: tools, REST, MCP, settings, tests | `docs/ai-crm.md` |
+| Connecting the terminal, Claude Code, ChatGPT | `README.md` § Connect from the terminal, Claude Code and ChatGPT |
 | Endpoint, params, response shape, error body | `docs/api.md`; `docs/openapi.yaml`; `schemas/` |
 | Models, dedup, legal basis, rules phases, outreach gate | `docs/concept.md` |
 | Which signals leads emits and consumes | `docs/concept.md` § Integration; `signals/` |
