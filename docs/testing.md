@@ -5,14 +5,14 @@ description: Which test file covers what, and the BDD and e2e suites in the enti
 
 ## Module suite
 
-`make test` — pytest + pytest-django, `tests/settings.py`: `DATABASE_URL` when set (CI, zeno), else sqlite in
-memory. The import query ceiling is exact only on PostgreSQL: in the entirius-zeno harness run
+`make test` — pytest + pytest-django, one `tests/settings.py` for the apps of the package: `DATABASE_URL` when set (CI,
+zeno), else sqlite in memory. The import query ceiling is exact only on PostgreSQL: in the entirius-zeno harness run
 `make module-test MODULE=entirius-django-leads` (the same suite inside the service container).
 Nothing leaves the process: `ToolboxClient` is patched in the services that call it, and `communicate()`
 (with the agreements footer) is patched where a test only needs the call. `ENVIRONMENT = "development"` routes the `test/` endpoints.
 
 `tests/test_openapi.py` fails on any schema warning; run it after touching a view or schema. `docs/openapi.yaml` is
-exported from the service (`manage.py spectacular`) and filtered to `/api/leads/` — regenerate it with the API.
+exported from the service (`manage.py spectacular`) and filtered to `/api/leads/` and `/api/prospecting/` — regenerate it with the API.
 
 | File | Covers |
 |---|---|
@@ -38,10 +38,11 @@ exported from the service (`manage.py spectacular`) and filtered to `/api/leads/
 | `test_recipient_check.py` | `recipient_check`: every reason of `block_reasons` refuses an approval with its sentence, do-not-contact without a contact, foreign thread, two queries; the wrong-person flag withdraws waiting drafts |
 | `test_deals.py` | deal stages (order, unique key, delete / kind refused while in use), opening (first open stage, owner and currency defaults, timeline), amounts (string round trip, floats, decimals, digits, negative, no currency), update whitelist and contact of the company, open → won → reopened → lost with the signal, lost reason 400, no lost stage 409, delete only open, a deleted contact keeps the deal, list filters and sort, board order / per-currency totals / column limit / owner, query counts of list and board, company card counts and deals, deal timeline, deal attributes and `fields/?entity=deal`, default currency, deal tasks on the timeline and `open_tasks`, archive (closed only, twice, restore, timeline events, no update / owner / reopen / delete while archived, out of the lists, board and counts, `archived=true` without extra queries, the funnel unchanged) |
 | `test_activity_words.py` | `subject_label` = company name on drafts and hand-written mail; reply alert title in words and `REPLY_ALERTED` (notifications installed / absent, a company of no one); activity `data` of the CRM features (reply, tasks incl. reopened, composed, sequence stopped / paused, deals, owners, bulk assign); import `ignored_columns` and `automation_started_count` |
-| `test_version.py` | `__version__` equals the `pyproject.toml` version |
+| `test_version.py` | `__version__` of `django_leads` and `django_prospecting` equals the `pyproject.toml` version |
 | `test_tasks.py` | a task per reply class (table), the interested task's note, no task for the other classes, owner and due now, dedup, `resume_days`, a newer reply / opt-out / anonymisation cancelling the "come back" task, no-op without `django_todo`, a failing creation keeping the reply, timeline of person-created, done and cancelled tasks, other subjects and channels ignored, channel settings API, GDPR export and scrub (skipped without `django_todo`) |
 | `test_compose.py` | compose through the owner's mailbox after the gate, an opted-out contact refused with one `blocked`, answering a reply, a reply of another company or contact, no communicator channel, no clause set, bad requests, staff only |
-| `test_openapi.py` | `spectacular --validate --fail-on-warn` over `django_leads.urls` |
+| `test_openapi.py` | `spectacular --validate --fail-on-warn` over `django_leads.urls` and `django_prospecting.urls` |
+| `prospecting/` | the Prospecting app — `prospecting.md` § Tests |
 
 ## BDD in zeno
 

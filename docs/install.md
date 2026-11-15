@@ -48,6 +48,19 @@ urlpatterns.append(path("", include("django_leads.urls")))
 - `test/import-now/`, `test/evaluate/`, `test/rotate-now/`, `test/anonymise-now/` — only when
   `ENVIRONMENT == "development"`; the views also answer 404 outside it.
 
+### The optional app: Prospecting
+
+The package carries one more app, enabled only when listed, after `django_leads`, and routed by its own URL module.
+Leads runs the same without it.
+
+```python
+INSTALLED_APPS += ["django_prospecting"]  # after "django_leads"
+urlpatterns.append(path("", include("django_prospecting.urls")))  # api/prospecting/v2/admin/<channel_idx>/
+```
+
+Settings (`PROSPECTING_*`), access areas and API: `prospecting.md`. It needs a worker on `prospecting_default`
+(below), no beat entry.
+
 ## Settings
 
 Defaults: `django_leads/settings.py`. Every value is read **once, at import** of that module — see `gotchas.md`.
@@ -75,7 +88,8 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 
 ## Celery
 
-Every task runs on `LEADS_QUEUE_DEFAULT`. The host owns the beat schedule — the module registers none.
+Every task of `django_leads` runs on `LEADS_QUEUE_DEFAULT`; `django_prospecting` has its own queue. The host owns
+the beat schedule — the package registers none.
 
 | Task | Trigger | Schedule the host adds |
 |---|---|---|
@@ -88,6 +102,7 @@ Every task runs on `LEADS_QUEUE_DEFAULT`. The host owns the beat schedule — th
 | `django_leads.retry_failed_analyses` | beat | every 10 minutes |
 | `django_leads.rotate_unresponsive` | beat | daily |
 | `django_leads.anonymise_inactive` | beat | daily |
+| `django_prospecting.run_search` (queue `PROSPECTING_QUEUE_DEFAULT`, `prospecting_default`) | a new people search, on commit (`contact_needed`, `POST people/searches/`) | — |
 
 ```python
 CELERY_BEAT_SCHEDULE = {

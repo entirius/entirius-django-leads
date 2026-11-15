@@ -8,6 +8,8 @@ contract is `docs/openapi.yaml` (generated from the service, filtered to `/api/l
 schema cannot say. Views are thin: parse into a Pydantic schema (`schemas/requests.py`), call a service, dump a
 response schema (`schemas/responses.py`). Field whitelists live in the services.
 
+The optional app `django_prospecting` has its own prefix and page: `api/prospecting/v2/admin/` (`prospecting.md`).
+
 ## Auth, scoping, paging
 
 | | |

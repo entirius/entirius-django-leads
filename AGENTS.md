@@ -1,7 +1,9 @@
 # AGENTS.md
 
-entirius-django-leads (Django app `django_leads`) — leads and B2B pipeline module of Entirius: companies,
-contacts, stages, rules, recipient selection, retention and GDPR. Table prefix `django_leads_`.
+entirius-django-leads — leads and B2B pipeline module of Entirius. One distribution, two Django apps:
+`django_leads` (companies, contacts, stages, rules, recipient selection, retention and GDPR; table prefix
+`django_leads_`), and the optional `django_prospecting`, enabled only when listed in `INSTALLED_APPS` (new people to
+contact at a company; `django_prospecting_`, `api/prospecting/v2/`, queue `prospecting_default`).
 
 ## Commands
 
@@ -16,7 +18,12 @@ contacts, stages, rules, recipient selection, retention and GDPR. Table prefix `
 - English only; MPL-2.0 header on every `.py` (`insert-license`); no Claude/AI attribution in commits or PRs.
 - Layered: `models/` · `services/` (all logic, field whitelists) · `schemas/` · `api/admin/` (thin views) ·
   `signals/` · `tasks/`. No logic in models or views.
-- Never rename the package, the app label or the table prefix; never edit a released migration.
+- Never rename a package, an app label or a table prefix; never edit a released migration.
+- `django_leads` never imports `django_prospecting`: leads works without it. It reaches leads only through its public
+  services and signals, lazily, behind `apps.is_installed("django_leads")` (`services/leads_bridge.py`,
+  `signals/leads_receivers.py`).
+- One version: `django_prospecting.__version__` is `django_leads.__version__` (munin reports the app with it); one
+  CHANGELOG, one release.
 - Access: areas live on the AppConfig (`access_areas`, `access_route_rules`), every admin view carries
   `access_area`; a new admin route without one fails `tests/test_access_ownership.py`.
 - Git flow: `develop` + `master`, PRs, semver tag on `master`. Do not commit by default — the operator decides.
@@ -51,6 +58,15 @@ src/django_leads/
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)
 ├── utils/        domains (registrable_domain)  emails (normalize, hash, token)  prompts  refs
 └── management/commands/  leads_import_csv  leads_gdpr
+
+src/django_prospecting/   (optional app; docs/prospecting.md)
+├── apps.py (areas, connects the contact_needed receiver)  enums.py  settings.py (read at import)  urls.py  admin.py
+├── models/       people_search  candidate  candidate_check  company_prospect
+├── providers/    base  toolbox_search  fixed_search  stub_tester
+├── services/     search (start, run, checks)  pattern  candidate  leads_bridge (the only leads caller)  company
+├── signals/      leads_receivers (contact_needed → search)
+├── api/admin/    views/ _base  people  company
+└── tasks/        search (run_search, queue prospecting_default)
 ```
 
 Flow: import / form / manual → first stage → `transition_stage` → `stage_entered` → `rule_service` (claim under
@@ -60,6 +76,7 @@ lock → pick → `request_draft` = gate + communicator draft) → `message_sent
 | Topic | Where |
 |---|---|
 | A setting's name, default, meaning; Celery queue and beat | `docs/install.md` |
+| The Prospecting app: search, checks, settings, API, tests | `docs/prospecting.md` |
 | Endpoint, params, response shape, error body | `docs/api.md`; `docs/openapi.yaml`; `schemas/` |
 | Models, dedup, legal basis, rules phases, outreach gate | `docs/concept.md` |
 | Which signals leads emits and consumes | `docs/concept.md` § Integration; `signals/` |

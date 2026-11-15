@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Prospecting, a new app in the package** (formerly planned as `entirius-django-prospecting`, never released — it
+  ships here, one distribution, one release). Optional: enabled only when the host lists it in `INSTALLED_APPS`
+  after `django_leads`, routed by its own URL module; leads runs the same without it. Its `__version__` is the
+  version of leads (munin reports `prospecting` with it). Dependencies: `entirius-django-utils>=2.4.0`. Needs the
+  `contact_needed` signal and `candidate_service` of leads (another person, U3).
+  `django_prospecting` (`docs/prospecting.md`): new people to contact at a company that lost its last person to
+  mail (U3). The `contact_needed` signal of leads starts a search (task `django_prospecting.run_search`, queue
+  `prospecting_default`); a public search provider (`toolbox`, or `fixed` for test stacks), the company's address
+  pattern, guessed addresses tested without sending (`stub` tester for test stacks), four checks per person with
+  source and date (`ok` / `no_info` after `PROSPECTING_MAX_ATTEMPTS`); an accepted candidate becomes a contact
+  through `candidate_service.accept_candidate`. Companies: a placeholder list. Admin API v2 under
+  `api/prospecting/v2/admin/<channel_idx>/`: `companies/`, `people/searches/`, `people/candidates/`,
+  `…/accept/`, `…/reject/`, `people/limits/`. Access areas `prospecting.people` (pii), `prospecting.companies`.
+  Models `PeopleSearch`, `Candidate`, `CandidateCheck`, `CompanyProspect` (migration `django_prospecting.0001`).
+
 Released as 0.5.0.
 
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
