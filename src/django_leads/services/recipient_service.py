@@ -75,15 +75,17 @@ def block_reason(contact: Contact) -> str | None:
     return next(iter(block_reasons(contact)), None)
 
 
-def refusal_sentence(company: Company, email: str) -> str | None:
+def refusal_sentence(company: Company, email: str, *, allowed: frozenset[str] = frozenset()) -> str | None:
     """Why the company refuses mail to `email`: the first reason of the contact with that address (case-insensitive)
-    as a sentence; a do-not-contact company refuses also without such a contact. None for any other address."""
+    as a sentence, reasons in `allowed` skipped; a do-not-contact company refuses also without such a contact. None
+    for any other address."""
     contact = company.contacts.filter(email__iexact=email).order_by("pk").first()
     if contact is None:
         return REFUSAL_SENTENCES["do_not_contact"] if company.do_not_contact else None
     contact.company = company
     no_refusal = {contact.email: None}  # communicator asks `can_mail` itself
-    return next((REFUSAL_SENTENCES[r] for r in block_reasons(contact, no_refusal) if r in REFUSAL_SENTENCES), None)
+    reasons = [r for r in block_reasons(contact, no_refusal) if r in REFUSAL_SENTENCES and r not in allowed]
+    return next((REFUSAL_SENTENCES[r] for r in reasons), None)
 
 
 def eligible(contact: Contact) -> bool:

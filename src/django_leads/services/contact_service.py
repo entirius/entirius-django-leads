@@ -20,6 +20,7 @@ from django_leads.models import Activity, Channel, Company, Contact
 from django_leads.services import (
     activity_service,
     attribute_service,
+    candidate_service,
     follow_up_service,
     recipient_service,
     retention_service,
@@ -239,6 +240,7 @@ def opt_out(contact: Contact, *, reason: str, actor: str) -> Contact:
     from django_leads.services import potential_service
 
     potential_service.on_event(contact.company)
+    candidate_service.look_for_another_person(contact.company, reason=candidate_service.OPTED_OUT)
     return contact
 
 
@@ -262,6 +264,7 @@ def flag_wrong_person(contact: Contact, *, actor: str) -> Contact:
         activity_service.record(contact.company, ActivityKind.NOTE, message, contact=contact, actor=actor)
         reason = recipient_service.REFUSAL_SENTENCES["wrong_person"]
         suppression_service.withdraw_drafts(contact.company.channel, contact.email, reason=reason)
+        candidate_service.look_for_another_person(contact.company, reason=candidate_service.WRONG_PERSON)
     return contact
 
 
