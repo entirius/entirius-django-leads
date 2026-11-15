@@ -11,7 +11,7 @@ The channel's history (U11) is the list of every entry: company timelines plus e
 import calendar
 from datetime import date, datetime, time, timedelta
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from django_leads.models import Activity, Channel, Company, Contact, Deal
@@ -68,7 +68,7 @@ def list_activities(
     if company_id:
         activities = activities.filter(company_id=company_id)
     if actor:
-        activities = activities.filter(actor=actor)
+        activities = activities.filter(_actor_filter(actor))
     if kinds:
         activities = activities.filter(kind__in=kinds)
     if date_from:
@@ -78,9 +78,28 @@ def list_activities(
     return activities
 
 
+IMPORT_ACTOR = "import:"  # every import batch ("import:<id>") is one entry of the person filter
+VIA = " via "  # a person acting through another module: "anna via ai-crm (cms)"
+
+
+def _actor_filter(actor: str) -> Q:
+    """`import:` = every import batch; a person = their own entries and the ones they made through a module."""
+    if actor == IMPORT_ACTOR:
+        return Q(actor__startswith=IMPORT_ACTOR)
+    return Q(actor=actor) | Q(actor__startswith=f"{actor}{VIA}")
+
+
+def person_of(actor: str) -> str:
+    """The person filter's entry of an actor: the person before " via ", `import:` for every import batch."""
+    if actor.startswith(IMPORT_ACTOR):
+        return IMPORT_ACTOR
+    return actor.split(VIA, 1)[0]
+
+
 def list_actors(channel: Channel) -> list[str]:
-    """Every actor that wrote an entry of the channel, for the history's person filter."""
-    return list(Activity.objects.filter(channel=channel).order_by("actor").values_list("actor", flat=True).distinct())
+    """Every person of the channel history (the person filter); `actor` of `list_activities` takes each one."""
+    actors = Activity.objects.filter(channel=channel).values_list("actor", flat=True).distinct()
+    return sorted({person_of(actor) for actor in actors})
 
 
 def purge_old(now: datetime | None = None) -> dict[str, int]:

@@ -78,6 +78,20 @@ def test_actors_list_the_person_filter(admin_api, company, shop):
     assert admin_api.get(api_url("activities/actors/")).json() == {"results": ["anna", "piotr"]}
 
 
+def test_a_person_takes_their_entries_through_a_module_and_imports_are_one(admin_api, company, shop):
+    _entry(company, ActivityKind.NOTE, "manager")
+    _entry(company, ActivityKind.NOTE, "manager via ai-crm (cms)")
+    _entry(shop, ActivityKind.NOTE, "manager via ai-crm (mcp)")
+    _entry(shop, ActivityKind.NOTE, "managers")
+    _entry(company, ActivityKind.IMPORT, "import:1")
+    _entry(shop, ActivityKind.IMPORT, "import:2")
+    assert admin_api.get(api_url("activities/actors/")).json() == {"results": ["import:", "manager", "managers"]}
+    assert admin_api.get(api_url("activities/?actor=manager")).json()["count"] == 3
+    assert admin_api.get(api_url("activities/?actor=managers")).json()["count"] == 1
+    assert admin_api.get(api_url("activities/?actor=import:")).json()["count"] == 2
+    assert admin_api.get(api_url("activities/?actor=import:1")).json()["count"] == 1
+
+
 def test_settings_change_is_in_the_history(admin_api, channel):
     url = api_url("channel/")
     response = admin_api.patch(url, {"history_months": 12, "resume_days": {"not_now": 10}}, format="json")

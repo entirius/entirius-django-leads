@@ -134,7 +134,7 @@ Area `leads.settings`. A channel needs a stage of each kind to close deals; a ne
 | POST | `<channel_idx>/deals/<id>/transition/` | exactly one of `stage_key` or `kind` (= the first stage of that kind), `lost_reason` (≤ 255) | 200 `DealResponse`; Activity `deal` "deal <from> -> <to>" (`data = {deal_id, from, to}`); 404 unknown key; 409 `no_deal_stage` when the channel has no stage of the kind; 400 on `lost_reason` for a lost stage without one; 409 `deal_archived` for an archived deal |
 | POST | `<channel_idx>/deals/<id>/archive/` | — | 200 `DealResponse` with `archived_at`; Activity `deal` "deal archived: <title>"; an archived deal is returned unchanged; 409 `deal_open` for an open deal |
 | POST | `<channel_idx>/deals/<id>/restore/` | — | 200 `DealResponse`, `archived_at` null; Activity `deal` "deal restored: <title>"; a deal that is not archived is returned unchanged |
-| GET | `<channel_idx>/activities/actors/` | — | 200 `{results: [actor, …]}` — every actor of the channel history (the person filter) |
+| GET | `<channel_idx>/activities/actors/` | — | 200 `{results: [person, …]}` — the person filter of the channel history: each actor once, `"anna via ai-crm (cms)"` as `anna`, every import batch as `import:` |
 | GET | `<channel_idx>/deals/<id>/activities/` | paging | 200 `ActivityListResponse` of the entries about the deal (stage moves, edits, tasks) |
 | GET | `<channel_idx>/companies/<id>/deals/` | paging | 200 `DealListResponse` of the company, newest first, archived deals left out |
 
@@ -221,7 +221,7 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/activities/` | `company` (id), `actor` (exact), `kind` (comma-separated), `date_from` / `date_to` (days, both included, server time zone), paging | 200 `ActivityListResponse` — the channel history: `id, company_id (null = about the channel), company_name, contact_id, deal_id, deal_title, kind, message, data, actor, created_at`, newest first; the CRM activities carry their parts in `data` (`concept.md` § Activity data) |
+| GET | `<channel_idx>/activities/` | `company` (id), `actor` (a person of `activities/actors/`: also its `"<actor> via …"` entries; `import:` = every import batch), `kind` (comma-separated), `date_from` / `date_to` (days, both included, server time zone), paging | 200 `ActivityListResponse` — the channel history: `id, company_id (null = about the channel), company_name, contact_id, deal_id, deal_title, kind, message, data, actor, created_at`, newest first; the CRM activities carry their parts in `data` (`concept.md` § Activity data) |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
 | POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |

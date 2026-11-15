@@ -5,7 +5,8 @@
 - **History: the channel's journal of every activity.** `Activity.channel` (set on every entry, backfilled from the
   company) and a nullable `company` (migration `0017`, indexes on channel + date / actor / kind). `activities/` filters
   by `actor`, `kind` (comma-separated), `date_from` / `date_to` and carries `company_name` / `deal_title`;
-  `activities/actors/` lists the person filter. A channel settings change writes a `settings` entry with old and new
+  `activities/actors/` lists the person filter: one entry per person (`"anna via ai-crm (cms)"` is `anna`, whose filter
+  takes both) and one `import:` for every import batch. A channel settings change writes a `settings` entry with old and new
   values. `Channel.history_months` (default 24, `channel/`) and the daily `django_leads.purge_history` beat delete
   older entries.
 

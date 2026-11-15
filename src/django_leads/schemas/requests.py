@@ -234,7 +234,13 @@ class ActivityListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
-    actor: str = Field(default="", max_length=128, description="Exact actor (username, system, …).", examples=["anna"])
+    actor: str = Field(
+        default="",
+        max_length=128,
+        description='A person of `activities/actors/`: that actor and its "<actor> via …" entries; `import:` = every '
+        "import batch.",
+        examples=["anna"],
+    )
     kind: str = Field(
         default="",
         max_length=512,
