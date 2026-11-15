@@ -235,6 +235,17 @@ def test_a_cancelled_task_shows_in_the_timeline(shop, django_capture_on_commit_c
 
 
 @needs_todo
+def test_a_cancelled_task_keeps_its_reason_and_who_cancelled(shop, django_capture_on_commit_callbacks):
+    """U5: the History line "Task cancelled: {title} — {reason} · {who}" reads `data.reason` and `actor`."""
+    from django_todo.services import task_service
+
+    with django_capture_on_commit_callbacks(execute=True):
+        task_service.cancel(manual_task(shop), actor="seller", reason="duplicate")
+    cancelled = shop.activities.get(data__event="task_cancelled")
+    assert (cancelled.actor, cancelled.data["reason"], cancelled.data["status"]) == ("seller", "duplicate", "cancelled")
+
+
+@needs_todo
 @pytest.mark.parametrize("ref", ["other.Thing:1", "leads.Company:999999"])
 def test_tasks_of_other_subjects_are_ignored(shop, ref, django_capture_on_commit_callbacks):
     from django_todo.services import task_service
