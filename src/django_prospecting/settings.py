@@ -25,3 +25,5 @@ PROSPECTING_DAILY_BUDGET = getattr(settings, "PROSPECTING_DAILY_BUDGET", 100)
 PROSPECTING_MAX_CANDIDATES = getattr(settings, "PROSPECTING_MAX_CANDIDATES", 5)
 # Possible addresses tried per person.
 PROSPECTING_MAX_ADDRESSES = getattr(settings, "PROSPECTING_MAX_ADDRESSES", 3)
+# A queued search untouched for this long lost its worker: it is failed and no longer blocks a new search.
+PROSPECTING_QUEUED_STALE_MINUTES = getattr(settings, "PROSPECTING_QUEUED_STALE_MINUTES", 60)

@@ -7,6 +7,9 @@ four checks of every person with their source and date.
 A check that is still missing after the last attempt stays `no_info` — the candidate shows which confirmation is
 missing; a salesperson decides anyway. Nothing here writes to leads or sends mail."""
 
+import logging
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
@@ -18,7 +21,9 @@ from django_prospecting import settings as prospecting_settings
 from django_prospecting.enums import AddressVerdict, CandidateStatus, CheckKind, CheckResult, SearchStatus
 from django_prospecting.models import Candidate, CandidateCheck, PeopleSearch
 from django_prospecting.providers.base import FoundPerson, ProviderError, SearchAnswer
-from django_prospecting.services import pattern_service
+from django_prospecting.services import leads_bridge, pattern_service
+
+logger = logging.getLogger(__name__)
 
 FINAL_VERDICTS = frozenset({AddressVerdict.VALID, AddressVerdict.INVALID, AddressVerdict.CATCH_ALL})
 
@@ -28,6 +33,7 @@ def start(
 ) -> PeopleSearch:
     """A queued search runs once on commit (worker). A company with a queued search gets that one back; a company
     over `PROSPECTING_COMPANY_SEARCH_LIMIT` gets a `refused` search that never runs."""
+    _fail_stale(channel_idx, subject_ref)
     queued = PeopleSearch.objects.filter(channel_idx=channel_idx, subject_ref=subject_ref, status=SearchStatus.QUEUED)
     if existing := queued.first():
         return existing
@@ -44,6 +50,17 @@ def start(
     search = PeopleSearch.objects.create(**fields)
     transaction.on_commit(lambda: _enqueue(search.pk))
     return search
+
+
+def _fail_stale(channel_idx: str, subject_ref: str) -> None:
+    """A queued search untouched for `PROSPECTING_QUEUED_STALE_MINUTES` lost its worker: it must not hold the company."""
+    limit = timezone.now() - timedelta(minutes=prospecting_settings.PROSPECTING_QUEUED_STALE_MINUTES)
+    PeopleSearch.objects.filter(
+        channel_idx=channel_idx, subject_ref=subject_ref, status=SearchStatus.QUEUED, modified_at__lt=limit
+    ).update(
+        status=SearchStatus.FAILED, detail="never finished (worker lost)", finished_at=timezone.now(),
+        modified_at=timezone.now(),
+    )  # fmt: skip
 
 
 def _enqueue(search_id: int) -> None:
@@ -63,8 +80,21 @@ def run(search: PeopleSearch) -> PeopleSearch:
     """Ask the provider until every check of every person is `ok` or the attempts are used up."""
     if search.status != SearchStatus.QUEUED:
         return search
-    provider, tester = providers.search_provider(), providers.address_tester()
     errors: list[str] = []
+    try:
+        _attempts(search, errors)
+    except Exception as error:
+        logger.exception("prospecting: search %s failed", search.pk)
+        errors.append(f"unexpected {type(error).__name__}")
+    search.status = SearchStatus.DONE if search.candidates.exists() else SearchStatus.FAILED
+    search.detail = "; ".join(dict.fromkeys(errors))[:255]
+    search.finished_at = timezone.now()
+    search.save(update_fields=["status", "detail", "finished_at", "modified_at"])
+    return search
+
+
+def _attempts(search: PeopleSearch, errors: list[str]) -> None:
+    provider, tester = providers.search_provider(), providers.address_tester()
     for _ in range(prospecting_settings.PROSPECTING_MAX_ATTEMPTS):
         if spent_today(search.channel_idx) >= prospecting_settings.PROSPECTING_DAILY_BUDGET:
             errors.append("daily budget used up")
@@ -81,11 +111,6 @@ def run(search: PeopleSearch) -> PeopleSearch:
         merge(search, answer, tester)
         if _complete(search):
             break
-    search.status = SearchStatus.DONE if search.candidates.exists() else SearchStatus.FAILED
-    search.detail = "; ".join(dict.fromkeys(errors))[:255]
-    search.finished_at = timezone.now()
-    search.save(update_fields=["status", "detail", "finished_at", "modified_at"])
-    return search
 
 
 def _complete(search: PeopleSearch) -> bool:
@@ -159,6 +184,8 @@ def _addresses(candidate, person: FoundPerson, search: PeopleSearch, tester, ema
     pattern_note = f"pattern {search.mail_pattern} from {search.pattern_source}" if search.mail_pattern else ""
     for address in guessed:
         options.setdefault(address, {"email": address, "source": pattern_note or "common address patterns"})
+    for address in leads_bridge.erased_emails(list(options)):  # an erased address is never tested nor offered
+        options.pop(address, None)
     tester_source = getattr(tester, "source", type(tester).__name__)
     for option in options.values():
         if option.get("verdict") in FINAL_VERDICTS:

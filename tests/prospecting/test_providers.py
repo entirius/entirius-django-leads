@@ -63,3 +63,12 @@ def test_toolbox_search_needs_a_model(monkeypatch):
     monkeypatch.setattr(prospecting_settings, "PROSPECTING_SEARCH_MODEL", "")
     with pytest.raises(ProviderError, match="MODEL"):
         ToolboxSearch().find_people(company_name="Shop", domain="shop.test", channel_idx="ch")
+
+
+def test_a_profile_url_must_be_http_or_https():
+    from django_prospecting.providers.base import FoundPerson
+
+    person = {"first_name": "A", "last_name": "B"}
+    assert FoundPerson(**person, profile_url="javascript:alert(1)").profile_url == ""
+    assert FoundPerson(**person, profile_url="data:text/html,x").profile_url == ""
+    assert FoundPerson(**person, profile_url="https://example.test/in/a").profile_url == "https://example.test/in/a"
