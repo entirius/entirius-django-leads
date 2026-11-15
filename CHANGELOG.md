@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **History: the channel's journal of every activity.** `Activity.channel` (set on every entry, backfilled from the
+  company) and a nullable `company` (migration `0017`, indexes on channel + date / actor / kind). `activities/` filters
+  by `actor`, `kind` (comma-separated), `date_from` / `date_to` and carries `company_name` / `deal_title`;
+  `activities/actors/` lists the person filter. A channel settings change writes a `settings` entry with old and new
+  values. `Channel.history_months` (default 24, `channel/`) and the daily `django_leads.purge_history` beat delete
+  older entries.
+
 Released as 0.5.0.
 
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);

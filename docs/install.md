@@ -88,6 +88,7 @@ Every task runs on `LEADS_QUEUE_DEFAULT`. The host owns the beat schedule — th
 | `django_leads.retry_failed_analyses` | beat | every 10 minutes |
 | `django_leads.rotate_unresponsive` | beat | daily |
 | `django_leads.anonymise_inactive` | beat | daily |
+| `django_leads.purge_history` | beat | daily (deletes history entries older than `Channel.history_months`, default 24) |
 
 ```python
 CELERY_BEAT_SCHEDULE = {
@@ -95,6 +96,7 @@ CELERY_BEAT_SCHEDULE = {
     "leads-retry-analyses": {"task": "django_leads.retry_failed_analyses", "schedule": 600},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
+    "leads-purge-history": {"task": "django_leads.purge_history", "schedule": crontab(hour=4, minute=30)},
 }
 ```
 
