@@ -5,8 +5,9 @@ from unittest import mock
 
 import pytest
 
+from django_leads.models import Channel
 from django_prospecting.enums import CandidateStatus
-from django_prospecting.models import CompanyProspect
+from django_prospecting.models import CompanyProspect, PeopleSearch
 from django_prospecting.services import leads_bridge
 from tests.prospecting.conftest import DOMAIN, SUBJECT, api_url, run_search
 
@@ -74,22 +75,59 @@ def test_unknown_candidate_is_404(staff_api, db):
     assert staff_api.post(api_url("people/candidates/999/reject/"), {}, format="json").status_code == 404
 
 
-def test_other_channel_sees_nothing(staff_api, candidate):
+def test_an_unknown_channel_is_404(staff_api, candidate):
+    assert staff_api.get(api_url("people/candidates/", channel_idx="other")).status_code == 404
+    assert staff_api.get(api_url("people/limits/", channel_idx="invented")).status_code == 404
+    body = {"subject_ref": SUBJECT}
+    assert staff_api.post(api_url("people/searches/", channel_idx="invented"), body, format="json").status_code == 404
+
+
+def test_other_channel_sees_nothing(staff_api, candidate, polish):
+    Channel.objects.create(idx="other", name="Other", default_language=polish)
     response = staff_api.get(api_url("people/candidates/", channel_idx="other"))
     assert response.json()["results"] == []
 
 
-def test_manual_search_and_list(staff_api, fixed_provider, django_capture_on_commit_callbacks):
+def test_manual_search_and_list(staff_api, fixed_provider, company, django_capture_on_commit_callbacks):
+    ref = f"leads.Company:{company.pk}"
     with django_capture_on_commit_callbacks(execute=True):
-        response = staff_api.post(
-            api_url("people/searches/"),
-            {"subject_ref": SUBJECT, "company_name": "Example Shop", "domain": DOMAIN},
-            format="json",
-        )
+        response = staff_api.post(api_url("people/searches/"), {"subject_ref": ref}, format="json")
     assert response.status_code == 201
-    assert (response.json()["reason"], response.json()["requested_by"]) == ("manual", "anna")
-    rows = staff_api.get(api_url("people/searches/"), {"subject_ref": SUBJECT}).json()["results"]
+    body = response.json()
+    assert (body["reason"], body["requested_by"], body["domain"]) == ("manual", "anna", company.domain)
+    rows = staff_api.get(api_url("people/searches/"), {"subject_ref": ref}).json()["results"]
     assert rows[0]["status"] == "done" and rows[0]["mail_pattern"] == "{first}.{last}"
+
+
+def test_a_search_takes_name_and_domain_from_leads_not_the_body(staff_api, fixed_provider, company):
+    body = {"subject_ref": f"leads.Company:{company.pk}", "domain": "attacker.test", "company_name": "x"}
+    assert staff_api.post(api_url("people/searches/"), body, format="json").status_code == 400
+
+
+def test_a_search_of_a_company_from_another_channel_is_refused(staff_api, fixed_provider, company, polish):
+    other = Channel.objects.create(idx="other", name="Other", default_language=polish)
+    ref = f"leads.Company:{company.pk}"
+    response = staff_api.post(api_url("people/searches/", channel_idx=other.idx), {"subject_ref": ref}, format="json")
+    assert response.status_code == 400 and "subject_ref" in str(response.json())
+    assert (
+        staff_api.post(api_url("people/searches/"), {"subject_ref": "leads.Company:0"}, format="json").status_code
+        == 400
+    )
+    assert PeopleSearch.objects.count() == 0
+
+
+def test_invented_refs_cannot_dodge_the_company_limit(staff_api, fixed_provider, company):
+    for ref in ("leads.Company:9001", "leads.Company:9002"):
+        assert staff_api.post(api_url("people/searches/"), {"subject_ref": ref}, format="json").status_code == 400
+    assert PeopleSearch.objects.count() == 0
+
+
+def test_accept_hands_leads_the_channel_of_the_candidate(staff_api, candidate):
+    with mock.patch(
+        "django_leads.services.candidate_service.accept_candidate", return_value="leads.Contact:1"
+    ) as accept:
+        staff_api.post(api_url(f"people/candidates/{candidate.pk}/accept/"), {}, format="json")
+    assert accept.call_args.kwargs["channel_idx"] == candidate.channel_idx
 
 
 def test_limits(staff_api, fixed_provider):

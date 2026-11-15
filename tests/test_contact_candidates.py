@@ -10,8 +10,14 @@ import pytest
 from django_agreements.enums import LegalBasis
 
 from django_leads.enums import ActivityKind, LeadSource
-from django_leads.models import Activity, Contact
-from django_leads.services import candidate_service, company_service, contact_service, recipient_service
+from django_leads.models import Activity, Channel, Contact
+from django_leads.services import (
+    candidate_service,
+    company_service,
+    contact_service,
+    erased_address_service,
+    recipient_service,
+)
 from django_leads.signals import contact_needed
 from django_leads.signals.communicator_receivers import on_recipient_check
 
@@ -101,7 +107,7 @@ def test_accept_candidate_adds_a_mailable_contact(solo, django_capture_on_commit
     with django_capture_on_commit_callbacks(execute=True):
         contact_service.flag_wrong_person(only_contact(solo), actor="system")
     ref = candidate_service.accept_candidate(
-        subject_ref=f"leads.Company:{solo.pk}", email="Tomasz.Lis@solo-shop.test", first_name="Tomasz",
+        subject_ref=f"leads.Company:{solo.pk}", channel_idx=solo.channel.idx, email="Tomasz.Lis@solo-shop.test", first_name="Tomasz",
         last_name="Lis", job_title="CEO", source_note="prospecting: public register", actor="anna",
     )  # fmt: skip
     contact = Contact.objects.select_related("company__channel").get(email="tomasz.lis@solo-shop.test")
@@ -115,10 +121,10 @@ def test_accept_candidate_adds_a_mailable_contact(solo, django_capture_on_commit
 
 def test_accept_candidate_refuses_unknown_company_and_existing_address(solo):
     with pytest.raises(ValueError, match="no company"):
-        candidate_service.accept_candidate(subject_ref="leads.Company:0", email="a@b.test", first_name="A",
+        candidate_service.accept_candidate(subject_ref="leads.Company:0", channel_idx=solo.channel.idx, email="a@b.test", first_name="A",
                                            last_name="B", actor="anna")  # fmt: skip
     with pytest.raises(ValueError, match="already exists"):
-        candidate_service.accept_candidate(subject_ref=f"leads.Company:{solo.pk}", email=EWA, first_name="Ewa",
+        candidate_service.accept_candidate(subject_ref=f"leads.Company:{solo.pk}", channel_idx=solo.channel.idx, email=EWA, first_name="Ewa",
                                            last_name="Kot", actor="anna")  # fmt: skip
 
 
@@ -132,3 +138,21 @@ def test_a_referral_request_may_go_to_the_wrong_person(solo):
     assert on_recipient_check(None, referral) is None
     contact_service.opt_out(only_contact(solo), reason="x", actor="a")
     assert on_recipient_check(None, referral) == "the contact opted out"
+
+
+def test_accept_candidate_refuses_a_company_of_another_channel(solo, polish):
+    other = Channel.objects.create(idx="elsewhere", name="Elsewhere", default_language=polish)
+    with pytest.raises(ValueError, match="no company"):
+        candidate_service.accept_candidate(subject_ref=f"leads.Company:{solo.pk}", channel_idx=other.idx,
+                                           email="anyone@attacker.test", first_name="A", last_name="B",
+                                           actor="anna")  # fmt: skip
+    assert not Contact.objects.filter(email="anyone@attacker.test").exists()
+
+
+def test_accept_candidate_refuses_an_erased_address(solo):
+    erased_address_service.remember("Anna.Kowalska@solo-shop.test")
+    with pytest.raises(ValueError, match="erased_address"):
+        candidate_service.accept_candidate(subject_ref=f"leads.Company:{solo.pk}", channel_idx=solo.channel.idx,
+                                           email="anna.kowalska@solo-shop.test", first_name="Anna",
+                                           last_name="Kowalska", actor="anna")  # fmt: skip
+    assert not Contact.objects.filter(email="anna.kowalska@solo-shop.test").exists()

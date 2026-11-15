@@ -18,8 +18,6 @@ class CompanyCreateRequest(_Strict):
 
 class SearchCreateRequest(_Strict):
     subject_ref: str = Field(min_length=1, max_length=128, examples=["leads.Company:42"])
-    company_name: str = Field(min_length=1, max_length=255)
-    domain: str = Field(min_length=3, max_length=253, examples=["example.com"])
 
 
 class SearchListQuery(BaseModel):

@@ -19,6 +19,12 @@ def utc(settings):
     settings.TIME_ZONE = "UTC"
 
 
+@pytest.fixture(autouse=True)
+def leads_channel(channel):
+    """The leads channel of CHANNEL_IDX: prospecting refuses a channel leads does not know."""
+    return channel
+
+
 @pytest.fixture
 def without_leads(monkeypatch):
     """django_leads left out of INSTALLED_APPS: prospecting runs on its own, accepting has nowhere to go."""

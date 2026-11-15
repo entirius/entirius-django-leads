@@ -15,7 +15,7 @@ from django_agreements.enums import LegalBasis
 
 from django_leads.enums import ActivityKind, LeadSource
 from django_leads.models import Company
-from django_leads.services import activity_service, recipient_service
+from django_leads.services import activity_service, erased_address_service, recipient_service
 from django_leads.signals import contact_needed
 from django_leads.utils.refs import company_from_ref, contact_ref
 
@@ -47,6 +47,7 @@ def look_for_another_person(company: Company, *, reason: str) -> bool:
 def accept_candidate(
     *,
     subject_ref: str,
+    channel_idx: str,
     email: str,
     first_name: str,
     last_name: str,
@@ -54,13 +55,15 @@ def accept_candidate(
     source_note: str = "",
     actor: str,
 ) -> str:
-    """The new contact's reference (`leads.Contact:<id>`). Raises `ValueError` for an unknown company or an address
-    that already is a contact of it."""
+    """The new contact's reference (`leads.Contact:<id>`). Raises `ValueError` for an unknown company, a company of
+    another channel, an erased or anonymised address, or an address that already is a contact of the company."""
     from django_leads.services import contact_service
 
     company = company_from_ref(subject_ref)
-    if company is None:
+    if company is None or company.channel.idx != channel_idx:
         raise ValueError(f"no company {subject_ref}")
+    if erased_address_service.is_erased(email):
+        raise ValueError(erased_address_service.SKIP_REASON)
     row = {"email": email, "first_name": first_name, "last_name": last_name, "job_title": job_title}
     row.update(source=LeadSource.PROSPECTING, legal_basis=LegalBasis.LEGITIMATE_INTEREST)
     try:
