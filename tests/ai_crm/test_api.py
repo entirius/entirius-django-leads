@@ -126,3 +126,10 @@ def test_the_openapi_schema_lists_every_route():
     paths = SchemaGenerator().get_schema(request=None, public=True)["paths"]
     prefix = "/api/ai-crm/v2/admin/{channel_idx}/"
     assert {f"{prefix}{p}" for p in ("plan/", "tools/", "tools/{name}/", "proposals/", "chat/", "mcp/")} <= set(paths)
+
+
+def test_every_plan_item_carries_every_field_and_the_spec_is_typed(anna, shop):
+    make_task(shop, anna, "Call back")
+    item = api_for(anna).get(url("plan/")).json()["items"][0]
+    assert {"n", "type", "task_id", "title", "due_at", "overdue", "company_id", "count"} <= set(item)
+    assert item["count"] is None and item["task_id"]
