@@ -211,6 +211,18 @@ def test_list_sorts_by_owner_and_shows_the_owner(admin_api, channel):
     assert row["owner"]["username"] == "adam" and set(row["owner"]) == {"id", "username", "name"}
 
 
+def test_list_puts_my_companies_first(admin_api, channel):
+    """U6: the task dialog's picker shows the caller's companies first; `sort` orders within each part."""
+    new_company(channel, "b-anna.test", staff("anna"))
+    new_company(channel, "c-mine.test", operator())
+    new_company(channel, "a-free.test")
+    new_company(channel, "d-mine.test", operator())
+    assert listed(admin_api, mine_first="true") == ["c-mine.test", "d-mine.test", "a-free.test", "b-anna.test"]
+    assert listed(admin_api, mine_first="true", sort="-name")[:2] == ["d-mine.test", "c-mine.test"]
+    assert listed(admin_api) == ["a-free.test", "b-anna.test", "c-mine.test", "d-mine.test"]
+    assert admin_api.get(api_url("companies/"), {"mine_first": "maybe"}).status_code == 400
+
+
 def test_list_query_count_is_constant(admin_api, channel):
     owners = [staff(f"seller{number}") for number in range(5)]
     for number in range(50):
