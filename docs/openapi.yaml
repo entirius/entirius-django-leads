@@ -4159,7 +4159,7 @@ components:
           title: Stage Entered At
           type: string
         source:
-          description: csv, form, manual or connector.
+          description: csv, form, manual, connector or prospecting.
           examples:
           - csv
           title: Source
@@ -4398,7 +4398,7 @@ components:
           title: Stage Entered At
           type: string
         source:
-          description: csv, form, manual or connector.
+          description: csv, form, manual, connector or prospecting.
           examples:
           - csv
           title: Source
@@ -4762,7 +4762,7 @@ components:
           title: Is Primary
           type: boolean
         source:
-          description: csv, form, manual or connector.
+          description: csv, form, manual, connector or prospecting.
           examples:
           - csv
           title: Source

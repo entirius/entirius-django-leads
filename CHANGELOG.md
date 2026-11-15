@@ -4,6 +4,12 @@
 
 Released as 0.5.0.
 
+- **Another person for a company (U3).** A `wrong_person` flag or an opt-out that leaves a company with nobody the
+  gate lets through records "looking for another person" and sends the new signal `contact_needed` on commit
+  (`django_leads.signals`); a do-not-contact company is not searched for. `candidate_service.accept_candidate` (the
+  public service for a prospecting module) adds an accepted person as a contact: new `LeadSource.PROSPECTING`
+  (migration `0019`), legal basis legitimate interest. The `recipient_check` receiver lets a communicator referral
+  request (`referral_request`) reach a wrong-person contact; every other reason still refuses it.
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
   `POST deals/<id>/archive/` (won or lost only, 409 `deal_open`) and `POST deals/<id>/restore/`, both idempotent,
   with Activity `deal` "deal archived: <title>" / "deal restored: <title>" (`event` `deal_archived` /
