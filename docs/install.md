@@ -48,6 +48,18 @@ urlpatterns.append(path("", include("django_leads.urls")))
 - `test/import-now/`, `test/evaluate/`, `test/rotate-now/`, `test/anonymise-now/` — only when
   `ENVIRONMENT == "development"`; the views also answer 404 outside it.
 
+### The optional app: AI CRM
+
+The package carries one more app, enabled only when listed, after `django_leads`, and routed by its own URL module.
+Leads runs the same without it.
+
+```python
+INSTALLED_APPS += ["django_ai_crm"]  # after "django_leads"
+urlpatterns.append(path("", include("django_ai_crm.urls")))  # api/ai-crm/v2/admin/<channel_idx>/
+```
+
+Settings (`AI_CRM_*`), access area and API: `ai-crm.md`. No Celery task, no beat entry.
+
 ## Settings
 
 Defaults: `django_leads/settings.py`. Every value is read **once, at import** of that module — see `gotchas.md`.

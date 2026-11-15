@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **AI CRM, a new app in the package** (formerly planned as `entirius-django-ai-crm`, never released — it ships here,
+  one distribution, one release). Optional: enabled only when the host lists it in `INSTALLED_APPS` after
+  `django_leads`, routed by its own URL module; leads runs the same without it. Its `__version__` is the version of
+  leads (munin reports `ai_crm` with it). Dependencies: `entirius-django-utils>=2.4.0`; the `test` extra adds `respx`.
+  `django_ai_crm` (`docs/ai-crm.md`): a salesperson's day plan (their overdue and today tasks, drafts and replies
+  waiting, companies due to come back) and tools that update the CRM — `get_day_plan`, `close_task`, `create_task`,
+  `add_note`, `move_deal`, `mark_do_not_contact`, `approve_draft`, `list_proposals`, `confirm_proposal`,
+  `reject_proposal`. Only the caller's own tasks, companies and deals; each tool asks django-access for the area it
+  changes; a lost deal, Do not contact and sending a draft are a `Proposal` (migration `django_ai_crm.0001`) that
+  runs only on the same user's confirm. Every change signed `"<username> via ai-crm (<cms | api | mcp>)"`. Chat:
+  commands in English and Polish, other text through the AI toolbox (`AI_CRM_MODEL`). Admin API v2 under
+  `api/ai-crm/v2/admin/<channel_idx>/`: `plan/`, `tools/`, `tools/<name>/`, `proposals/`, `chat/`, `mcp/` (MCP
+  server, streamable HTTP, JSON-RPC 2.0) — for the CMS, the terminal, Claude Code and ChatGPT (README). Access area
+  `ai_crm.agent`. Settings `AI_CRM_MODEL`, `AI_CRM_MAX_TOKENS`, `AI_CRM_MAX_ACTIONS`, `AI_CRM_PROPOSAL_TTL_HOURS`.
+
 Released as 0.5.0.
 
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);

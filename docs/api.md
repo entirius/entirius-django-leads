@@ -8,6 +8,8 @@ contract is `docs/openapi.yaml` (generated from the service, filtered to `/api/l
 schema cannot say. Views are thin: parse into a Pydantic schema (`schemas/requests.py`), call a service, dump a
 response schema (`schemas/responses.py`). Field whitelists live in the services.
 
+The optional app `django_ai_crm` has its own prefix and page: `api/ai-crm/v2/admin/` (`ai-crm.md`).
+
 ## Auth, scoping, paging
 
 | | |
