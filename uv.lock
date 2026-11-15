@@ -634,6 +634,24 @@ wheels = [
 ]
 
 [[package]]
+name = "entirius-django-access"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django", version = "5.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "djangorestframework" },
+    { name = "djangorestframework-simplejwt" },
+    { name = "drf-spectacular" },
+    { name = "entirius-django-utils" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9e/7d/2b2867ed41507fd092fdfda42a3163c3ce896cf17027a9f39aac42826825/entirius_django_access-1.1.0.tar.gz", hash = "sha256:b9cdabf6543b2916607f7be8ed5003a094c39ed031cb92104612994b0c4a68aa", size = 256410, upload-time = "2026-10-25T11:28:48.143Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/e4/aa659d51c7091dde047ae85f901ba385b32d8ae4072b4b69580044c8bbc7/entirius_django_access-1.1.0-py3-none-any.whl", hash = "sha256:54a4eacfe70a0d6348476499485215b29a42febe58d27955b0d297eea390a504", size = 112447, upload-time = "2026-10-25T11:28:47.146Z" },
+]
+
+[[package]]
 name = "entirius-django-agreements"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -655,8 +673,8 @@ wheels = [
 
 [[package]]
 name = "entirius-django-communicator"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.5.0"
+source = { git = "https://github.com/entirius/entirius-django-communicator?branch=develop#dbc3b414b85c672f5fd065e574773535e598c25d" }
 dependencies = [
     { name = "celery" },
     { name = "celery-once" },
@@ -675,10 +693,6 @@ dependencies = [
     { name = "nh3" },
     { name = "pydantic" },
     { name = "redis" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/37/0a/365d10edf9991d7b829466f66db1577d00b8cd6ba6aaa6800687c526ec6b/entirius_django_communicator-0.4.0.tar.gz", hash = "sha256:56800cc1ba04fc49a63bf2c36ae55c949433e31357a99353b7645095ff496f48", size = 233049, upload-time = "2026-10-12T08:55:12.861Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/57/45/845001fade1d24ec371decc847a3d9a4c4b84b7f4e0b7b826fa3aca3d473/entirius_django_communicator-0.4.0-py3-none-any.whl", hash = "sha256:857582a41069f9d4297244a1e2d27193286d095df0649a9455c606f06b3c9985", size = 145651, upload-time = "2026-10-12T08:55:11.766Z" },
 ]
 
 [[package]]
@@ -761,8 +775,10 @@ notifications = [
 ]
 test = [
     { name = "dj-database-url" },
+    { name = "entirius-django-access" },
     { name = "entirius-django-contact-forms" },
     { name = "entirius-django-notifications" },
+    { name = "entirius-django-todo" },
     { name = "factory-boy" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pytest" },
@@ -779,14 +795,16 @@ requires-dist = [
     { name = "djangorestframework", specifier = ">=3.14" },
     { name = "djangorestframework-simplejwt", specifier = ">=5.3" },
     { name = "drf-spectacular", specifier = ">=0.27" },
+    { name = "entirius-django-access", marker = "extra == 'test'", specifier = ">=1.1.0" },
     { name = "entirius-django-agreements", specifier = ">=2.1.0" },
-    { name = "entirius-django-communicator", specifier = ">=0.4.0" },
+    { name = "entirius-django-communicator", git = "https://github.com/entirius/entirius-django-communicator?branch=develop" },
     { name = "entirius-django-contact-forms", marker = "extra == 'contact-forms'" },
     { name = "entirius-django-contact-forms", marker = "extra == 'test'" },
     { name = "entirius-django-notifications", marker = "extra == 'notifications'", specifier = ">=0.1.0" },
     { name = "entirius-django-notifications", marker = "extra == 'test'", specifier = ">=0.1.0" },
     { name = "entirius-django-regional", specifier = ">=2.0.1" },
     { name = "entirius-django-siteintel", specifier = ">=0.1.0" },
+    { name = "entirius-django-todo", marker = "extra == 'test'", git = "https://github.com/entirius/entirius-django-todo?branch=develop" },
     { name = "entirius-django-utils", specifier = ">=2.4.0" },
     { name = "factory-boy", marker = "extra == 'test'" },
     { name = "pre-commit", marker = "extra == 'dev'" },
@@ -857,6 +875,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/01/c9/ad0ce3576d016af25e4e3e8ed89c20d99cc352ff02ca218e9730e715b035/entirius_django_siteintel-0.1.0.tar.gz", hash = "sha256:3118970256aac7dbc71a8cf9a6155a4bcace8e216778943439bb2402b70d2560", size = 126562, upload-time = "2026-09-15T17:14:29.962Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/d4/427b7b45489d2b851746ec3e9517023bf797412c763f24fc1ae084af31c0/entirius_django_siteintel-0.1.0-py3-none-any.whl", hash = "sha256:17c6f42a4e30db181132b14a42af01894d36fc1fd032e6d4f8385e6b725c6fc2", size = 49562, upload-time = "2026-09-15T17:14:28.915Z" },
+]
+
+[[package]]
+name = "entirius-django-todo"
+version = "0.1.0"
+source = { git = "https://github.com/entirius/entirius-django-todo?branch=develop#c9a082f128d99f89674102d391e60ba7046476c4" }
+dependencies = [
+    { name = "celery" },
+    { name = "celery-once" },
+    { name = "django", version = "5.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "djangorestframework" },
+    { name = "djangorestframework-simplejwt" },
+    { name = "drf-spectacular" },
+    { name = "entirius-django-utils" },
+    { name = "pydantic" },
 ]
 
 [[package]]

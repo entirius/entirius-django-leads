@@ -6,7 +6,7 @@ description: Which test file covers what, and the BDD and e2e suites in the enti
 ## Module suite
 
 `make test` — pytest + pytest-django, one `tests/settings.py` for the three apps: `DATABASE_URL` when set (CI, zeno),
-else sqlite in memory (`tests/ai_crm/` needs PostgreSQL). The import query ceiling is exact only on PostgreSQL: in the
+else sqlite in memory (CI runs PostgreSQL; `tests/ai_crm/` needs `django_todo` and `django_access`, both in the `test` extra). The import query ceiling is exact only on PostgreSQL: in the
 entirius-zeno harness run
 `make module-test MODULE=entirius-django-leads` (the same suite inside the service container).
 Nothing leaves the process: `ToolboxClient` is patched in the services that call it, and `communicate()`

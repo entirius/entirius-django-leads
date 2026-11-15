@@ -12,7 +12,7 @@ salesperson's day plan and an agent over REST API v2 and MCP, for the CMS, the t
 | Command | Meaning |
 |---|---|
 | `make install` | `uv sync --all-extras` |
-| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` (`tests/ai_crm/` needs it, plus todo and access) |
+| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` (the `test` extra brings todo and access for `tests/ai_crm/`) |
 | `make check` / `fix` | ruff lint + format (+ canonical `.gitleaks.toml` guard) |
 
 ## Conventions

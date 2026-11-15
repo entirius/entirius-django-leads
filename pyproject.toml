@@ -51,7 +51,8 @@ contact-forms = ["entirius-django-contact-forms"]
 notifications = ["entirius-django-notifications>=0.1.0"]
 # Soft dependency django_todo (replies become tasks, tasks show in the timeline): the extra
 # `todo = ["entirius-django-todo>=0.1.0"]` lands with the first todo release on PyPI — a requirement PyPI cannot
-# resolve breaks `uv lock`. Until then the host installs entirius-django-todo next to leads.
+# resolve breaks `uv lock`. Until then the host installs entirius-django-todo next to leads; the `test` extra takes it
+# from GitHub (`tool.uv.sources`, dev and CI only — published metadata stays PyPI-only).
 test = [
     "pytest",
     "pytest-django",
@@ -62,6 +63,9 @@ test = [
     "entirius-django-notifications>=0.1.0",
     # tests/ai_crm: the chat's toolbox calls are mocked (django_utils.toolbox.testing).
     "respx>=0.21",
+    # tests/ai_crm: tasks (django_todo) behind the access gate (django_access).
+    "entirius-django-todo>=0.1.0",
+    "entirius-django-access>=1.1.0",
 ]
 
 [project.entry-points.leads_connectors]
@@ -75,7 +79,11 @@ Repository = "https://github.com/entirius/entirius-django-leads"
 Changelog = "https://github.com/entirius/entirius-django-leads/blob/develop/CHANGELOG.md"
 Issues = "https://github.com/entirius/entirius-django-leads/issues"
 
-# agreements 2.1.0, utils 2.1.0 and the leads-platform modules are not on PyPI until their releases — resolve the sibling clones.
+# todo 0.1.0 and communicator 0.5.0 (reply_plan_service, which leads imports) are not on PyPI yet: dev and CI resolve
+# them from GitHub until their releases; then these two lines go.
+[tool.uv.sources]
+entirius-django-todo = { git = "https://github.com/entirius/entirius-django-todo", branch = "develop" }
+entirius-django-communicator = { git = "https://github.com/entirius/entirius-django-communicator", branch = "develop" }
 
 [build-system]
 requires = ["hatchling"]

@@ -1,8 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-from importlib.util import find_spec
-
 import pytest
 from celery import current_app
 from django.contrib.auth import get_user_model
@@ -17,9 +15,6 @@ from django_leads.models import Channel, Company, Contact, LeadType, Stage, Stag
 from django_leads.services import company_service
 
 CHANNEL_IDX = "default-europe"
-
-# The AI CRM suite drives tasks (django_todo) through the access gate (django_access); without both it is left out.
-collect_ignore = [] if find_spec("django_todo") and find_spec("django_access") else ["ai_crm"]
 
 
 @pytest.fixture(autouse=True)
