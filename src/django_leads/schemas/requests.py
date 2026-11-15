@@ -73,6 +73,9 @@ class CompanyListQuery(BaseModel):
     origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.", examples=["fair"])
     segment: ScoreSegment | None = Field(default=None, description="Score segment filter (S1 best … S4).")
     owner: str = Field(default="", pattern=OWNER_FILTER_PATTERN, description=OWNER_FILTER_DESCRIPTION, examples=["me"])
+    potential: Literal["green", "orange", "red", "none"] | None = Field(
+        default=None, description="Potential dot filter; `none` = not written to yet (no dot).", examples=["orange"]
+    )
 
     @field_validator("sort")
     @classmethod
@@ -618,6 +621,62 @@ class ResumeDays(BaseModel):
     )  # fmt: skip
 
 
+PotentialColour = Literal["green", "orange", "red"]
+
+
+class PotentialRequest(BaseModel):
+    """A salesperson's colour of a company's potential dot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    colour: PotentialColour = Field(description="green, orange or red.", examples=["green"])
+    comment: str = Field(
+        min_length=1,
+        max_length=255,
+        description="Why it differs from the rules (required).",
+        examples=["Met at a fair"],
+    )
+    return_on: date | None = Field(
+        default=None, description="Optional come-back day: the manual colour ends then.", examples=["2027-02-15"]
+    )
+
+    @field_validator("comment")
+    @classmethod
+    def comment_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("comment is required")
+        return value.strip()
+
+
+class PotentialReplyColours(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    interested: PotentialColour | None = None
+    not_now: PotentialColour | None = None
+    out_of_office: PotentialColour | None = None
+    unclear: PotentialColour | None = None
+    wrong_person: PotentialColour | None = None
+    not_interested: PotentialColour | None = None
+
+
+class PotentialSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    silence_days: int | None = Field(
+        default=None, ge=1, le=730, description="Days without a reply after the last mail until red; null = 120.",
+        examples=[120],
+    )  # fmt: skip
+    skip_return_days: int | None = Field(
+        default=None, ge=1, le=365, description="Days until a skipped draft comes back; null = 30.", examples=[30]
+    )
+    red_return_days: int | None = Field(
+        default=None, ge=1, le=730, description="Days until a red comes back (orange, Today); null = 90.", examples=[90]
+    )
+    reply_colours: PotentialReplyColours | None = Field(
+        default=None, description="Colour per reply class; a class left out uses the default."
+    )
+
+
 class ChannelSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -627,6 +686,11 @@ class ChannelSettingsRequest(BaseModel):
     resume_days: ResumeDays | None = Field(
         default=None,
         description="Replaces the channel's values; a key left out or null uses the default, null resets all.",
+    )
+    potential: PotentialSettings | None = Field(
+        default=None,
+        description="Potential dot thresholds; replaces the channel's values (null resets all) and recomputes every "
+        "company of the channel except manual colours.",
     )
 
 

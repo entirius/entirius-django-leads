@@ -130,6 +130,9 @@ def set_do_not_contact(company: Company, value: bool, *, actor: str) -> Company:
         suppression_service.suppress_domain(company.channel, company.domain)
     else:
         suppression_service.release_domain(company.channel, company.domain)
+    from django_leads.services import potential_service
+
+    potential_service.on_event(company)
     return company
 
 
@@ -147,6 +150,7 @@ def list_companies(
     attributes: dict[str, str] | None = None,
     owner: str = "",
     user_id: int | None = None,
+    potential: str | None = None,
 ) -> QuerySet[Company]:
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
     active lead type of the channel (`UnknownLeadType`); `attributes` keys must be list filters (`filter_attributes`);
@@ -169,6 +173,10 @@ def list_companies(
         companies = filter_attributes(channel, companies, attributes)
     companies = filter_flags(companies, lead_type, do_not_contact, has_reply)
     companies = owner_service.filter_by_owner(companies, owner, user_id)
+    if potential:
+        from django_leads.services import potential_service
+
+        companies = potential_service.filter_companies(companies, potential)
     return companies.order_by(_ordering(sort), "id")
 
 
