@@ -4,6 +4,22 @@
 
 Released as 0.5.0.
 
+- **Potential dot of a company (green / orange / red).** New fields `potential`, `potential_reason`,
+  `potential_return_on`, `potential_manual`, `potential_comment`, `potential_changed_at` on `Company` and
+  `potential_settings` on `Channel` (migration `0018`, in `CompanyResponse`). `potential_service` computes the colour
+  from what leads stores, first match wins: manual → do not contact (red) → spam complaint (red) → an open or won deal
+  (green) → every deal lost (red) → the last reply newer than the last mail (its class colour) → nobody left to mail
+  (orange `looking_for_person`) → 120 days without a reply (red) → a skipped draft (orange, back after 30 days) → a
+  mail sent (orange). A red comes back orange (`came_back`) after 90 days with a "Come back to <company>" task for the
+  owner. An opt-out or a wrong person blocks only that person. Recomputed after a reply, a sent mail, a skipped draft
+  (communicator `message_skipped`, soft), a deal opened / moved / deleted, an opt-out, do not contact and a bounce;
+  daily by the new beat task `django_leads.refresh_potential`. `POST companies/<id>/potential/` sets a manual colour
+  (`comment` required, optional `return_on`; anything but red on a do-not-contact or complained company is 409
+  `legal_block`), `DELETE` goes back to the rules; a manual colour holds until a new reply or a deal change.
+  `companies/?potential=green|orange|red|none` filters the list. `channel/` reads and replaces the thresholds
+  (`potential`: `silence_days`, `skip_return_days`, `red_return_days`, `reply_colours`); a change recomputes the
+  channel (`django_leads.refresh_channel_potential`). Every change of a dot is an Activity `potential` with from, to,
+  reason, return day, actor and comment.
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
   `POST deals/<id>/archive/` (won or lost only, 409 `deal_open`) and `POST deals/<id>/restore/`, both idempotent,
   with Activity `deal` "deal archived: <title>" / "deal restored: <title>" (`event` `deal_archived` /
