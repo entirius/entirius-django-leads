@@ -63,7 +63,7 @@ class ChannelSettingsView(AdminView):
             updates["history_months"] = body.history_months
         if "potential" in body.model_fields_set:  # null resets to the defaults
             values = body.potential.model_dump(exclude_none=True) if body.potential else {}
-            potential_service.update_thresholds(channel, values, actor=request.user.username)
+            updates["potential_settings"] = values
         try:
             updated = channel_service.update_channel(channel, updates, actor=request.user.username)
             return Response(_dump(updated))

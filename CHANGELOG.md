@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Review fixes (history, potential dot, channel settings).** The potential dot's own entries no longer move
+  `Company.last_activity_at` (the daily sweep used to push the retention clock out: `activity_service.record(...,
+  touch=False)`). The sweep isolates each company (a failure is logged, the loop goes on) and cuts the "Come back"
+  task title to 255 characters. The history purge keeps legal basis, opt-out and anonymisation entries, spam
+  complaints and each company's first `sent`. `PATCH channel/` saves nothing when any part of the request is invalid,
+  and a change of the `potential` thresholds writes a `settings` entry (`potential_settings`: from, to) and recomputes
+  the channel only when a value moved. "Nobody left to mail" is one definition (the outreach gate): the dot shows
+  `looking_for_person` for a company whose contacts have no legal basis or are suppressed or bounced, and a hard bounce
+  of the last person sends `contact_needed` (reason `hard_bounce`). Migration `0017` is reversible with `settings`
+  entries present (they are deleted on the way back) and backfills before it builds the indexes. `mine_first` is in
+  the OpenAPI.
 - **Two new apps in the package: AI CRM and Prospecting** (formerly planned as `entirius-django-ai-crm` and
   `entirius-django-prospecting`, never released — they ship here, one distribution, one release). Each is optional:
   enabled only when the host lists it in `INSTALLED_APPS` after `django_leads`, routed by its own URL module; leads
@@ -36,8 +47,6 @@
   older entries.
 - **The company list can put the caller's companies first.** `companies/?mine_first=true` lists the companies the
   caller owns before the rest, `sort` ordering within each part (the task dialog's company picker).
-
-Released as 0.5.0.
 
 - **Potential dot of a company (green / orange / red).** New fields `potential`, `potential_reason`,
   `potential_return_on`, `potential_manual`, `potential_comment`, `potential_changed_at` on `Company` and

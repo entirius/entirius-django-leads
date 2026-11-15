@@ -100,7 +100,7 @@ stays on the timeline. Removing an anonymised contact answers 200 and changes no
 | Method | Path | Body | Success |
 |---|---|---|---|
 | GET | `<channel_idx>/channel/` | — | 200 `{idx, name, default_currency, resume_days, history_months, potential}` |
-| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all); `default_currency` (ISO 4217 of a platform currency, pre-fills new deals; null clears; unknown code → 400); `history_months` (1–120, months the history is kept; default 24); `potential` (see below). A change that moves a value writes a `settings` history entry (no company; `data.changes` = `{field: {from, to}}`) | 200 `{idx, name, default_currency, resume_days, history_months, potential}` |
+| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all); `default_currency` (ISO 4217 of a platform currency, pre-fills new deals; null clears; unknown code → 400); `history_months` (1–120, months the history is kept; default 24); `potential` (see below; the whole request is validated before anything is saved). A change that moves a value writes a `settings` history entry (no company; `data.changes` = `{field: {from, to}}`) | 200 `{idx, name, default_currency, resume_days, history_months, potential}` |
 
 `resume_days` in the response is effective: the channel's values over the defaults `{not_now: 30, out_of_office: 7}`
 — days until the "come back" task of a reply of that class (`concept.md` § Tasks). Area `leads.settings`.
@@ -115,11 +115,12 @@ all) and recomputes every company of the channel except manual colours.
 `potential_service` is the only writer; first match wins: manual → `do_not_contact` (red, no return) → `complaint`
 (red, no return) → `deal_open` / `deal_won` (green) → `deals_lost` (red) → the last reply newer than the last mail
 (`reply:<class>` in its colour; `unsubscribe` counts only when nobody is left) → `looking_for_person` (orange: a mail
-went out and no contact may be mailed any more) → `silence` (red after `silence_days`) → `draft_skipped` (orange,
+went out and no contact passes the outreach gate any more: no legal basis, suppression and hard bounce count like an opt-out) → `silence` (red after `silence_days`) → `draft_skipped` (orange,
 `return_on` = skip + `skip_return_days`) → `awaiting_reply` (orange). A red's `return_on` is + `red_return_days`;
 on that day the dot turns orange `came_back` and the owner gets a todo task "Come back to <company>" (Today).
 Recomputed after every reply, sent mail, skipped draft, deal change, opt-out, do-not-contact change and bounce, and
-daily by `django_leads.refresh_potential`.
+daily by `django_leads.refresh_potential` (a company that fails is logged, the rest go on). A change of a dot never
+moves `last_activity_at`: the retention clock runs on what people did.
 
 ## Stages
 

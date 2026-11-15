@@ -14,7 +14,7 @@ from django_communicator import signals as communicator_signals
 from django_communicator.models import Message, Thread
 
 from django_leads.enums import ActivityKind
-from django_leads.models import Activity, Company, DealStage
+from django_leads.models import Activity, Company, Contact, DealStage
 from django_leads.services import activity_service, company_service, contact_service, deal_service, potential_service
 from django_leads.tasks import refresh_potential
 from tests.conftest import api_url
@@ -153,7 +153,8 @@ def test_a_new_contact_ends_looking_for_another_person_at_once(shop):
     shop.contacts.update(wrong_person_at=timezone.now())
     potential_service.refresh(shop)
     assert stored(shop) == ("orange", "looking_for_person")
-    contact_service.create_contact(shop, {"email": "ewa@example-shop-4.test", "source": "manual"}, actor="test")
+    row = {"email": "ewa@example-shop-4.test", "source": "manual", "legal_basis": "legitimate_interest"}
+    contact_service.create_contact(shop, row, actor="test")
     assert stored(shop) == ("orange", "reply:wrong_person")
 
 
@@ -329,3 +330,86 @@ def test_thresholds_are_settings_and_a_change_recomputes(admin_api, shop, django
     assert response.json()["potential"]["reply_colours"]["not_now"] == "red"
     assert stored(shop) == ("red", "silence")
     assert admin_api.patch(api_url("channel/"), {"potential": {"silence_days": 0}}, "json").status_code == 400
+
+
+# --- review fixes ----------------------------------------------------------------------------------------------------
+
+
+def test_the_sweep_does_not_move_the_retention_clock(shop):
+    sent(shop, days_ago=130)
+    old = timezone.now() - timedelta(days=130)
+    Company.objects.filter(pk=shop.pk).update(last_activity_at=old)
+    assert potential_service.sweep() == 1
+    assert stored(shop) == ("red", "silence")
+    assert shop.last_activity_at == old
+    assert shop.activities.filter(kind=ActivityKind.POTENTIAL).count() == 1
+
+
+def test_a_failing_company_does_not_stop_the_sweep(shop, company, monkeypatch):
+    Contact.objects.create(company=company, email="ann@other.test", legal_basis="legitimate_interest")
+    for target in (shop, company):
+        sent(target, days_ago=130)
+    real = potential_service.compute
+
+    def broken(target, **kwargs):
+        if target.pk == shop.pk:
+            raise RuntimeError("boom")
+        return real(target, **kwargs)
+
+    monkeypatch.setattr(potential_service, "compute", broken)
+    assert potential_service.sweep() == 1
+    company.refresh_from_db()
+    assert company.potential == "red"
+
+
+def test_the_come_back_title_fits_the_task_title(shop, monkeypatch):
+    specs = []
+    monkeypatch.setattr(potential_service.task_bridge, "create", lambda company, contact, spec: specs.append(spec))
+    Company.objects.filter(pk=shop.pk).update(name="N" * 255)
+    sent(shop, days_ago=220)
+    potential_service.sweep()
+    assert len(specs) == 1 and len(specs[0].title) == 255 and specs[0].title.startswith("Come back to NNN")
+
+
+def test_a_contact_the_gate_refuses_is_nobody_to_mail(shop):
+    sent(shop, days_ago=2)
+    shop.contacts.update(legal_basis="")
+    assert dot(shop) == ("orange", "looking_for_person")
+
+
+def test_a_hard_bounce_of_the_last_person_looks_for_another(shop, channel, django_capture_on_commit_callbacks):
+    from django_communicator.models import AddressStatus
+    from django_communicator.models import Channel as MailChannel
+
+    MailChannel.objects.create(idx=channel.idx, label="Europe")
+    shop.contacts.exclude(email=PIOTR).delete()
+    sent(shop, days_ago=2)
+    AddressStatus.objects.create(email=PIOTR, status="invalid", reason="hard_bounce")
+    message = SimpleNamespace(pk=3, thread=thread_of(shop))
+    with django_capture_on_commit_callbacks(execute=True):
+        communicator_signals.message_bounced.send(sender=Message, message=message, hard=True, reason="")
+    assert stored(shop) == ("orange", "looking_for_person")
+    looking = shop.activities.filter(message="looking for another person")
+    assert [row.data["reason"] for row in looking] == ["hard_bounce"]
+
+
+def test_an_invalid_patch_saves_no_threshold(admin_api, channel):
+    body = {"potential": {"silence_days": 30}, "default_currency": "XXX"}
+    assert admin_api.patch(api_url("channel/"), body, "json").status_code == 400
+    channel.refresh_from_db()
+    assert channel.potential_settings == {}
+    assert not Activity.objects.filter(kind=ActivityKind.SETTINGS).exists()
+
+
+def test_a_threshold_change_is_a_settings_entry_and_a_same_value_is_not(
+    admin_api, channel, django_capture_on_commit_callbacks
+):
+    body = {"potential": {"silence_days": 30}}
+    with django_capture_on_commit_callbacks(execute=True) as first:
+        assert admin_api.patch(api_url("channel/"), body, "json").status_code == 200
+    entry = Activity.objects.get(kind=ActivityKind.SETTINGS)
+    assert entry.data["changes"]["potential_settings"] == {"from": {}, "to": {"silence_days": 30}}
+    with django_capture_on_commit_callbacks(execute=True) as second:
+        admin_api.patch(api_url("channel/"), body, "json")
+    assert Activity.objects.filter(kind=ActivityKind.SETTINGS).count() == 1
+    assert len(first) == 1 and second == []

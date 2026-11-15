@@ -29,7 +29,7 @@ from django.utils import timezone
 
 from django_leads.enums import ActivityKind, DealStageKind, Potential
 from django_leads.models import Activity, Channel, Company, Deal
-from django_leads.services import activity_service, task_bridge
+from django_leads.services import activity_service, recipient_service, task_bridge
 from django_leads.services.task_bridge import TaskSpec
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ CAME_BACK = "came_back"
 MANUAL = "manual"
 LEGAL_REASONS = frozenset({"do_not_contact", COMPLAINT})
 TASK_SOURCE = "leads.potential.came_back"
+TITLE_MAX = 255  # django_todo.Task.title
 
 
 class LegalBlock(ValueError):
@@ -79,17 +80,6 @@ def thresholds(channel: Channel) -> dict[str, Any]:
     values = {**DEFAULTS, **{key: own[key] for key in DAY_KEYS if own.get(key)}}
     values["reply_colours"] = {**DEFAULT_REPLY_COLOURS, **(own.get("reply_colours") or {})}
     return values
-
-
-def update_thresholds(channel: Channel, values: dict[str, Any] | None, *, actor: str) -> Channel:
-    """Replaces the channel's thresholds (None = the defaults), then recomputes every company of the channel
-    (a manual colour holds)."""
-    channel.potential_settings = values or {}
-    channel.save(update_fields=["potential_settings", "modified_at"])
-    from django_leads.tasks import refresh_channel_potential
-
-    transaction.on_commit(lambda: refresh_channel_potential.delay(channel.pk))
-    return channel
 
 
 def legal_block(company: Company) -> str | None:
@@ -170,19 +160,27 @@ def sweep(*, today: date | None = None) -> int:
     changed = 0
     for company in candidates().select_related("channel").iterator(chunk_size=200):
         manual_due = company.potential_manual and company.potential_return_on and company.potential_return_on <= today
-        before = (company.potential, company.potential_reason)
-        refreshed = refresh(company, reset_manual=bool(manual_due))
-        changed += (refreshed.potential, refreshed.potential_reason) != before
+        changed += _refreshed(company, reset_manual=bool(manual_due))
     return changed
 
 
 def refresh_channel(channel: Channel) -> int:
     changed = 0
     for company in candidates().filter(channel=channel).select_related("channel").iterator(chunk_size=200):
-        before = (company.potential, company.potential_reason)
-        refreshed = refresh(company)
-        changed += (refreshed.potential, refreshed.potential_reason) != before
+        changed += _refreshed(company)
     return changed
+
+
+def _refreshed(company: Company, *, reset_manual: bool = False) -> bool:
+    """1 when the colour changed; a company that fails is logged and the loop goes on (1 failing company must not
+    stop the ones after it, every night)."""
+    before = (company.potential, company.potential_reason)
+    try:
+        refreshed = refresh(company, reset_manual=reset_manual)
+    except Exception:
+        logger.exception("leads: potential of company %s not refreshed", company.pk)
+        return False
+    return (refreshed.potential, refreshed.potential_reason) != before
 
 
 def candidates() -> QuerySet[Company]:
@@ -230,13 +228,13 @@ def _store(company: Company, verdict: Verdict, *, manual: bool, comment: str, ac
     message = f"potential: {current[0] or 'none'} ({verdict.reason or 'not written to yet'})"
     if comment:
         message = f"{message} — {comment}"
-    activity_service.record(company, ActivityKind.POTENTIAL, message, data=data, actor=actor)
+    activity_service.record(company, ActivityKind.POTENTIAL, message, data=data, actor=actor, touch=False)
     if verdict.reason == CAME_BACK and previous[1] != CAME_BACK:
         _come_back_task(company)
 
 
 def _come_back_task(company: Company) -> None:
-    title = f"Come back to {company.name or company.domain}"
+    title = f"Come back to {company.name or company.domain}"[:TITLE_MAX]
     spec = TaskSpec("todo", title, timezone.now(), TASK_SOURCE, f"potential:{company.pk}")
     task_bridge.create(company, None, spec)
 
@@ -275,11 +273,9 @@ def _red_or_back(reason: str, back: date, today: date) -> Verdict:
 
 
 def _reachable(company: Company) -> bool:
-    """Someone at the company may still be mailed (an opt-out or a wrong person blocks only that person)."""
-    contacts = company.contacts.exclude(email="").filter(
-        opt_out_at__isnull=True, anonymised_at__isnull=True, wrong_person_at__isnull=True
-    )
-    return contacts.exists()
+    """Someone at the company may still be mailed: the outreach gate lets a contact through (an opt-out, a wrong
+    person, a hard bounce, no legal basis block only that person). The same gate as `needs_another_person`."""
+    return any(recipient_service.eligible(contact) for contact in recipient_service.candidates(company))
 
 
 def _complained(company: Company) -> bool:

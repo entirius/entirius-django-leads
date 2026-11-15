@@ -103,7 +103,7 @@ the beat schedule — the package registers none.
 | `django_leads.retry_failed_analyses` | beat | every 10 minutes |
 | `django_leads.rotate_unresponsive` | beat | daily |
 | `django_leads.anonymise_inactive` | beat | daily |
-| `django_leads.purge_history` | beat | daily (deletes history entries older than `Channel.history_months`, default 24) |
+| `django_leads.purge_history` | beat | daily (deletes history entries older than `Channel.history_months`, default 24; keeps legal basis, opt-out and anonymisation entries, spam complaints and each company's first `sent`) |
 | `django_leads.refresh_potential` | beat | daily (silence, return days of the potential dot) |
 | `django_leads.refresh_channel_potential` | `PATCH channel/` with `potential` | — |
 | `django_prospecting.run_search` (queue `PROSPECTING_QUEUE_DEFAULT`, `prospecting_default`) | a new people search, on commit (`contact_needed`, `POST people/searches/`) | — |

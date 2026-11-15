@@ -27,6 +27,7 @@ from django_leads.models import Activity
 from django_leads.services import (
     activity_service,
     alert_service,
+    candidate_service,
     company_service,
     contact_service,
     follow_up_service,
@@ -43,6 +44,7 @@ logger = logging.getLogger(__name__)
 REPLY_EXCERPT = 200
 WRONG_PERSON = "wrong_person"
 NO_ALERT = "none"
+HARD_BOUNCE = "hard_bounce"
 REFERRAL_ALLOWED = frozenset({WRONG_PERSON})
 
 
@@ -217,4 +219,5 @@ def record_bounce(message, reason: str) -> None:
     contact = company.contacts.filter(email__iexact=message.thread.recipient_email).first()
     data = {"message_id": message.pk, "reason": reason}
     activity_service.record(company, ActivityKind.NOTE, "address invalid: hard bounce", contact=contact, data=data)
+    candidate_service.look_for_another_person(company, reason=HARD_BOUNCE)
     potential_service.on_event(company)

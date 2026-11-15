@@ -6,6 +6,8 @@
 from datetime import datetime, timedelta
 
 import pytest
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 from django.utils import timezone
 
 from django_leads.enums import ActivityKind
@@ -130,3 +132,32 @@ def test_purge_deletes_entries_older_than_the_channel_months(company, channel):
 )
 def test_months_before(moment, months, expected):
     assert activity_service.months_before(moment, months) == expected
+
+
+def test_purge_keeps_the_entries_other_code_reads(company, channel):
+    old = activity_service.months_before(timezone.now(), 24) - timedelta(days=1)
+    kept = [
+        _entry(company, kind, "anna", old)
+        for kind in (ActivityKind.LEGAL_BASIS, ActivityKind.LEGAL_BASIS_CONFLICT, ActivityKind.OPTOUT)
+    ]
+    kept.append(_entry(company, ActivityKind.ANONYMISED, "anna", old))
+    complaint = activity_service.record(company, ActivityKind.NOTE, "hard bounce", data={"reason": "complaint"})
+    first_sent = _entry(company, ActivityKind.SENT, "anna", old)
+    later_sent = _entry(company, ActivityKind.SENT, "anna", old + timedelta(days=1))
+    note = _entry(company, ActivityKind.NOTE, "anna", old)
+    Activity.objects.filter(pk=complaint.pk).update(created_at=old)
+    gone = {later_sent.pk, note.pk}
+    assert purge_history(as_of=timezone.now().isoformat()) == {channel.idx: 2}
+    left = set(Activity.objects.values_list("pk", flat=True))
+    assert {*(a.pk for a in kept), complaint.pk, first_sent.pk} <= left and not gone & left
+
+
+@pytest.mark.django_db(transaction=True)
+def test_migration_17_reverses_with_settings_entries(channel):
+    latest = MigrationExecutor(connection).loader.graph.leaf_nodes("django_leads")[0][1]
+    activity_service.record_channel(channel, ActivityKind.SETTINGS, "settings: x", actor="anna")
+    try:
+        MigrationExecutor(connection).migrate([("django_leads", "0016_deal_archived_at")])
+    finally:
+        MigrationExecutor(connection).migrate([("django_leads", latest)])
+    assert not Activity.objects.filter(kind=ActivityKind.SETTINGS).exists()

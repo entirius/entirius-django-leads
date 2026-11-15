@@ -9,12 +9,15 @@ Every change that moves a value writes a `settings` entry into the channel histo
 
 from typing import Any
 
+from django.db import transaction
+
 from django_leads.enums import ActivityKind
 from django_leads.models import Channel
 from django_leads.services import activity_service, deal_service
 
 DEFAULT_CURRENCY = "default_currency"
-EDITABLE_FIELDS = frozenset({"resume_days", "default_currency", "history_months"})
+POTENTIAL = "potential_settings"
+EDITABLE_FIELDS = frozenset({"resume_days", "default_currency", "history_months", POTENTIAL})
 
 
 def update_channel(channel: Channel, updates: dict[str, Any], *, actor: str = "system") -> Channel:
@@ -22,9 +25,23 @@ def update_channel(channel: Channel, updates: dict[str, Any], *, actor: str = "s
     if invalid:
         raise ValueError(f"Fields not editable via update_channel: {sorted(invalid)}")
     before = {field: _value(channel, field) for field in updates}
-    for field, value in updates.items():
-        setattr(channel, field, deal_service.resolve_currency(value) if field == DEFAULT_CURRENCY else value)
-    channel.save(update_fields=[*updates, "modified_at"])
+    values = {
+        field: deal_service.resolve_currency(value) if field == DEFAULT_CURRENCY else value
+        for field, value in updates.items()
+    }  # every value resolved before the first one is set: a bad one saves nothing
+    with transaction.atomic():
+        for field, value in values.items():
+            setattr(channel, field, value)
+        channel.save(update_fields=[*updates, "modified_at"])
+        changes = _record_changes(channel, updates, before, actor)
+        if POTENTIAL in changes:  # the thresholds moved: every company of the channel is recomputed
+            from django_leads.tasks import refresh_channel_potential
+
+            transaction.on_commit(lambda: refresh_channel_potential.delay(channel.pk))
+    return channel
+
+
+def _record_changes(channel: Channel, updates: dict[str, Any], before: dict[str, Any], actor: str) -> dict:
     changes = {
         field: {"from": before[field], "to": _value(channel, field)}
         for field in sorted(updates)
@@ -34,7 +51,7 @@ def update_channel(channel: Channel, updates: dict[str, Any], *, actor: str = "s
         message = f"settings: {', '.join(changes)}"
         data = {"event": "channel_settings", "changes": changes}
         activity_service.record_channel(channel, ActivityKind.SETTINGS, message, data=data, actor=actor)
-    return channel
+    return changes
 
 
 def _value(channel: Channel, field: str) -> Any:

@@ -14,6 +14,11 @@ def fill_channel(apps, schema_editor):
     Activity.objects.filter(channel__isnull=True).update(channel_id=channel_of)
 
 
+def drop_companyless(apps, schema_editor):
+    """Reverse: entries about the channel itself (settings, no company) cannot live in the old schema."""
+    apps.get_model("django_leads", "Activity").objects.filter(company__isnull=True).delete()
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("django_leads", "0016_deal_archived_at"),
@@ -47,6 +52,9 @@ class Migration(migrations.Migration):
                 to="django_leads.company",
             ),
         ),
+        # after the company turns nullable, before the indexes (a backfill under three indexes is slower); reversed
+        # before the company is NOT NULL again, so the entries without a company (settings) go first
+        migrations.RunPython(fill_channel, drop_companyless),
         migrations.AlterField(
             model_name="activity",
             name="kind",
@@ -93,5 +101,4 @@ class Migration(migrations.Migration):
             model_name="activity",
             index=models.Index(fields=["channel", "kind", "created_at"], name="django_lead_act_kind_idx"),
         ),
-        migrations.RunPython(fill_channel, migrations.RunPython.noop),
     ]

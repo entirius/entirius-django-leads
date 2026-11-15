@@ -857,6 +857,11 @@ paths:
           type: string
         description: Lead type code of the channel, or UNKNOWN.
       - in: query
+        name: mine_first
+        schema:
+          type: boolean
+        description: true = the caller's companies first, `sort` orders within each part (no effect without a user).
+      - in: query
         name: origin
         schema:
           type: string

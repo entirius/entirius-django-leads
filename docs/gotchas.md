@@ -15,7 +15,12 @@ item below: the rule, then where it is enforced.
   attributes. That patch reaches only code that reads `leads_settings.X` through the module; `alert_service`
   (`LEADS_NOTIFY_ROLE`) and `intel_service` (`LEADS_ANALYSIS_MAX_HOOKS`) import the value and ignore it.
 - **`Activity` is written only through `activity_service`** — it moves `Company.last_activity_at`, which retention
-  reads. A bulk `Activity.objects.create` elsewhere makes a company look idle.
+  reads. A bulk `Activity.objects.create` elsewhere makes a company look idle. Entries nobody at the company caused
+  (the potential dot's own) go in with `touch=False`.
+- **The history purge keeps the entries code reads as state**: `legal_basis`, `legal_basis_conflict`, `optout`,
+  `anonymised`, an entry with `data.reason = "complaint"` (the potential's `legal_block`) and a company's first `sent`
+  (`first_sent` stage event). Everything else older than `history_months` goes, stage moves included (the funnel
+  only sees that window).
 - **`transition_stage` is the only stage change.** Setting `company.stage` directly skips the timeline and
   `stage_entered`, so no rule runs. Django admin keeps `stage` read-only and cannot add companies for that reason.
 - **Leads never writes a communicator `Message` or a contact_forms `Lead`** — drafts go through `communicate()`,
