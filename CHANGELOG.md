@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **The company list can put the caller's companies first.** `companies/?mine_first=true` lists the companies the
+  caller owns before the rest, `sort` ordering within each part (the task dialog's company picker).
+
 Released as 0.5.0.
 
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
