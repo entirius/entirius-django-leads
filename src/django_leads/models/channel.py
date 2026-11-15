@@ -31,6 +31,8 @@ class Channel(BaseModel):
     default_currency = models.ForeignKey(
         "django_regional.Currency", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
+    # History (`Activity`) entries older than this many months are deleted by the daily purge.
+    history_months = models.PositiveSmallIntegerField(default=24)
 
     objects = ChannelManager()
 

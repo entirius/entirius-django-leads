@@ -48,6 +48,7 @@ class ActivityKind(models.TextChoices):
     SCORE = "score", "Score"
     TASK = "task", "Task"
     DEAL = "deal", "Deal"
+    SETTINGS = "settings", "Settings"
 
 
 class ImportStatus(models.TextChoices):

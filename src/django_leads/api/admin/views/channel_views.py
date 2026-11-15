@@ -1,7 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Admin API v2 — channel settings: days until a follow-up task per reply class, default deal currency."""
+"""Admin API v2 — channel settings: days until a follow-up task per reply class, default deal currency, months the
+history is kept."""
 
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import ValidationError
@@ -21,7 +22,11 @@ def _dump(channel: Channel) -> dict:
     resume_days = follow_up_service.resume_days(channel)
     currency = channel.default_currency.iso3 if channel.default_currency_id else None
     body = ChannelSettingsResponse(
-        idx=channel.idx, name=channel.name, default_currency=currency, resume_days=resume_days
+        idx=channel.idx,
+        name=channel.name,
+        default_currency=currency,
+        resume_days=resume_days,
+        history_months=channel.history_months,
     )
     return body.model_dump()
 
@@ -53,7 +58,10 @@ class ChannelSettingsView(AdminView):
             updates["resume_days"] = body.resume_days.model_dump(exclude_none=True) if body.resume_days else {}
         if "default_currency" in body.model_fields_set:
             updates["default_currency"] = body.default_currency
+        if body.history_months is not None:
+            updates["history_months"] = body.history_months
         try:
-            return Response(_dump(channel_service.update_channel(channel, updates)))
+            updated = channel_service.update_channel(channel, updates, actor=request.user.username)
+            return Response(_dump(updated))
         except deal_service.InvalidDeal as error:
             raise ValidationError({"default_currency": [str(error)]}) from None

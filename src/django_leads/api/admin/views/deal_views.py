@@ -34,10 +34,10 @@ from django_leads.schemas.requests import (
 )
 from django_leads.schemas.responses import (
     ActivityListResponse,
-    ActivityResponse,
     DealBoardResponse,
     DealListResponse,
     DealResponse,
+    HistoryEntryResponse,
 )
 from django_leads.services import (
     activity_service,
@@ -293,7 +293,7 @@ class DealActivityListView(DealView):
     )
     def get(self, request: Request, channel_idx: str, pk: int) -> Response:
         deal = self.deal(self.channel(channel_idx), pk)
-        return self.paginated(request, activity_service.list_for_deal(deal), ActivityResponse.model_validate)
+        return self.paginated(request, activity_service.list_for_deal(deal), HistoryEntryResponse.of)
 
 
 class CompanyDealListView(DealView):
