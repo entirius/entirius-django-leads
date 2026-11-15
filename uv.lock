@@ -786,7 +786,7 @@ requires-dist = [
     { name = "entirius-django-notifications", marker = "extra == 'test'", specifier = ">=0.1.0" },
     { name = "entirius-django-regional", specifier = ">=2.0.1" },
     { name = "entirius-django-siteintel", specifier = ">=0.1.0" },
-    { name = "entirius-django-utils", specifier = ">=2.3.0" },
+    { name = "entirius-django-utils", specifier = ">=2.4.0" },
     { name = "factory-boy", marker = "extra == 'test'" },
     { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'test'", specifier = ">=3.1" },
@@ -859,7 +859,7 @@ wheels = [
 
 [[package]]
 name = "entirius-django-utils"
-version = "2.3.0"
+version = "2.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -877,9 +877,9 @@ dependencies = [
     { name = "python-slugify" },
     { name = "webargs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b0/25/3418958d318b6fa0a428c49a5832c4b21ae76ed2359953718e7f3fffb8d6/entirius_django_utils-2.3.0.tar.gz", hash = "sha256:26d9ca1ef953d79363cf1902096a73cfe40d1eb64c38a168e99c7f5f32d7347e", size = 91188, upload-time = "2026-10-12T08:41:50.256Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/50/b256ace309bb8bc9520bb17db7193613ca3bda2a56a00dd725e1dc6adffd/entirius_django_utils-2.4.3.tar.gz", hash = "sha256:69c0c5988d2fdf32800b1e995b6d905a2a42ef800678496e318cd9d9df3c02d8", size = 96566, upload-time = "2026-11-04T17:51:12.572Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/8b/a24d6378e123100cded79a0334d0f8ea9c25d908e14e9274969575bd7c41/entirius_django_utils-2.3.0-py3-none-any.whl", hash = "sha256:75a00071b7aa04bab02e5cf225ce8d52b3ac61d614542f0b9873c3bfed36288e", size = 42073, upload-time = "2026-10-12T08:41:49.298Z" },
+    { url = "https://files.pythonhosted.org/packages/97/fc/cae3ea7c792f5bc7e721a0b1329a498f0edbd4705d5e8723b513e90c4742/entirius_django_utils-2.4.3-py3-none-any.whl", hash = "sha256:a5e3378ef2dea8346a48c2621eeaa9e21b35c151916315b0f804a08c64e9bc99", size = 44087, upload-time = "2026-11-04T17:51:11.422Z" },
 ]
 
 [[package]]

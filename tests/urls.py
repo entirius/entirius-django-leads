@@ -8,4 +8,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/contact-forms/v2/", include("django_contact_forms.api.public.urls")),
     path("", include("django_leads.urls")),
+    path("", include("django_prospecting.urls")),
 ]
