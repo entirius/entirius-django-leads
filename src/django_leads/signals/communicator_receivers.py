@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 REPLY_EXCERPT = 200
 WRONG_PERSON = "wrong_person"
 NO_ALERT = "none"
+REFERRAL_ALLOWED = frozenset({WRONG_PERSON})
 
 
 def connect() -> None:
@@ -105,10 +106,16 @@ def on_draft_retry_requested(sender, message, **kwargs) -> str | None:
 
 def on_recipient_check(sender, message, **kwargs) -> str | None:
     """Synchronous: the sentence the outreach gate refuses the thread's recipient with, None for a thread about no
-    company of leads or an address that is no contact of it (unless the company is marked do not contact)."""
+    company of leads or an address that is no contact of it (unless the company is marked do not contact).
+
+    A referral request (communicator's answer to a `wrong_person` reply asking who the right person is) may still go
+    to the wrong person — every other reason refuses it as usual."""
     thread = message.thread
     company = company_from_ref(thread.subject_ref)
-    return recipient_service.refusal_sentence(company, thread.recipient_email) if company else None
+    if company is None:
+        return None
+    allowed = REFERRAL_ALLOWED if getattr(message, "referral_request", False) else frozenset()
+    return recipient_service.refusal_sentence(company, thread.recipient_email, allowed=allowed)
 
 
 def record_retry_blocked(company, contact, message, reason: str) -> None:
