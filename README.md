@@ -14,9 +14,10 @@ It keeps companies and contacts, moves them through stages, runs outreach rules 
 - Runs stage rules: AI-assisted site analysis, recipient selection and outreach drafts behind a consent gate.
 - Anonymises idle contacts on a retention schedule and serves GDPR export and erase requests.
 - Exposes an admin API (JWT, Pydantic schemas, OpenAPI) for the CMS.
-- An optional app in the same package, enabled only when listed in `INSTALLED_APPS`: `django_ai_crm` — a
-  salesperson's day plan and an agent that updates the CRM, over a REST API v2 and an MCP server for the terminal,
-  Claude Code and ChatGPT (`docs/ai-crm.md`).
+- Two optional apps in the same package, each enabled only when listed in `INSTALLED_APPS`:
+  `django_ai_crm` — a salesperson's day plan and an agent that updates the CRM, over a REST API v2 and an MCP server
+  for the terminal, Claude Code and ChatGPT (`docs/ai-crm.md`); `django_prospecting` — new people to contact at a
+  company that lost its last person to mail (`docs/prospecting.md`).
 
 ## Installation
 
@@ -131,7 +132,7 @@ Any other MCP client that can send a header connects as Claude Code does.
 
 - Python 3.11 or newer, Django 4.2 or newer.
 - PostgreSQL in production (tests fall back to sqlite).
-- A Celery worker consuming the `leads_default` queue.
+- A Celery worker consuming the `leads_default` queue (and `prospecting_default` with `django_prospecting`).
 - Entirius packages pulled in: `entirius-django-utils`, `entirius-django-regional`, `entirius-django-agreements`,
   `entirius-django-communicator`, `entirius-django-siteintel`.
 

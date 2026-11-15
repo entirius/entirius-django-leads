@@ -5,7 +5,7 @@ import pytest
 from django.core.management import call_command
 
 
-@pytest.mark.parametrize("urlconf", ["django_leads.urls", "django_ai_crm.urls"])
+@pytest.mark.parametrize("urlconf", ["django_leads.urls", "django_ai_crm.urls", "django_prospecting.urls"])
 def test_openapi_schema_validates(tmp_path, urlconf):
     call_command(
         "spectacular",

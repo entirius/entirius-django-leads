@@ -9,4 +9,5 @@ urlpatterns = [
     path("api/contact-forms/v2/", include("django_contact_forms.api.public.urls")),
     path("", include("django_leads.urls")),
     path("", include("django_ai_crm.urls")),
+    path("", include("django_prospecting.urls")),
 ]
