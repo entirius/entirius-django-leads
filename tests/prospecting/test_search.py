@@ -1,7 +1,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from django_prospecting import settings as prospecting_settings
 from django_prospecting.enums import CheckKind, CheckResult, SearchReason, SearchStatus
@@ -121,3 +124,41 @@ def test_company_search_limit_refuses(monkeypatch, fixed_provider):
     )
     assert refused.status == SearchStatus.REFUSED
     assert "limit" in refused.detail
+
+
+def test_an_unexpected_error_fails_the_search_instead_of_leaving_it_queued(monkeypatch, fixed_provider):
+    class Broken:
+        def find_people(self, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr("django_prospecting.providers.search_provider", Broken)
+    search = run_search()
+    search.refresh_from_db()
+    assert search.status == SearchStatus.FAILED
+    assert "RuntimeError" in search.detail and search.finished_at
+
+
+def test_a_stale_queued_search_does_not_block_a_new_one(fixed_provider, django_capture_on_commit_callbacks):
+    stale = queued_search()
+    PeopleSearch.objects.filter(pk=stale.pk).update(modified_at=timezone.now() - timedelta(hours=2))
+    fresh = queued_search(subject_ref="leads.Company:43")
+    with django_capture_on_commit_callbacks(execute=False):
+        first = search_service.start(
+            channel_idx=CHANNEL_IDX, subject_ref=SUBJECT, company_name="Shop", domain="shop.test", reason="manual"
+        )
+        same = search_service.start(
+            channel_idx=CHANNEL_IDX, subject_ref="leads.Company:43", company_name="Shop", domain="shop.test",
+            reason="manual",
+        )  # fmt: skip
+    stale.refresh_from_db()
+    assert stale.status == SearchStatus.FAILED and first.pk != stale.pk and first.status == SearchStatus.QUEUED
+    assert same.pk == fresh.pk  # a recent queued search is still reused
+
+
+def test_an_erased_address_is_neither_tested_nor_offered(fixed_provider, polish):
+    from django_leads.services import erased_address_service
+
+    erased_address_service.remember(f"ewa.zielinska@{DOMAIN}")
+    candidate = run_search().candidates.get(last_name="Zielińska")
+    assert f"ewa.zielinska@{DOMAIN}" not in [option["email"] for option in candidate.email_options]
+    assert candidate.email != f"ewa.zielinska@{DOMAIN}"

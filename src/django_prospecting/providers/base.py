@@ -3,7 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """The contract of a search provider: what it answers about the people of one company."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProviderError(Exception):
@@ -20,6 +20,12 @@ class FoundPerson(BaseModel):
     email: str = Field(default="", max_length=254)
     profile_url: str = Field(default="", max_length=500)
     source: str = Field(default="", max_length=500)
+
+    @field_validator("profile_url")
+    @classmethod
+    def _web_url_only(cls, value: str) -> str:
+        """A link from a model answer is shown to salespeople: only http(s), anything else is dropped."""
+        return value if value.lower().startswith(("http://", "https://")) else ""
 
 
 class FoundAddress(BaseModel):

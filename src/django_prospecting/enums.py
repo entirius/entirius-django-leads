@@ -7,6 +7,7 @@ from django.db import models
 class SearchReason(models.TextChoices):
     WRONG_PERSON = "wrong_person", "Wrong person"
     OPTED_OUT = "opted_out", "Opted out"
+    HARD_BOUNCE = "hard_bounce", "Hard bounce"
     MANUAL = "manual", "Manual"
 
 

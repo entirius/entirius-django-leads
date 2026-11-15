@@ -19,7 +19,7 @@
   runs the same without them. Their `__version__` is the version of leads (munin reports `ai_crm` and `prospecting`
   with it). Dependencies: `entirius-django-utils>=2.4.0`; the `test` extra adds `respx`.
   - `django_ai_crm` (`docs/ai-crm.md`): a salesperson's day plan (their overdue and today tasks, drafts and replies
-    waiting, companies due to come back) and tools that update the CRM — `get_day_plan`, `close_task`, `create_task`,
+    waiting) and tools that update the CRM — `get_day_plan`, `close_task`, `create_task`,
     `add_note`, `move_deal`, `mark_do_not_contact`, `approve_draft`, `list_proposals`, `confirm_proposal`,
     `reject_proposal`. Only the caller's own tasks, companies and deals; each tool asks django-access for the area it
     changes; a lost deal, Do not contact and sending a draft are a `Proposal` (migration `django_ai_crm.0001`) that
@@ -37,6 +37,18 @@
     `api/prospecting/v2/admin/<channel_idx>/`: `companies/`, `people/searches/`, `people/candidates/`,
     `…/accept/`, `…/reject/`, `people/limits/`. Access areas `prospecting.people` (pii), `prospecting.companies`.
     Models `PeopleSearch`, `Candidate`, `CandidateCheck`, `CompanyProspect` (migration `django_prospecting.0001`).
+
+  - Review fixes. Prospecting: the channel of the URL must exist and `subject_ref` must be a company of it; name and
+    domain of a manual search come from leads (the body is `{subject_ref}` only), `accept_candidate` takes
+    `channel_idx` and refuses a company of another channel and an erased or anonymised address; a search fails on
+    any error and a queued one older than `PROSPECTING_QUEUED_STALE_MINUTES` (60) no longer blocks the company;
+    erased guesses are not tested; `profile_url` keeps http(s) only; reason `hard_bounce` (migration
+    `django_prospecting.0002`). GDPR export and erase hooks for candidates (`django_prospecting.gdpr`) and
+    proposals (`django_ai_crm.gdpr`). AI CRM: Pydantic response schemas (`PlanResponse`, `ToolResultResponse`,
+    `ChatResponse`, `ProposalListResponse`, `ToolListResponse`) replace untyped objects (every plan item field is
+    present, null when unused); the dead "companies due to come back" source is gone. CI: the `test` extra brings
+    `entirius-django-todo` and `entirius-django-access` (todo and communicator 0.5.0 from GitHub until released), so
+    `tests/ai_crm/` runs.
 
 - **History: the channel's journal of every activity.** `Activity.channel` (set on every entry, backfilled from the
   company) and a nullable `company` (migration `0017`, indexes on channel + date / actor / kind). `activities/` filters

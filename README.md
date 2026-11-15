@@ -67,13 +67,17 @@ sending a draft come back as a proposal that needs their yes (`confirm_proposal`
 **The salesperson's token.** Their own login, through the service's JWT endpoint — the same token the CMS uses. The
 access token lives as long as the service's `SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"]` (5 minutes by default), the refresh
 token a day; `POST api/token/refresh/` with `{"refresh": ...}` gives a new access token. A staff user without a role
-is stopped by the access gate (403).
+is stopped by the access gate (403). The token is the salesperson's whole CMS session, not a key limited to
+`api/ai-crm/`: keep the file owner-only (or the refresh token in a secret store), and do not hand it to an agent you do
+not trust with the CMS.
 
 ```shell
 HOST=https://<service-host>   # http://localhost:8100 in the entirius-zeno harness
 CHANNEL=<channel_idx>         # default-europe in zeno
+umask 077   # the file holds a refresh token that works on every admin API of the service: owner-only
 curl -s $HOST/api/token/ -H 'Content-Type: application/json' \
   -d '{"username": "anna", "password": "..."}' > ~/.entirius-token.json   # {"refresh": ..., "access": ...}
+chmod 600 ~/.entirius-token.json   # also when the file already existed
 TOKEN=$(jq -r .access ~/.entirius-token.json)
 ```
 

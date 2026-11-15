@@ -27,7 +27,7 @@ from django_prospecting.schemas.responses import (
     SearchListResponse,
     SearchResponse,
 )
-from django_prospecting.services import candidate_service, search_service
+from django_prospecting.services import candidate_service, leads_bridge, search_service
 
 SUBJECT = OpenApiParameter("subject_ref", str, description="Only this company (`leads.Company:42`).")
 
@@ -62,16 +62,19 @@ class SearchListView(PeopleView):
         tags=TAGS,
         operation_id="prospecting_searches_create",
         summary="Look for new people at a company",
-        description="Runs in the worker. A company with a queued search gets that one; over the company limit the "
-        "search is `refused`.",
+        description="Runs in the worker. Name and domain come from the leads company `subject_ref` of this channel "
+        "(400 otherwise). A company with a queued search gets that one; over the company limit the search is "
+        "`refused`.",
         request=SearchCreateRequest,
         responses={201: SearchResponse, **ERROR_RESPONSES},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
         body = parse(SearchCreateRequest, request.data)
+        with decision_errors("subject_ref"):
+            company = leads_bridge.company_for_search(channel_idx, body.subject_ref)
         search = search_service.start(
-            channel_idx=channel_idx, reason=SearchReason.MANUAL, requested_by=request.user.get_username(),
-            **body.model_dump(),
+            channel_idx=channel_idx, subject_ref=body.subject_ref, reason=SearchReason.MANUAL,
+            requested_by=request.user.get_username(), **company,
         )  # fmt: skip
         return Response(SearchResponse.model_validate(search).model_dump(mode="json"), status=status.HTTP_201_CREATED)
 

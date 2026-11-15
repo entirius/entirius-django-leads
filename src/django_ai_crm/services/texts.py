@@ -26,10 +26,6 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Answer the replies waiting for a person: {count} (Inbox).",
         "pl": "Obsłuż odpowiedzi czekające na człowieka: {count} (Inbox).",
     },
-    "return_line": {
-        "en": "Come back to {company} (company #{id}).",
-        "pl": "Wróć do firmy {company} (firma #{id}).",
-    },
     "task_closed": {"en": "Done: task #{id} closed — {outcome}", "pl": "Gotowe: zadanie #{id} zamknięte — {outcome}"},
     "task_created": {
         "en": "New task #{id} for {company}: {title}",

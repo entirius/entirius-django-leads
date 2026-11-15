@@ -10,7 +10,7 @@ from typing import Literal, TypeVar
 from django_utils.api.v2_errors import raise_pydantic_as_drf
 from pydantic import BaseModel, ValidationError
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, NotFound
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import IsAdminUser
 from rest_framework.views import APIView
@@ -41,6 +41,11 @@ class PeopleView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAdminUser]
     access_area = PEOPLE_AREA
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if not leads_bridge.channel_exists(kwargs["channel_idx"]):
+            raise NotFound("Channel not found.")
 
 
 class CompaniesView(PeopleView):

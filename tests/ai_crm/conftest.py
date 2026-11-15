@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from django_access.models import Grant, Role
@@ -31,6 +32,7 @@ def agent_settings(settings):
     settings.ACCESS_GATE_MODE = "enforce"
     settings.TIME_ZONE = "Europe/Warsaw"
     settings.STOREFRONT_BASE_URL = "http://storefront.test"
+    cache.clear()  # access caches a user's permissions by pk; sqlite hands the same pk to the next test's user
 
 
 @pytest.fixture(autouse=True)

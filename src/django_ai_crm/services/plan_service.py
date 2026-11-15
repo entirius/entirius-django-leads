@@ -6,7 +6,7 @@
 
 1. their open tasks overdue, then due today (django_todo, oldest due first);
 2. drafts waiting for review and replies waiting for a person (django_communicator, the Today counters);
-3. companies due to come back (django_leads `potential_service.returns_due`, when that release is installed).
+A company coming back is a task ("Come back", created by leads), so it is in the first list.
 
 Each source gates itself: module not installed or area not readable → the source is left out, never an error.
 """
@@ -18,7 +18,6 @@ from django.utils import timezone
 
 from django_ai_crm.services import crm
 from django_ai_crm.services.caller import (
-    COMPANIES_READ,
     CONVERSATIONS_READ,
     REVIEW_READ,
     TASKS_READ,
@@ -38,8 +37,6 @@ def day_plan(caller: Caller, tz: tzinfo | None = None) -> dict[str, Any]:
             caller, drafts=caller.can(REVIEW_READ), replies=caller.can(CONVERSATIONS_READ)
         )  # fmt: skip
         items += [{"type": kind, "count": count} for kind, count in counts.items() if count]
-    if crm.available("leads") and caller.can(COMPANIES_READ):
-        items += _returns(caller)
     for number, item in enumerate(items, start=1):
         item["n"] = number
     return {"items": items, "upcoming_7d": upcoming, "generated_at": timezone.now().isoformat()}
@@ -59,22 +56,6 @@ def _task_item(caller: Caller, task, tz: tzinfo) -> dict[str, Any]:
         "subject_label": task.subject_label,
         "company_id": company.pk if company else None,
     }
-
-
-def _returns(caller: Caller) -> list[dict[str, Any]]:
-    """Companies whose "come back later" date is due (U2). A leads without the potential colour has no such list."""
-    try:
-        from django_leads.services import potential_service  # type: ignore[attr-defined]
-    except ImportError:
-        return []
-    returns_due = getattr(potential_service, "returns_due", None)
-    if returns_due is None:
-        return []
-    companies = returns_due(caller.channel_idx, caller.user.pk)
-    return [
-        {"type": "return", "company_id": company.pk, "subject_label": company.name or company.domain}
-        for company in companies
-    ]
 
 
 def item(plan: dict[str, Any], number: int) -> dict[str, Any] | None:
@@ -105,6 +86,4 @@ def _line(item: dict[str, Any], language: str) -> str:
         when = text("overdue", language) if item["overdue"] else text("today", language)
         about = f" — {item['subject_label']}" if item["subject_label"] else ""
         return f"[{when}] {item['title']}{about} (task #{item['task_id']})"
-    if item["type"] == "return":
-        return text("return_line", language, company=item["subject_label"], id=item["company_id"])
     return text(f"{item['type']}_line", language, count=item["count"])

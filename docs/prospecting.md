@@ -18,7 +18,14 @@ in `INSTALLED_APPS`. App label and table prefix `django_prospecting`, URL prefix
 - A salesperson accepts or rejects each candidate. Only an accepted person reaches leads, as a contact
   (`candidate_service.accept_candidate` of leads, source `prospecting`, legal basis legitimate interest); nothing here
   sends mail. Leads never learns how the person was found.
-- The `contact_needed` signal of leads (a company without anyone left to mail: wrong person, opted out) starts a search.
+- The `contact_needed` signal of leads (a company without anyone left to mail: wrong person, opted out, hard bounce)
+  starts a search. A manual search takes the company's name and domain from leads: `subject_ref` must be a company
+  of the channel in the URL, the channel must exist, nothing else of the company comes from the request.
+- A search that fails for any reason is `failed`; a queued one untouched for `PROSPECTING_QUEUED_STALE_MINUTES` is
+  failed by the next `start`, so it never blocks the company. Addresses leads remembers as erased are not tested or
+  offered, and `accept_candidate` refuses them.
+- GDPR: `django_prospecting.gdpr` (found by leads' export and erase) lists and deletes the candidates and checks that
+  hold an address.
 - **Companies**: placeholder — a list of companies added by hand; no search runs yet.
 - Limits: searches per company, provider calls per channel and day, candidates per search.
 
@@ -66,6 +73,7 @@ urlpatterns.append(path("", include("django_prospecting.urls")))
 | `PROSPECTING_MAX_ATTEMPTS` | `3` | searches per check before `no_info` |
 | `PROSPECTING_COMPANY_SEARCH_LIMIT` | `3` | searches per company, all time (refused ones not counted) |
 | `PROSPECTING_DAILY_BUDGET` | `100` | provider calls per channel and day |
+| `PROSPECTING_QUEUED_STALE_MINUTES` | `60` | a queued search untouched this long is failed (lost worker) |
 | `PROSPECTING_MAX_CANDIDATES` | `5` | candidates kept per search |
 | `PROSPECTING_MAX_ADDRESSES` | `3` | guessed addresses tested per person |
 
@@ -82,7 +90,7 @@ Base `api/prospecting/v2/admin/<channel_idx>/`, JWT, staff only. Errors in the v
 |---|---|---|
 | GET / POST | `companies/` | placeholder list with its `description`; add a company by hand |
 | GET | `people/searches/?subject_ref=` | searches, newest first |
-| POST | `people/searches/` | `{subject_ref, company_name, domain}` → 201 search (`queued`, or `refused` over the company limit) |
+| POST | `people/searches/` | `{subject_ref}` (a company of this channel; name and domain come from leads) → 201 search (`queued`, or `refused` over the company limit); 400 not a company of the channel, 404 unknown channel |
 | GET | `people/candidates/?subject_ref=&status=` | candidates with `checks` (kind, result `ok`/`no_info`, value, source, checked_at, attempts), `missing`, `email_options` (email, source, verdict, tested_at, tested_by) |
 | POST | `people/candidates/<id>/accept/` | `{email?}` → the person becomes a contact in leads; 409 decided, 400 refused by leads, 503 leads not installed |
 | POST | `people/candidates/<id>/reject/` | `{reason?}`; 409 decided |
@@ -115,7 +123,7 @@ src/django_prospecting/
 
 ## Tests
 
-`tests/prospecting/` (PostgreSQL via `DATABASE_URL`). The bridge to leads is mocked; `without_leads` (conftest) takes
+`tests/prospecting/` (PostgreSQL via `DATABASE_URL`, else sqlite; a leads channel `default-europe` is autouse). The bridge to leads is mocked; `without_leads` (conftest) takes
 `django_leads` out of `apps.is_installed` for the 503 path.
 
 | File | Covers |
@@ -124,7 +132,8 @@ src/django_prospecting/
 | `test_search.py` | fixed search, 3 attempts → `no_info`, sources and dates, catch-all, retries, budget, limits, start on commit |
 | `test_providers.py` | stub tester, toolbox request and its errors |
 | `test_candidates_api.py` | API: list, accept, reject, searches, limits, companies, auth |
-| `test_leads_bridge.py` | bridge without leads, `contact_needed` receiver |
+| `test_leads_bridge.py` | bridge without leads, `contact_needed` receiver (also `hard_bounce`) |
+| `test_gdpr.py` | export and erase of candidates by address |
 | `test_migrations.py`, `test_access_ownership.py` | contracts (`tests/test_openapi.py` and `tests/test_version.py` cover the app too) |
 
 BDD (U3): `@prospecting` in `entirius-test-package-emporium` (`features/leads/prospecting.feature`), run by the
