@@ -71,6 +71,7 @@ urlpatterns = [
         name="admin-leads-scoring-profile",
     ),
     path("activities/", activity.ActivityListView.as_view(), name="admin-leads-activities"),
+    path("activities/actors/", activity.ActivityActorsView.as_view(), name="admin-leads-activity-actors"),
     path("imports/", imports.ImportListView.as_view(), name="admin-leads-imports"),
     path("imports/<int:pk>/", imports.ImportDetailView.as_view(), name="admin-leads-import"),
     path("reports/funnel/", report.FunnelView.as_view(), name="admin-leads-report-funnel"),

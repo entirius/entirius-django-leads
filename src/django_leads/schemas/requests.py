@@ -234,6 +234,26 @@ class ActivityListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+    actor: str = Field(
+        default="",
+        max_length=128,
+        description='A person of `activities/actors/`: that actor and its "<actor> via …" entries; `import:` = every '
+        "import batch.",
+        examples=["anna"],
+    )
+    kind: str = Field(
+        default="",
+        max_length=512,
+        pattern=r"^[a-z_,]*$",
+        description="Activity kinds, comma-separated; blank = every kind.",
+        examples=["task,deal"],
+    )
+    date_from: date | None = Field(default=None, description="First day, included (server time zone).")
+    date_to: date | None = Field(default=None, description="Last day, included (server time zone).")
+
+    @property
+    def kinds(self) -> list[str]:
+        return [kind for kind in self.kind.split(",") if kind]
 
 
 class AttributeOption(BaseModel):
@@ -627,6 +647,9 @@ class ChannelSettingsRequest(BaseModel):
     resume_days: ResumeDays | None = Field(
         default=None,
         description="Replaces the channel's values; a key left out or null uses the default, null resets all.",
+    )
+    history_months: int | None = Field(
+        default=None, ge=1, le=120, description="Months the history is kept (1-120); null = unchanged.", examples=[24]
     )
 
 

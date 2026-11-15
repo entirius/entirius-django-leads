@@ -83,7 +83,9 @@ class ActivityResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(description="Activity id.", examples=[1])
-    company_id: int = Field(description="Company id.", examples=[100])
+    company_id: int | None = Field(
+        description="Company id; null = an entry about the channel (settings).", examples=[100]
+    )
     contact_id: int | None = Field(description="Contact id.", examples=[None])
     deal_id: int | None = Field(description="Deal the entry is about; null = none or deleted.", examples=[None])
     kind: str = Field(description="Activity kind.", examples=["import"])
@@ -91,6 +93,20 @@ class ActivityResponse(BaseModel):
     data: dict[str, Any] = Field(description="Structured details.", examples=[{}])
     actor: str = Field(description="Username, system or import:<batch id>.", examples=["system"])
     created_at: datetime = Field(description="Created.", examples=["2026-09-13T12:00:00Z"])
+
+
+class HistoryEntryResponse(ActivityResponse):
+    """An entry of the channel history: the activity plus the names of what it is about."""
+
+    company_name: str | None = Field(description="Company name; null = no company.", examples=["Ogród Sp. z o.o."])
+    deal_title: str | None = Field(description="Deal title; null = no deal.", examples=[None])
+
+    @classmethod
+    def of(cls, activity) -> "HistoryEntryResponse":
+        base = ActivityResponse.model_validate(activity).model_dump()
+        company = activity.company if activity.company_id else None
+        deal = activity.deal if activity.deal_id else None
+        return cls(**base, company_name=company.name if company else None, deal_title=deal.title if deal else None)
 
 
 class OwnerResponse(BaseModel):
@@ -233,7 +249,11 @@ class LeadTypeListResponse(BaseModel):
 
 
 class ActivityListResponse(_Page):
-    results: list[ActivityResponse] = Field(description="Timeline entries, newest first.")
+    results: list[HistoryEntryResponse] = Field(description="History entries, newest first.")
+
+
+class ActivityActorsResponse(BaseModel):
+    results: list[str] = Field(description="Every actor of the channel's history, sorted.", examples=[["manager"]])
 
 
 class ImportBatchListResponse(_Page):
@@ -328,6 +348,7 @@ class ChannelSettingsResponse(BaseModel):
         description="Effective days until a follow-up task per reply class (not_now, out_of_office).",
         examples=[{"not_now": 30, "out_of_office": 7}],
     )
+    history_months: int = Field(description="History entries older than this many months are deleted.", examples=[24])
 
 
 class AuditRequestedResponse(BaseModel):
