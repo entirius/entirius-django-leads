@@ -2,8 +2,8 @@
 [project]
 name = "entirius-django-leads"
 version = "0.5.0"
-description = "Leads and B2B pipeline module for Entirius: companies, contacts, stages, rules and recipient selection"
-keywords = ["django", "leads", "crm", "b2b", "sales-pipeline", "gdpr", "ecommerce", "entirius"]
+description = "Leads and B2B pipeline module for Entirius: companies, contacts, stages, rules and recipient selection; an AI CRM agent (REST API v2 and MCP)"
+keywords = ["django", "leads", "crm", "b2b", "sales-pipeline", "gdpr", "ecommerce", "ai", "agent", "mcp", "entirius"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Framework :: Django",
@@ -36,7 +36,7 @@ dependencies = [
     "celery>=5.3",
     "celery-once>=3.0.1",
     "tldextract>=5.3",
-    "entirius-django-utils>=2.3.0",
+    "entirius-django-utils>=2.4.0",
     "entirius-django-regional>=2.0.1",
     "entirius-django-agreements>=2.1.0",
     "entirius-django-communicator>=0.4.0",
@@ -60,6 +60,8 @@ test = [
     "dj-database-url>=2.0",
     "entirius-django-contact-forms",
     "entirius-django-notifications>=0.1.0",
+    # tests/ai_crm: the chat's toolbox calls are mocked (django_utils.toolbox.testing).
+    "respx>=0.21",
 ]
 
 [project.entry-points.leads_connectors]
@@ -80,7 +82,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/django_leads"]
+# One distribution, two Django apps: django_leads, and the optional django_ai_crm (only when the host lists it in
+# INSTALLED_APPS).
+packages = ["src/django_leads", "src/django_ai_crm"]
 
 [tool.ruff]
 line-length = 120
@@ -93,10 +97,10 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/**" = ["S101", "S105"]
+"tests/**" = ["S101", "S105", "S106"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["django_leads"]
+known-first-party = ["django_leads", "django_ai_crm"]
 
 [tool.ruff.format]
 quote-style = "double"

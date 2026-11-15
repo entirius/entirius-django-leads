@@ -2,7 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-"""Standalone test settings: DATABASE_URL when set (CI / zeno), else sqlite in memory."""
+"""Standalone test settings for the apps of the package: DATABASE_URL when set (CI / zeno), else sqlite in memory.
+
+`tests/ai_crm/` needs PostgreSQL, django_todo and django_access (`tests/conftest.py` leaves it out without them);
+its own conftest switches on the access gate and the time zone it measures the day in.
+"""
 
 import tempfile
 from importlib.util import find_spec
@@ -28,6 +32,7 @@ INSTALLED_APPS = [
     "django_siteintel",
     "django_communicator",
     "django_leads",
+    "django_ai_crm",
 ]
 # django_access when importable (zeno): tests/test_access_ownership.py proves the access declarations.
 if find_spec("django_access"):
@@ -61,6 +66,8 @@ REST_FRAMEWORK = {
 }
 SPECTACULAR_SETTINGS = {"TITLE": "django-leads Admin API v2", "VERSION": "2.0.0", "OAS_VERSION": "3.1.0"}
 DATABASES = {"default": dj_database_url.config(default="sqlite://:memory:")}
+if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
+    INSTALLED_APPS.append("django.contrib.postgres")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
