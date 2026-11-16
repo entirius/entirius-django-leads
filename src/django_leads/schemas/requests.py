@@ -435,7 +435,7 @@ class UploadOptions(BaseModel):
     )
     mapping: str | None = Field(
         default=None,
-        description='JSON object {"<file column>": "<field key>" | "ignore"}, or "auto" for the proposal as it is; '
+        description='JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored); '
         "absent = the exact-name import.",
     )
 

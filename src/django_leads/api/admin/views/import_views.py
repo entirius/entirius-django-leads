@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Admin API v2 — imports: list, preview of the column mapping, upload (queued), detail with the report, fields."""
+"""Admin API v2 — imports: list, preview of the column mapping, upload (queued), detail with the report."""
 
 from django.db import transaction
 from drf_spectacular.utils import extend_schema
@@ -18,7 +18,6 @@ from django_leads.schemas.responses import (
     ImportBatchDetailResponse,
     ImportBatchListResponse,
     ImportBatchResponse,
-    ImportFieldListResponse,
     ImportPreviewResponse,
 )
 from django_leads.services import import_mapping_service, import_service
@@ -44,7 +43,7 @@ UPLOAD_SCHEMA = {
             "mapping": {
                 "type": "string",
                 "description": 'JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are '
-                'ignored), or "auto" for the proposal of imports/preview/ as it is; absent = the exact-name import.',
+                "ignored); absent = the exact-name import.",
             },
         },
         "required": ["file"],
@@ -165,19 +164,3 @@ class ImportPreviewView(AdminView):
         except import_mapping_service.MappingError as error:
             raise ValidationError({error.field: [error.message]}, code=error.code) from None
         return Response(ImportPreviewResponse.model_validate(preview).model_dump(mode="json"))
-
-
-class ImportFieldListView(AdminView):
-    access_area = "leads.companies"
-
-    @extend_schema(
-        tags=_TAGS,
-        operation_id="leads_imports_fields",
-        summary="The fields an import column can go to",
-        description="Built-in fields in display order, then the channel's active custom fields (attr.<key>, "
-        "contact.attr.<key>); `ignore` is not listed.",
-        responses={200: ImportFieldListResponse, **ERROR_RESPONSES},
-    )
-    def get(self, request: Request, channel_idx: str) -> Response:
-        fields = import_mapping_service.field_catalogue(self.channel(channel_idx))
-        return Response(ImportFieldListResponse(results=fields).model_dump(mode="json"))

@@ -58,7 +58,9 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | `LEADS_IMPORT_CHUNK_SIZE` | `500` | CSV rows per chunk; counters, report and resume point commit with each chunk |
 | `LEADS_IMPORT_TMP_DIR` | `<system temp>/django_leads` | uploads wait here as `<batch_id>.csv` (file 0600, directory 0700) |
 | `LEADS_IMPORT_STALE_MINUTES` | `30` | a `pending`/`running` batch without progress this long is failed `stale`; also the form-submission retry cutoff |
-| `LEADS_IMPORT_AI_MODEL` | `""` | toolbox model asked about import columns the rules leave unrecognised (header + ≤ 5 values each); empty = off |
+| `LEADS_IMPORT_MAX_ROWS` | `100000` | data rows of an import file (csv and xlsx, the exact-name import too); over it → 400 `TOO_MANY_ROWS` |
+| `LEADS_IMPORT_MAX_COLUMNS` | `200` | columns of an import file; over it → 400 `TOO_MANY_COLUMNS` |
+| `LEADS_IMPORT_MAX_UNPACKED_MB` | `200` | an `.xlsx` is refused (400 `TOO_LARGE`) when its parts unpack past this, before anything is parsed |
 | `LEADS_IMPORT_REPORT_MAX` | `1000` | skipped rows kept in a batch report; counters always cover every row |
 | `LEADS_FORM_CONSENT_KEYS` | `["marketing_consent"]` | `Lead.raw_data` keys read as marketing consent |
 | `LEADS_FORM_WEBSITE_KEYS` | `["website", "url"]` | `Lead.raw_data` keys read as the company website |
@@ -105,7 +107,7 @@ CELERY_BEAT_SCHEDULE = {
 | Extra | Installs | Without it |
 |---|---|---|
 | `contact-forms` | `entirius-django-contact-forms` | no form bridge; the sweep skips form retries |
-| `notifications` | `entirius-django-notifications` | replies and failed analyses are logged only (one warning per process) |
+| `notifications` | `entirius-django-notifications>=0.3.0` | replies and failed analyses are logged only (one warning per process) |
 | — (`entirius-django-todo` next to leads; the extra `todo` comes with its first PyPI release) | `django_todo` in `INSTALLED_APPS` | replies create no tasks, closed tasks write no timeline, GDPR exports list no tasks |
 | — (`django_accounts` in the host) | — | `companies/<id>/create-customer/` is not routed and its module never imported |
 

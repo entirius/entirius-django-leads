@@ -3,7 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 """Which column of an import file goes to which CRM field: the proposal (header words, then the values, then the
-channel's custom fields, optionally the AI toolbox), the preview of the first rows, the check of a mapping the user
+channel's custom fields), the preview of the first rows, the check of a mapping the user
 confirmed, and the file rewritten as the import's own CSV (`CSV_COLUMNS` + `attr.<key>`), so the queued run reads one
 format whatever the upload was.
 
@@ -14,34 +14,26 @@ Proposals and previews hold sample values for the person who uploaded the file a
 import csv
 import io
 import json
-import logging
 import re
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from typing import Any
-
-from django.conf import settings
-from django_agreements.enums import LegalBasis
 
 from django_leads import settings as leads_settings
 from django_leads.connectors.csv import ATTRIBUTE_PREFIXES, COLUMN_ALIASES, CSV_COLUMNS
 from django_leads.enums import AttributeEntity
 from django_leads.models import Channel
 from django_leads.services import attribute_service, import_service, lead_type_service, stage_service
-from django_leads.services.import_file_service import ZIP_MAGIC, Table, read_table
+from django_leads.services.import_file_service import ZIP_MAGIC, Table, check_csv_size, read_table
 from django_leads.services.import_vocabulary import CONCEPT_SYNONYMS, FIELD_SYNONYMS, WEAK_WORDS, compact, normalise
 
-logger = logging.getLogger(__name__)
-
 IGNORE = "ignore"
-AUTO = "auto"
 CERTAIN = 0.85
 CHECK = 0.5
 SAMPLE_COUNT = 5
 SAMPLE_MAX_LENGTH = 80
 DETECT_ROWS = 200
 PREVIEW_ROWS = 5
-AI_TAG = "leads.import_mapping"
 COMPANY_KEYS = frozenset({"domain", "website", "email"})
 NAME_PARTS = frozenset({"first_name", "last_name"})
 TYPED_FIELDS = frozenset({"email", "website", "domain", "phone"})
@@ -194,7 +186,6 @@ def _propose(table: Table, context: _Context, user_mapping: dict[str, str]) -> l
         else:
             _guess(proposal, table.raw_header[index] if index < len(table.raw_header) else name, values, context)
         proposals.append(proposal)
-    _ask_ai(proposals, table, context)
     _resolve_conflicts(proposals)
     return proposals
 
@@ -304,8 +295,6 @@ def _match_content(values: list[str], context: _Context) -> tuple[str | None, st
     if (ratio := share(lambda v: "@" not in v and HOST_RE.fullmatch(v) is not None)) >= 0.8:
         site = share(lambda v: v.lower().startswith(("http", "www.")) or "/" in v)
         return ("website" if site >= 0.5 else "domain"), None, ratio, "content"
-    if (ratio := share(lambda v: v.lower() in LegalBasis.values)) >= 0.8:
-        return "legal_basis", None, ratio, "content"
     if (ratio := share(lambda v: POSTAL_RE.fullmatch(v) is not None)) >= 0.8:
         return None, "postal_code", ratio, "content"
     if (ratio := share(is_nip)) >= 0.8:
@@ -379,88 +368,19 @@ def _lose(proposal: Proposal, winner: Proposal) -> None:
     proposal.field, proposal.reason, proposal.conflict_with = IGNORE, "duplicate_field", winner.name
 
 
-def _ask_ai(proposals: list[Proposal], table: Table, context: _Context) -> None:
-    """Behind `LEADS_IMPORT_AI_MODEL` (empty = off): the header and a few values of each column the rules left
-    unrecognised — never the whole file. A failing toolbox leaves them unrecognised."""
-    model = leads_settings.LEADS_IMPORT_AI_MODEL
-    pending = [p for p in proposals if p.field == IGNORE and p.reason == "unrecognised" and p.source != "user"]
-    if not model or not pending or not getattr(settings, "AI_TOOLBOX_ENABLED", True):
-        return
-    taken = {p.field for p in proposals if p.field != IGNORE}
-    allowed = sorted(context.keys - taken)
-    columns = [{"name": p.name, "samples": [s[:64] for s in p.samples]} for p in pending]
-    answer = ai_complete(model, columns, allowed)
-    by_name = {p.name: p for p in pending}
-    for item in answer:
-        proposal = by_name.get(item.get("name"))
-        target = item.get("field")
-        if proposal is None or target not in allowed or target in taken:
-            continue
-        proposal.field, proposal.reason, proposal.source, proposal.confidence = target, None, "ai", 0.6
-        taken.add(target)
-
-
-AI_PROMPT = (
-    "You map the columns of a spreadsheet of companies and their contacts to CRM fields. For every column you get its "
-    "header and a few values. Answer with the CRM field key that fits, or 'ignore' when none fits. Use only the "
-    "allowed keys."
-)
-
-
-def ai_complete(model: str, columns: list[dict[str, Any]], allowed: list[str]) -> list[dict[str, Any]]:
-    """`[{name, field}]` from the toolbox, or [] when it fails or answers something else."""
-    from django_utils.toolbox.client import ToolboxClient
-    from django_utils.toolbox.errors import ToolboxError
-    from django_utils.toolbox.schemas import CompletionRequest, Message
-
-    schema = {
-        "type": "object",
-        "properties": {
-            "columns": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}, "field": {"type": "string"}},
-                    "required": ["name", "field"],
-                },
-            }
-        },
-        "required": ["columns"],
-    }
-    content = json.dumps({"allowed": [*allowed, IGNORE], "columns": columns}, ensure_ascii=False)
-    request = CompletionRequest(
-        model=model,
-        messages=[Message(role="system", content=AI_PROMPT), Message(role="user", content=content)],
-        json_schema=schema,
-        max_tokens=512,
-        tags=[AI_TAG],
-    )
-    try:
-        with ToolboxClient() as client:
-            response = client.complete(request)
-    except ToolboxError as exc:
-        logger.warning("event=leads_import_mapping_ai_failed error=%s", type(exc).__name__)
-        return []
-    parsed = response.parsed
-    items = parsed.get("columns") if isinstance(parsed, dict) else None
-    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
-
-
 # --- the user's mapping ----------------------------------------------------------------------------------------------
 
 
-def parse_mapping(raw: str | None) -> dict[str, str] | str | None:
-    """The multipart `mapping`: absent → None, `auto` → AUTO, else a JSON object `{column: field}`."""
+def parse_mapping(raw: str | None) -> dict[str, str] | None:
+    """The multipart `mapping`: absent → None, else a JSON object `{column: field}`."""
     if raw is None or raw == "":
         return None
-    if raw.strip() == AUTO:
-        return AUTO
     try:
         value = json.loads(raw)
     except ValueError:
         value = None
     if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
-        raise MappingError("invalid_json", 'The mapping must be a JSON object {"column": "field"} or "auto".')
+        raise MappingError("invalid_json", 'The mapping must be a JSON object {"column": "field"}.')
     return value
 
 
@@ -586,7 +506,6 @@ def preview(channel: Channel, filename: str, data: bytes, raw_mapping: str | Non
     table = read_table(filename, data)
     context = _context(channel)
     user = parse_mapping(raw_mapping)
-    user = None if user == AUTO else user
     if user:
         check_names(table, context.keys, user)
     proposals = _propose(table, context, user or {})
@@ -620,14 +539,18 @@ def prepare_import(channel: Channel, filename: str, data: bytes, raw_mapping: st
         return Prepared(_legacy_content(filename, data), [], [])
     table = read_table(filename, data)
     context = _context(channel)
-    if mapping == AUTO:
-        resolved = {p.name: p.field for p in _propose(table, context, {})}
-    else:
-        check_names(table, context.keys, mapping)
-        resolved = {name: mapping.get(name, IGNORE) for name in table.columns}
+    check_names(table, context.keys, mapping)
+    resolved = {name: mapping.get(name, IGNORE) for name in table.columns}
     check_complete(resolved)
     labels = {item["key"]: item["label"] for item in context.catalogue}
-    report = [{"column": name, "field": resolved[name], "label": labels.get(resolved[name])} for name in table.columns]
+    report = [
+        {
+            "column": name[: import_service.HEADER_MAX_LENGTH],
+            "field": resolved[name],
+            "label": labels.get(resolved[name]),
+        }
+        for name in table.columns
+    ]
     ignored = [name[: import_service.HEADER_MAX_LENGTH] for name in table.columns if resolved[name] == IGNORE]
     return Prepared(to_csv(table, resolved), report, ignored[: leads_settings.LEADS_IMPORT_REPORT_MAX])
 
@@ -639,6 +562,7 @@ def _legacy_content(filename: str, data: bytes) -> str:
         except UnicodeDecodeError:
             text = None
         if text is not None and _reads_as_comma_csv(text):
+            check_csv_size(text)
             return text
     return identity_csv(read_table(filename, data))
 

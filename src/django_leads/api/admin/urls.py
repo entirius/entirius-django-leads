@@ -74,7 +74,6 @@ urlpatterns = [
     path("activities/actors/", activity.ActivityActorsView.as_view(), name="admin-leads-activity-actors"),
     path("imports/", imports.ImportListView.as_view(), name="admin-leads-imports"),
     path("imports/preview/", imports.ImportPreviewView.as_view(), name="admin-leads-imports-preview"),
-    path("imports/fields/", imports.ImportFieldListView.as_view(), name="admin-leads-imports-fields"),
     path("imports/<int:pk>/", imports.ImportDetailView.as_view(), name="admin-leads-import"),
     path("reports/funnel/", report.FunnelView.as_view(), name="admin-leads-report-funnel"),
     path("rules/", rule.RuleListView.as_view(), name="admin-leads-rules"),

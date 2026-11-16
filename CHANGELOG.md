@@ -17,7 +17,8 @@
   (100 000), `LEADS_IMPORT_MAX_COLUMNS` (200) and `LEADS_IMPORT_MAX_UNPACKED_MB` (200, xlsx size after unzipping);
   over a limit the answer is 400. A corrupt sheet is a 400 too. Without `mapping` the exact-name import is unchanged; it
   now also reads `description` (company notes) and accepts xlsx / cp1250 / `;` files with exact names. A file named
-  `name,domain,email` now gets its company names (test C9).
+  `name,domain,email` now gets its company names (test C9). The `notifications` extra needs
+  `entirius-django-notifications>=0.3.0` (alerts to the company owner, `recipient_user_id`).
 
 - **History: the channel's journal of every activity.** `Activity.channel` (set on every entry, backfilled from the
   company) and a nullable `company` (migration `0017`, indexes on channel + date / actor / kind). `activities/` filters

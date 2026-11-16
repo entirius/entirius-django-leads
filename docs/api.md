@@ -223,9 +223,8 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 |---|---|---|---|
 | GET | `<channel_idx>/activities/` | `company` (id), `actor` (a person of `activities/actors/`: also its `"<actor> via …"` entries; `import:` = every import batch), `kind` (comma-separated), `date_from` / `date_to` (days, both included, server time zone), paging | 200 `ActivityListResponse` — the channel history: `id, company_id (null = about the channel), company_name, contact_id, deal_id, deal_title, kind, message, data, actor, created_at`, newest first; the CRM activities carry their parts in `data` (`concept.md` § Activity data) |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
-| GET | `<channel_idx>/imports/fields/` | — | 200 `ImportFieldListResponse` `{results: [{key, label, entity, custom, kind}]}` — the fields a column can go to: built-in ones in display order, then the active custom fields (`attr.<key>`, `contact.attr.<key>`); `ignore` is not listed |
 | POST | `<channel_idx>/imports/preview/` | `multipart/form-data` `file` (`.csv` or `.xlsx`, ≤ 20 MB); `mapping` (optional, JSON `{column: field \| "ignore"}`: the user's choices, the other columns get the proposal) | 200 `ImportPreviewResponse` — nothing is stored |
-| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: CSV or `.xlsx`, ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional); `mapping` (optional: JSON `{column: field \| "ignore"}`, columns left out are ignored, or `auto` = the proposal as it is; absent = the exact-name import) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
+| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: CSV or `.xlsx`, ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional); `mapping` (optional: JSON `{column: field \| "ignore"}`, columns left out are ignored; absent = the exact-name import; `auto` is refused) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |
 
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
@@ -242,7 +241,7 @@ columns mapped to `ignore`.
 (csv), sheet (xlsx: the first), row_count, columns, rows, warnings, fields`.
 - `columns[]`: `name` (the mapping key: the header stripped; an empty header is `Column <n>`, a repeated one
   `<name> (2)`), `index`, `field` (a key of `fields` or `ignore`), `confidence` (0..1), `level` (`certain` ≥ 0.85,
-  `check`, `unrecognised`), `source` (`exact` · `header` · `custom_field` · `content` · `ai` · `user` · `none`),
+  `check`, `unrecognised`), `source` (`exact` · `header` · `custom_field` · `content` · `user` · `none`),
   `reason` when ignored (`unrecognised` · `duplicate_field` + `conflict_with` · `no_crm_field` · `empty_column` ·
   `user`), `concept` (a recognised idea without a built-in field: `tax_id`, `regon`, `krs`, `street`, `city`,
   `postal_code`, `country`, `region`, `address`, `employees`, `revenue`, `linkedin`), `samples` (≤ 5 values).

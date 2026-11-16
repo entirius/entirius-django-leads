@@ -2102,8 +2102,8 @@ paths:
                   description: Owner of created companies and of matched ones without an owner; absent = none.
                 mapping:
                   type: string
-                  description: 'JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored), or
-                    "auto" for the proposal of imports/preview/ as it is; absent = the exact-name import.'
+                  description: 'JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored);
+                    absent = the exact-name import.'
               required:
               - file
       security:
@@ -2148,37 +2148,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportBatchDetailResponse'
-          description: ''
-        '400':
-          description: No response body
-        '401':
-          description: No response body
-        '403':
-          description: No response body
-        '404':
-          description: No response body
-  /api/leads/v2/admin/{channel_idx}/imports/fields/:
-    get:
-      operationId: leads_imports_fields
-      description: Built-in fields in display order, then the channel's active custom fields (attr.<key>, contact.attr.<key>);
-        `ignore` is not listed.
-      summary: The fields an import column can go to
-      parameters:
-      - in: path
-        name: channel_idx
-        schema:
-          type: string
-        required: true
-      tags:
-      - Leads Imports
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImportFieldListResponse'
           description: ''
         '400':
           description: No response body
@@ -3442,8 +3411,8 @@ paths:
                   description: Owner of created companies and of matched ones without an owner; absent = none.
                 mapping:
                   type: string
-                  description: 'JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored), or
-                    "auto" for the proposal of imports/preview/ as it is; absent = the exact-name import.'
+                  description: 'JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored);
+                    absent = the exact-name import.'
               required:
               - file
       security:
@@ -6483,7 +6452,7 @@ components:
           title: Level
           type: string
         source:
-          description: exact, header, custom_field, content, ai, user or none.
+          description: exact, header, custom_field, content, user or none.
           examples:
           - header
           title: Source
@@ -6533,18 +6502,6 @@ components:
       - concept
       - samples
       title: ImportColumnProposal
-      type: object
-    ImportFieldListResponse:
-      properties:
-        results:
-          description: Built-in fields in display order, then custom fields.
-          items:
-            $ref: '#/components/schemas/ImportFieldResponse'
-          title: Results
-          type: array
-      required:
-      - results
-      title: ImportFieldListResponse
       type: object
     ImportFieldResponse:
       properties:
@@ -6649,7 +6606,7 @@ components:
           title: Warnings
           type: array
         fields:
-          description: The fields a column can go to (same as imports/fields/).
+          description: The fields a column can go to (built-in ones in display order, then the channel's active custom fields; `ignore` is not listed).
           items:
             $ref: '#/components/schemas/ImportFieldResponse'
           title: Fields

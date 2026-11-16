@@ -4,13 +4,19 @@
 
 """An uploaded import file read into a table of strings: CSV (`,` `;` tab `|`; UTF-8, UTF-8/UTF-16 with BOM,
 cp1250) or `.xlsx` (the first sheet). The first non-empty row is the header; empty rows are dropped, so row numbers
-count the header as 1 and the non-empty data rows after it. Nothing here touches the database."""
+count the header as 1 and the non-empty data rows after it. Nothing here touches the database.
+
+A file over `LEADS_IMPORT_MAX_ROWS` / `LEADS_IMPORT_MAX_COLUMNS` (and an .xlsx that unpacks past
+`LEADS_IMPORT_MAX_UNPACKED_MB`) is refused before it is held in memory."""
 
 import csv
 import io
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
+from xml.etree.ElementTree import ParseError
+
+from django_leads import settings as leads_settings
 
 ZIP_MAGIC = b"PK\x03\x04"
 OLE_MAGIC = b"\xd0\xcf\x11\xe0"  # .xls, .doc — the old binary Office formats
@@ -20,7 +26,7 @@ SNIFF_LINES = 20
 
 class ImportFileError(ValueError):
     """The file cannot be read; `code` is the API issue (`unsupported_format`, `encoding`, `unreadable`,
-    `no_header`)."""
+    `no_header`, `too_large`, `too_many_rows`, `too_many_columns`)."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -103,18 +109,51 @@ def _read_csv(text: str, encoding: str) -> Table:
 def _read_xlsx(data: bytes) -> Table:
     from openpyxl import load_workbook
 
+    _check_unpacked_size(data)
     try:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     except (zipfile.BadZipFile, KeyError, OSError, ValueError, TypeError):
         raise ImportFileError("unreadable", "The .xlsx file cannot be read.") from None
     try:
-        sheet = workbook.worksheets[0] if workbook.worksheets else None
-        if sheet is None:
+        if not workbook.worksheets:
             raise ImportFileError("no_header", "The file has no header row.")
-        rows = [[cell_text(value) for value in row] for row in sheet.iter_rows(values_only=True)]
-        return _table("xlsx", rows, sheet=sheet.title)
+        sheet = workbook.worksheets[0]
+        return _table("xlsx", _sheet_rows(sheet), sheet=sheet.title)
+    except ImportFileError:
+        raise
+    except (ParseError, zipfile.BadZipFile, KeyError, OSError, ValueError, TypeError):
+        raise ImportFileError("unreadable", "The .xlsx file cannot be read.") from None
     finally:
         workbook.close()
+
+
+def _check_unpacked_size(data: bytes) -> None:
+    """A few KB of zip can unpack to gigabytes: the declared sizes of the parts are summed before anything is parsed
+    (the zip reader never yields more than a part declares)."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            unpacked = sum(info.file_size for info in archive.infolist())
+    except zipfile.BadZipFile:
+        raise ImportFileError("unreadable", "The .xlsx file cannot be read.") from None
+    if unpacked > leads_settings.LEADS_IMPORT_MAX_UNPACKED_MB * 1024 * 1024:
+        raise ImportFileError("too_large", "The .xlsx file is too large once unpacked.")
+
+
+def _sheet_rows(sheet) -> list[list[str]]:
+    """The non-empty rows of the sheet, never wider than the column limit (+1, to see it is exceeded) and never more
+    than the row limit: a lone formatted cell far to the right or far down costs neither memory nor a padded row."""
+    max_rows = leads_settings.LEADS_IMPORT_MAX_ROWS + 1  # the header counts
+    rows = []
+    for values in sheet.iter_rows(values_only=True, max_col=leads_settings.LEADS_IMPORT_MAX_COLUMNS + 1):
+        if all(value is None for value in values):
+            continue
+        row = [cell_text(value) for value in values]
+        if not any(row):
+            continue
+        if len(rows) == max_rows:
+            raise ImportFileError("too_many_rows", f"The file has more than {max_rows - 1} rows.")
+        rows.append(row)
+    return rows
 
 
 def cell_text(value: object) -> str:
@@ -138,9 +177,29 @@ def _table(kind: str, rows: list[list[str]], **meta: str) -> Table:
         raise ImportFileError("no_header", "The file has no header row.")
     raw_header, data_rows = filled[0], filled[1:]
     width = _used_width(filled)
+    _check_size(len(data_rows), width)
     raw_header = (raw_header + [""] * width)[:width]
     data_rows = [(row + [""] * width)[:width] for row in data_rows]
     return Table(kind, unique_names(raw_header), data_rows, raw_header=raw_header, **meta)
+
+
+def _check_size(rows: int, columns: int) -> None:
+    if rows > leads_settings.LEADS_IMPORT_MAX_ROWS:
+        raise ImportFileError("too_many_rows", f"The file has more than {leads_settings.LEADS_IMPORT_MAX_ROWS} rows.")
+    if columns > leads_settings.LEADS_IMPORT_MAX_COLUMNS:
+        raise ImportFileError(
+            "too_many_columns", f"The file has more than {leads_settings.LEADS_IMPORT_MAX_COLUMNS} columns."
+        )
+
+
+def check_csv_size(text: str) -> None:
+    """The row and column limits for a CSV that goes to the import as it is (the exact-name import)."""
+    rows = 0
+    columns = 0
+    for row in csv.reader(io.StringIO(text, newline="")):
+        rows += 1
+        columns = max(columns, len(row))
+    _check_size(max(rows - 1, 0), columns)
 
 
 def _used_width(rows: list[list[str]]) -> int:

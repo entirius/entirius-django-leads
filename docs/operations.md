@@ -58,11 +58,17 @@ The proposal for each column, first match wins:
 4. a synonym as whole words inside a longer header (`Telefon komórkowy służbowy`) — 0.75 (0.55 for a lone `nazwa`,
    `adres`, …);
 5. the values (the first 200 non-empty ones, ≥ 80 % must fit): email, website (scheme, `www.` or a path) or domain,
-   legal basis, postal code `00-000`, NIP and REGON with a valid check digit, phone (7–15 digits), an active lead type
+   postal code `00-000`, NIP and REGON with a valid check digit, phone (7–15 digits), an active lead type
    code, a language code — 0.6–0.8. Values that are clearly addresses, sites or phones overrule a free-text header
    (`Kontakt` full of emails is the email column);
-6. with `LEADS_IMPORT_AI_MODEL` set (and `AI_TOOLBOX_ENABLED`), one toolbox call for the columns still unrecognised:
-   their header and at most 5 values each, never the file — 0.6; a failing toolbox leaves them unrecognised.
+
+The legal basis is never guessed from values: a header word proposes it, otherwise it is the user's choice. An import
+takes only a mapping object (`{column: field | "ignore"}`), never a proposal on trust.
+
+Limits (`install.md` § Settings): `LEADS_IMPORT_MAX_ROWS`, `LEADS_IMPORT_MAX_COLUMNS` and, for an `.xlsx`,
+`LEADS_IMPORT_MAX_UNPACKED_MB` of its parts once unpacked; they apply to every import endpoint, the exact-name import
+included. A file over a limit, and a corrupt sheet, are a 400. The header must be the first non-empty row: a title row
+above it becomes the header.
 
 One field takes one column: the user's choice, then the higher confidence, then the earlier column; the others are
 ignored as `duplicate_field`. `full_name` is split (`Jan Kowalski` → Jan / Kowalski, `Kowalski, Jan` → Jan /

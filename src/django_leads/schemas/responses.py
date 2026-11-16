@@ -276,10 +276,6 @@ class ImportFieldResponse(BaseModel):
     kind: str = Field(description="text for built-in fields, the attribute kind for custom ones.", examples=["text"])
 
 
-class ImportFieldListResponse(BaseModel):
-    results: list[ImportFieldResponse] = Field(description="Built-in fields in display order, then custom fields.")
-
-
 class ImportColumnProposal(BaseModel):
     name: str = Field(
         description="Column name (the mapping key); unique, empty header = 'Column <n>'.", examples=["WWW"]
@@ -288,7 +284,7 @@ class ImportColumnProposal(BaseModel):
     field: str = Field(description="Proposed field key, or ignore.", examples=["website"])
     confidence: float = Field(description="0..1.", examples=[0.95])
     level: str = Field(description="certain, check or unrecognised.", examples=["certain"])
-    source: str = Field(description="exact, header, custom_field, content, ai, user or none.", examples=["header"])
+    source: str = Field(description="exact, header, custom_field, content, user or none.", examples=["header"])
     reason: str | None = Field(
         description="Why ignored: unrecognised, duplicate_field, no_crm_field, empty_column or user.", examples=[None]
     )
@@ -324,7 +320,9 @@ class ImportPreviewResponse(BaseModel):
     columns: list[ImportColumnProposal] = Field(description="One entry per column, in file order.")
     rows: list[ImportPreviewRow] = Field(description="The first 5 data rows after the mapping.")
     warnings: list[ImportWarning] = Field(description="What would make the import skip or degrade rows.")
-    fields: list[ImportFieldResponse] = Field(description="The fields a column can go to (same as imports/fields/).")
+    fields: list[ImportFieldResponse] = Field(
+        description="The fields a column can go to (built-in ones in display order, then the channel's active custom fields; `ignore` is not listed)."
+    )
 
 
 class ImportBatchListResponse(_Page):

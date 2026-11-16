@@ -2,11 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """U17: an import file whose headers are not the exact column names — the proposal, the preview, the mapped import,
-xlsx / cp1250 / `;` files, conflicts, custom fields, the optional AI step, and the unchanged exact-name import."""
+xlsx / cp1250 / `;` files, conflicts, custom fields, the file limits, and the unchanged exact-name import."""
 
 import io
 import json
-from unittest import mock
+import zipfile
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -32,7 +32,15 @@ def preview(admin_api, content, name="baza.csv", mapping=None):
     return admin_api.post(api_url("imports/preview/"), body, format="multipart")
 
 
-def import_now(admin_api, content, name="baza.csv", mapping="auto", **extra):
+PROPOSAL = object()
+MAPPED = {"domain": "domain", "email": "email"}
+
+
+def import_now(admin_api, content, name="baza.csv", mapping=PROPOSAL, **extra):
+    """`test/import-now/`; by default with the mapping the preview proposes, confirmed as it is."""
+    if mapping is PROPOSAL:
+        columns = columns_of(preview(admin_api, content, name))
+        mapping = {column: item["field"] for column, item in columns.items()}
     body = {"file": upload(content, name), **extra}
     if mapping is not None:
         body["mapping"] = mapping if isinstance(mapping, str) else json.dumps(mapping)
@@ -184,7 +192,7 @@ def test_custom_fields_by_key_label_and_concept(admin_api, channel, custom_field
     columns = columns_of(preview(admin_api, "Numer NIP,Profil LinkedIn,domain\n5260250274,in/jan,a.pl\n"))
     assert (columns["Numer NIP"]["field"], columns["Numer NIP"]["source"]) == ("attr.nip", "custom_field")
     assert columns["Profil LinkedIn"]["field"] == "contact.attr.linkedin"
-    fields = admin_api.get(api_url("imports/fields/")).json()["results"]
+    fields = preview(admin_api, "Numer NIP,domain\n5260250274,a.pl\n").json()["fields"]
     assert [item["key"] for item in fields][-2:] == ["attr.nip", "contact.attr.linkedin"]
     assert fields[0] == {"key": "company_name", "label": "Company name", "entity": "company", "custom": False,
                          "kind": "text"}  # fmt: skip
@@ -320,7 +328,7 @@ def test_file_errors_are_v2_400s(admin_api, channel):
         "UNSUPPORTED_FORMAT",
     )
     assert issue(admin_api.post(api_url("imports/preview/"), {}, format="multipart")) == ("file", "REQUIRED")
-    assert issue(import_now(admin_api, b"", mapping="auto")) == ("file", "NO_HEADER")
+    assert issue(import_now(admin_api, b"", mapping={"x": "email"})) == ("file", "NO_HEADER")
 
 
 # --- C9: `name,domain,email` -----------------------------------------------------------------------------------------
@@ -348,8 +356,9 @@ def test_c9_file_gets_company_names(admin_api, channel):
 
 
 def test_queued_import_keeps_the_mapping_on_the_batch(admin_api, channel, django_capture_on_commit_callbacks):
+    mapping = json.dumps({"name": "company_name", "domain": "domain", "email": "email"})
     with django_capture_on_commit_callbacks(execute=True):
-        response = admin_api.post(api_url("imports/"), {"file": upload(C9), "mapping": "auto"}, format="multipart")
+        response = admin_api.post(api_url("imports/"), {"file": upload(C9), "mapping": mapping}, format="multipart")
     assert response.status_code == 202, response.content
     assert response.json()["column_mapping"][0] == {"column": "name", "field": "company_name", "label": "Company name"}
     batch = ImportBatch.objects.get(pk=response.json()["id"])
@@ -425,35 +434,111 @@ def test_viewer_without_staff_cannot_preview(customer_api, channel):
     assert preview(customer_api, C9).status_code == 403
 
 
-# --- AI --------------------------------------------------------------------------------------------------------------
+# --- the mapping is never guessed into the import --------------------------------------------------------------------
 
 
-def test_ai_is_off_by_default(admin_api, channel):
-    with mock.patch.object(import_mapping_service, "ai_complete") as ai:
-        columns_of(preview(admin_api, "domain,qwerty\na.pl,Ogrodnictwo\n"))
-    ai.assert_not_called()
+@pytest.mark.parametrize("path", ["imports/", "test/import-now/", "imports/preview/"])
+def test_mapping_auto_is_refused(admin_api, channel, path):
+    response = admin_api.post(api_url(path), {"file": upload(C9), "mapping": "auto"}, format="multipart")
+    assert issue(response) == ("mapping", "INVALID_JSON")
+    assert not ImportBatch.objects.exists() and not Company.objects.exists()
 
 
-def test_ai_names_only_the_unrecognised_columns(admin_api, channel, monkeypatch):
-    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_AI_MODEL", "fake-model")
-    answer = [{"name": "qwerty", "field": "industry"}, {"name": "domain", "field": "email"}]
-    with mock.patch.object(import_mapping_service, "ai_complete", return_value=answer) as ai:
-        columns = columns_of(preview(admin_api, "domain,qwerty\na.pl,Ogrodnictwo\n"))
-    model, sent, allowed = ai.call_args.args
-    assert model == "fake-model" and sent == [{"name": "qwerty", "samples": ["Ogrodnictwo"]}]
-    assert "domain" not in allowed
-    assert (columns["qwerty"]["field"], columns["qwerty"]["source"], columns["qwerty"]["level"]) == (
-        "industry",
-        "ai",
-        "check",
-    )
-    assert columns["domain"]["field"] == "domain"
+def test_legal_basis_is_not_proposed_from_the_values(admin_api, channel):
+    columns = columns_of(preview(admin_api, "domain,E-mail,qwerty\na.pl,jan@a.pl,consent\nb.pl,ola@b.pl,consent\n"))
+    assert (columns["qwerty"]["field"], columns["qwerty"]["reason"]) == ("ignore", "unrecognised")
 
 
-def test_ai_failure_leaves_the_column_unrecognised(admin_api, channel, monkeypatch):
-    from django_utils.toolbox.errors import ToolboxError
+def test_legal_basis_comes_from_the_users_mapping(admin_api, channel):
+    mapping = {"domain": "domain", "E-mail": "email", "qwerty": "legal_basis"}
+    body = import_now(admin_api, "domain,E-mail,qwerty\na.pl,jan@a.pl,consent\n", mapping=mapping).json()
+    assert body["column_mapping"][2]["field"] == "legal_basis"
 
-    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_AI_MODEL", "fake-model")
-    with mock.patch("django_utils.toolbox.client.ToolboxClient.complete", side_effect=ToolboxError(503, "down")):
-        columns = columns_of(preview(admin_api, "domain,qwerty\na.pl,Ogrodnictwo\n"))
-    assert columns["qwerty"]["reason"] == "unrecognised"
+
+# --- file limits -----------------------------------------------------------------------------------------------------
+
+
+def zipped(name: str, content: bytes) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(name, content)
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("mapping", [MAPPED, None])
+def test_xlsx_unpacking_past_the_limit_is_refused_before_parsing(admin_api, channel, monkeypatch, mapping):
+    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_MAX_UNPACKED_MB", 10)
+    bomb = zipped("xl/worksheets/sheet1.xml", b"\x00" * 20_000_000)
+    assert len(bomb) < 100_000
+    assert issue(import_now(admin_api, bomb, name="b.xlsx", mapping=mapping)) == ("file", "TOO_LARGE")
+    assert issue(preview(admin_api, bomb, name="b.xlsx")) == ("file", "TOO_LARGE")
+    assert not ImportBatch.objects.exists()
+
+
+ROWS = [["domain", "email"], *[[f"a{n}.pl", f"jan@a{n}.pl"] for n in range(5)]]
+
+
+def csv_text(rows: list[list]) -> str:
+    return "".join(",".join(map(str, row)) + "\n" for row in rows)
+
+
+@pytest.mark.parametrize("mapping", [MAPPED, None])
+@pytest.mark.parametrize("kind", ["csv", "xlsx"])
+def test_too_many_rows_is_a_400(admin_api, channel, monkeypatch, kind, mapping):
+    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_MAX_ROWS", 4)
+    content, name = (csv_text(ROWS), "a.csv") if kind == "csv" else (xlsx_bytes(ROWS), "a.xlsx")
+    assert issue(import_now(admin_api, content, name=name, mapping=mapping)) == ("file", "TOO_MANY_ROWS")
+    assert not ImportBatch.objects.exists()
+
+
+def test_the_row_limit_counts_data_rows_only(admin_api, channel, monkeypatch):
+    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_MAX_ROWS", 5)
+    for content, name in ((csv_text(ROWS), "a.csv"), (xlsx_bytes(ROWS), "a.xlsx")):
+        assert import_now(admin_api, content, name=name).json()["row_count"] == 5
+
+
+@pytest.mark.parametrize("mapping", [MAPPED, None])
+@pytest.mark.parametrize("kind", ["csv", "xlsx"])
+def test_too_many_columns_is_a_400(admin_api, channel, monkeypatch, kind, mapping):
+    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_MAX_COLUMNS", 3)
+    rows = [["domain", "email", "a", "b"], ["a.pl", "jan@a.pl", "1", "2"]]
+    content, name = (csv_text(rows), "a.csv") if kind == "csv" else (xlsx_bytes(rows), "a.xlsx")
+    assert issue(import_now(admin_api, content, name=name, mapping=mapping)) == ("file", "TOO_MANY_COLUMNS")
+    assert issue(preview(admin_api, content, name=name)) == ("file", "TOO_MANY_COLUMNS")
+
+
+def test_a_lone_far_cell_does_not_widen_the_sheet(admin_api, channel):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["domain", "email"])
+    sheet.append(["a.pl", "jan@a.pl"])
+    sheet["XFD500"] = "x"
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    body = preview(admin_api, buffer.getvalue(), name="far.xlsx").json()
+    assert [column["name"] for column in body["columns"]] == ["domain", "email"]
+
+
+def corrupt_sheet(data: bytes) -> bytes:
+    """The xlsx with its first sheet cut in the middle of an element."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as target:
+        for info in source.infolist():
+            content = source.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                content = content[: len(content) // 2]
+            target.writestr(info.filename, content)
+    return out.getvalue()
+
+
+@pytest.mark.parametrize("mapping", [MAPPED, None])
+def test_a_corrupt_sheet_is_a_400_not_a_500(admin_api, channel, mapping):
+    broken = corrupt_sheet(xlsx_bytes([["domain", "email"], *[[f"a{n}.pl", f"j@a{n}.pl"] for n in range(30)]]))
+    assert issue(preview(admin_api, broken, name="broken.xlsx")) == ("file", "UNREADABLE")
+    assert issue(import_now(admin_api, broken, name="broken.xlsx", mapping=mapping)) == ("file", "UNREADABLE")
+
+
+def test_openpyxl_parses_xml_through_defusedxml():
+    from openpyxl.xml import DEFUSEDXML
+
+    assert DEFUSEDXML is True
