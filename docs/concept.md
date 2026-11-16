@@ -188,6 +188,11 @@ reply sets `Contact.wrong_person_at`; the gate, the recipient pick and the rotat
 address's drafts waiting for review are withdrawn (communicator `review_service.withdraw`, "the contact is flagged as
 the wrong person").
 
+A referral request of communicator (`Message.referral_request`, the answer to a `wrong_person` reply asking who the
+right person is) passes the gate's `wrong_person` reason only (`recipient_check` receiver, `REFERRAL_ALLOWED`); every
+other reason refuses it as usual. Nothing looks for another person automatically: a company that lost its last
+person simply has nobody to mail until a salesperson adds one.
+
 The draft passes the company's `lead_type` as communicator's `audience`: one `template_key` per rule, the lead type
 picks the template variant — communicator's cascade (language, lead type) → (language, any) → (channel default
 language, lead type) → (default language, any). A type without its own variant gets the blank-audience template; no

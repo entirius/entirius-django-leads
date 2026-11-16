@@ -7,8 +7,13 @@ paths:
   /api/leads/v2/admin/{channel_idx}/activities/:
     get:
       operationId: leads_activities_list
-      summary: Timeline of the channel, newest first
+      summary: History of the channel, newest first
       parameters:
+      - in: query
+        name: actor
+        schema:
+          type: string
+        description: Exact actor (username, system, …).
       - in: path
         name: channel_idx
         schema:
@@ -19,6 +24,23 @@ paths:
         schema:
           type: integer
         description: Company id.
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: First day, included.
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: Last day, included.
+      - in: query
+        name: kind
+        schema:
+          type: string
+        description: Activity kinds, comma-separated.
       - in: query
         name: page
         schema:
@@ -37,6 +59,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActivityListResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/activities/actors/:
+    get:
+      operationId: leads_activities_actors_list
+      summary: Every actor of the channel history (the person filter)
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Activities
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityActorsResponse'
           description: ''
         '400':
           description: No response body
@@ -549,6 +600,11 @@ paths:
         schema:
           type: string
         description: Lead type code of the channel, or UNKNOWN.
+      - in: query
+        name: mine_first
+        schema:
+          type: boolean
+        description: true = the caller's companies first, `sort` orders within each part (no effect without a user).
       - in: query
         name: origin
         schema:
@@ -2017,7 +2073,9 @@ paths:
           description: No response body
     post:
       operationId: api_leads_v2_admin_imports_create
-      summary: Upload a CSV; the import runs on the leads queue
+      description: Without `mapping` the exact column names are read (`company_name`, `domain`, …); with it the file is read
+        as `imports/preview/` reads it and each column goes to its mapped field.
+      summary: Upload a CSV or XLSX; the import runs on the leads queue
       parameters:
       - in: path
         name: channel_idx
@@ -2042,6 +2100,10 @@ paths:
                 owner_id:
                   type: integer
                   description: Owner of created companies and of matched ones without an owner; absent = none.
+                mapping:
+                  type: string
+                  description: 'JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored);
+                    absent = the exact-name import.'
               required:
               - file
       security:
@@ -2086,6 +2148,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportBatchDetailResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
+  /api/leads/v2/admin/{channel_idx}/imports/preview/:
+    post:
+      operationId: leads_imports_preview
+      description: 'Nothing is stored: the import sends the file again with the confirmed `mapping`.'
+      summary: Propose a column mapping for a CSV or XLSX and show the first rows after it
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: .csv or .xlsx (first sheet).
+                mapping:
+                  type: string
+                  description: 'JSON object {"<file column>": "<field key>" | "ignore"}: the user''s choices; columns left
+                    out get the proposal.'
+              required:
+              - file
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportPreviewResponse'
           description: ''
         '400':
           description: No response body
@@ -3301,6 +3409,10 @@ paths:
                 owner_id:
                   type: integer
                   description: Owner of created companies and of matched ones without an owner; absent = none.
+                mapping:
+                  type: string
+                  description: 'JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored);
+                    absent = the exact-name import.'
               required:
               - file
       security:
@@ -3451,6 +3563,20 @@ paths:
           description: No response body
 components:
   schemas:
+    ActivityActorsResponse:
+      properties:
+        results:
+          description: Every actor of the channel's history, sorted.
+          examples:
+          - - manager
+          items:
+            type: string
+          title: Results
+          type: array
+      required:
+      - results
+      title: ActivityActorsResponse
+      type: object
     ActivityListResponse:
       properties:
         count:
@@ -3476,9 +3602,9 @@ components:
           - null
           title: Previous
         results:
-          description: Timeline entries, newest first.
+          description: History entries, newest first.
           items:
-            $ref: '#/components/schemas/ActivityResponse'
+            $ref: '#/components/schemas/HistoryEntryResponse'
           title: Results
           type: array
       required:
@@ -3497,11 +3623,13 @@ components:
           title: Id
           type: integer
         company_id:
-          description: Company id.
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Company id; null = an entry about the channel (settings).
           examples:
           - 100
           title: Company Id
-          type: integer
         contact_id:
           anyOf:
           - type: integer
@@ -5866,6 +5994,101 @@ components:
       - email
       title: GdprRequest
       type: object
+    HistoryEntryResponse:
+      description: 'An entry of the channel history: the activity plus the names of what it is about.'
+      properties:
+        id:
+          description: Activity id.
+          examples:
+          - 1
+          title: Id
+          type: integer
+        company_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Company id; null = an entry about the channel (settings).
+          examples:
+          - 100
+          title: Company Id
+        contact_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Contact id.
+          examples:
+          - null
+          title: Contact Id
+        deal_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Deal the entry is about; null = none or deleted.
+          examples:
+          - null
+          title: Deal Id
+        kind:
+          description: Activity kind.
+          examples:
+          - import
+          title: Kind
+          type: string
+        message:
+          description: Short description.
+          examples:
+          - import matched
+          title: Message
+          type: string
+        data:
+          additionalProperties: true
+          description: Structured details.
+          examples:
+          - {}
+          title: Data
+          type: object
+        actor:
+          description: Username, system or import:<batch id>.
+          examples:
+          - system
+          title: Actor
+          type: string
+        created_at:
+          description: Created.
+          examples:
+          - '2026-09-13T12:00:00Z'
+          format: date-time
+          title: Created At
+          type: string
+        company_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Company name; null = no company.
+          examples:
+          - Ogród Sp. z o.o.
+          title: Company Name
+        deal_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Deal title; null = no deal.
+          examples:
+          - null
+          title: Deal Title
+      required:
+      - id
+      - company_id
+      - contact_id
+      - deal_id
+      - kind
+      - message
+      - data
+      - actor
+      - created_at
+      - company_name
+      - deal_title
+      title: HistoryEntryResponse
+      type: object
     ImportBatchDetailResponse:
       properties:
         id:
@@ -5971,6 +6194,12 @@ components:
           - 0
           title: Automation Started Count
           type: integer
+        column_mapping:
+          description: Which column went to which field, in file order; [] for an exact-name import (no mapping).
+          items:
+            $ref: '#/components/schemas/ImportColumnMappingEntry'
+          title: Column Mapping
+          type: array
         report:
           description: Skipped rows (row number and reason code, no row values), capped at LEADS_IMPORT_REPORT_MAX.
           items:
@@ -6138,6 +6367,12 @@ components:
           - 0
           title: Automation Started Count
           type: integer
+        column_mapping:
+          description: Which column went to which field, in file order; [] for an exact-name import (no mapping).
+          items:
+            $ref: '#/components/schemas/ImportColumnMappingEntry'
+          title: Column Mapping
+          type: array
       required:
       - id
       - source
@@ -6155,6 +6390,267 @@ components:
       - ignored_columns
       - automation_started_count
       title: ImportBatchResponse
+      type: object
+    ImportColumnMappingEntry:
+      properties:
+        column:
+          description: Column of the file.
+          examples:
+          - Nazwa firmy
+          title: Column
+          type: string
+        field:
+          description: Field key it went to, or ignore.
+          examples:
+          - company_name
+          title: Field
+          type: string
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: English label of the field; null for ignore.
+          examples:
+          - Company name
+          title: Label
+      required:
+      - column
+      - field
+      - label
+      title: ImportColumnMappingEntry
+      type: object
+    ImportColumnProposal:
+      properties:
+        name:
+          description: Column name (the mapping key); unique, empty header = 'Column <n>'.
+          examples:
+          - WWW
+          title: Name
+          type: string
+        index:
+          description: Position in the file, from 0.
+          examples:
+          - 1
+          title: Index
+          type: integer
+        field:
+          description: Proposed field key, or ignore.
+          examples:
+          - website
+          title: Field
+          type: string
+        confidence:
+          description: 0..1.
+          examples:
+          - 0.95
+          title: Confidence
+          type: number
+        level:
+          description: certain, check or unrecognised.
+          examples:
+          - certain
+          title: Level
+          type: string
+        source:
+          description: exact, header, custom_field, content, user or none.
+          examples:
+          - header
+          title: Source
+          type: string
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'Why ignored: unrecognised, duplicate_field, no_crm_field, empty_column or user.'
+          examples:
+          - null
+          title: Reason
+        concept:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Recognised idea without a built-in field (tax_id, regon, krs, street, city, postal_code, country, region,
+            address, employees, revenue, linkedin).
+          examples:
+          - null
+          title: Concept
+        conflict_with:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: 'With duplicate_field: the column that kept the field.'
+          examples:
+          - null
+          title: Conflict With
+        samples:
+          description: Up to 5 distinct non-empty values.
+          examples:
+          - - https://alfa.pl
+          items:
+            type: string
+          title: Samples
+          type: array
+      required:
+      - name
+      - index
+      - field
+      - confidence
+      - level
+      - source
+      - reason
+      - concept
+      - samples
+      title: ImportColumnProposal
+      type: object
+    ImportFieldResponse:
+      properties:
+        key:
+          description: 'Field key of a mapping: built-in, attr.<key> or contact.attr.<key>.'
+          examples:
+          - email
+          title: Key
+          type: string
+        label:
+          description: English label (built-in) or the custom field's own label.
+          examples:
+          - Email
+          title: Label
+          type: string
+        entity:
+          description: company or contact.
+          examples:
+          - contact
+          title: Entity
+          type: string
+        custom:
+          description: A custom field (attribute definition) of the channel.
+          examples:
+          - false
+          title: Custom
+          type: boolean
+        kind:
+          description: text for built-in fields, the attribute kind for custom ones.
+          examples:
+          - text
+          title: Kind
+          type: string
+      required:
+      - key
+      - label
+      - entity
+      - custom
+      - kind
+      title: ImportFieldResponse
+      type: object
+    ImportPreviewResponse:
+      properties:
+        filename:
+          description: Uploaded file name.
+          examples:
+          - baza.xlsx
+          title: Filename
+          type: string
+        format:
+          description: csv or xlsx.
+          examples:
+          - xlsx
+          title: Format
+          type: string
+        encoding:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'CSV: utf-8, utf-8-sig, utf-16 or cp1250.'
+          examples:
+          - null
+          title: Encoding
+        delimiter:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'CSV: the detected separator.'
+          examples:
+          - null
+          title: Delimiter
+        sheet:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'xlsx: the sheet read (the first).'
+          examples:
+          - Arkusz1
+          title: Sheet
+        row_count:
+          description: Non-empty data rows.
+          examples:
+          - 128
+          title: Row Count
+          type: integer
+        columns:
+          description: One entry per column, in file order.
+          items:
+            $ref: '#/components/schemas/ImportColumnProposal'
+          title: Columns
+          type: array
+        rows:
+          description: The first 5 data rows after the mapping.
+          items:
+            $ref: '#/components/schemas/ImportPreviewRow'
+          title: Rows
+          type: array
+        warnings:
+          description: What would make the import skip or degrade rows.
+          items:
+            $ref: '#/components/schemas/ImportWarning'
+          title: Warnings
+          type: array
+        fields:
+          description: The fields a column can go to (built-in ones in display order, then the channel's active custom fields; `ignore` is not listed).
+          items:
+            $ref: '#/components/schemas/ImportFieldResponse'
+          title: Fields
+          type: array
+      required:
+      - filename
+      - format
+      - encoding
+      - delimiter
+      - sheet
+      - row_count
+      - columns
+      - rows
+      - warnings
+      - fields
+      title: ImportPreviewResponse
+      type: object
+    ImportPreviewRow:
+      properties:
+        row:
+          description: Row number in the file (header = 1, empty rows not counted).
+          examples:
+          - 2
+          title: Row
+          type: integer
+        values:
+          additionalProperties:
+            type: string
+          description: Non-empty values by field key after the mapping.
+          title: Values
+          type: object
+        skip_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Reason code the import would skip the row with.
+          examples:
+          - null
+          title: Skip Reason
+      required:
+      - row
+      - values
+      - skip_reason
+      title: ImportPreviewRow
       type: object
     ImportReportEntry:
       properties:
@@ -6174,6 +6670,23 @@ components:
       - row
       - reason
       title: ImportReportEntry
+      type: object
+    ImportWarning:
+      properties:
+        code:
+          description: no_company_key or no_company_name.
+          examples:
+          - no_company_name
+          title: Code
+          type: string
+        message:
+          description: English explanation.
+          title: Message
+          type: string
+      required:
+      - code
+      - message
+      title: ImportWarning
       type: object
     LeadTypeListResponse:
       properties:

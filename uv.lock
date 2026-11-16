@@ -496,6 +496,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "distlib"
 version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -655,8 +664,8 @@ wheels = [
 
 [[package]]
 name = "entirius-django-communicator"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.5.0"
+source = { git = "https://github.com/entirius/entirius-django-communicator?branch=develop#dbc3b414b85c672f5fd065e574773535e598c25d" }
 dependencies = [
     { name = "celery" },
     { name = "celery-once" },
@@ -675,10 +684,6 @@ dependencies = [
     { name = "nh3" },
     { name = "pydantic" },
     { name = "redis" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/37/0a/365d10edf9991d7b829466f66db1577d00b8cd6ba6aaa6800687c526ec6b/entirius_django_communicator-0.4.0.tar.gz", hash = "sha256:56800cc1ba04fc49a63bf2c36ae55c949433e31357a99353b7645095ff496f48", size = 233049, upload-time = "2026-10-12T08:55:12.861Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/57/45/845001fade1d24ec371decc847a3d9a4c4b84b7f4e0b7b826fa3aca3d473/entirius_django_communicator-0.4.0-py3-none-any.whl", hash = "sha256:857582a41069f9d4297244a1e2d27193286d095df0649a9455c606f06b3c9985", size = 145651, upload-time = "2026-10-12T08:55:11.766Z" },
 ]
 
 [[package]]
@@ -734,6 +739,7 @@ source = { editable = "." }
 dependencies = [
     { name = "celery" },
     { name = "celery-once" },
+    { name = "defusedxml" },
     { name = "django", version = "5.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "django", version = "6.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "djangorestframework" },
@@ -744,6 +750,7 @@ dependencies = [
     { name = "entirius-django-regional" },
     { name = "entirius-django-siteintel" },
     { name = "entirius-django-utils" },
+    { name = "openpyxl" },
     { name = "pydantic", extra = ["email"] },
     { name = "tldextract" },
 ]
@@ -763,6 +770,7 @@ test = [
     { name = "dj-database-url" },
     { name = "entirius-django-contact-forms" },
     { name = "entirius-django-notifications" },
+    { name = "entirius-django-todo" },
     { name = "factory-boy" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pytest" },
@@ -773,21 +781,24 @@ test = [
 requires-dist = [
     { name = "celery", specifier = ">=5.3" },
     { name = "celery-once", specifier = ">=3.0.1" },
+    { name = "defusedxml", specifier = ">=0.7" },
     { name = "dj-database-url", marker = "extra == 'test'", specifier = ">=2.0" },
     { name = "django", specifier = ">=4.2" },
     { name = "djangorestframework", specifier = ">=3.14" },
     { name = "djangorestframework-simplejwt", specifier = ">=5.3" },
     { name = "drf-spectacular", specifier = ">=0.27" },
     { name = "entirius-django-agreements", specifier = ">=2.1.0" },
-    { name = "entirius-django-communicator", specifier = ">=0.4.0" },
+    { name = "entirius-django-communicator", git = "https://github.com/entirius/entirius-django-communicator?branch=develop" },
     { name = "entirius-django-contact-forms", marker = "extra == 'contact-forms'" },
     { name = "entirius-django-contact-forms", marker = "extra == 'test'" },
-    { name = "entirius-django-notifications", marker = "extra == 'notifications'", specifier = ">=0.1.0" },
-    { name = "entirius-django-notifications", marker = "extra == 'test'", specifier = ">=0.1.0" },
+    { name = "entirius-django-notifications", marker = "extra == 'notifications'", git = "https://github.com/entirius/entirius-django-notifications?branch=develop" },
+    { name = "entirius-django-notifications", marker = "extra == 'test'", git = "https://github.com/entirius/entirius-django-notifications?branch=develop" },
     { name = "entirius-django-regional", specifier = ">=2.0.1" },
     { name = "entirius-django-siteintel", specifier = ">=0.1.0" },
+    { name = "entirius-django-todo", marker = "extra == 'test'", git = "https://github.com/entirius/entirius-django-todo?branch=develop" },
     { name = "entirius-django-utils", specifier = ">=2.3.0" },
     { name = "factory-boy", marker = "extra == 'test'" },
+    { name = "openpyxl", specifier = ">=3.1" },
     { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'test'", specifier = ">=3.1" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.0" },
@@ -800,8 +811,8 @@ provides-extras = ["dev", "contact-forms", "notifications", "test"]
 
 [[package]]
 name = "entirius-django-notifications"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.3.0"
+source = { git = "https://github.com/entirius/entirius-django-notifications?branch=develop#d50b1eaf8e4128283adea74a55ddbb5d4b56c13b" }
 dependencies = [
     { name = "celery" },
     { name = "django", version = "5.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -813,10 +824,6 @@ dependencies = [
     { name = "entirius-django-utils" },
     { name = "entirius-py-idx-normalizator" },
     { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/81/eb/6896bb18f7c6904d88018cfb624583aea1f921c83b2fe9fa50891bcf9654/entirius_django_notifications-0.1.0.tar.gz", hash = "sha256:28d13dcaa3266d92b25eaa93f20700a22a006f5368678d6dadbdb7e69cf07b2c", size = 93019, upload-time = "2026-09-15T17:59:54.719Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cf/25/8bd3ba5687a934ee13e6f72d3fad89bc846e415a16b028eb8240225c6c94/entirius_django_notifications-0.1.0-py3-none-any.whl", hash = "sha256:ed484c887837bf550c597cecdea493234ddd8eaf8eb06aef4ac8103a4ed7b088", size = 34743, upload-time = "2026-09-15T17:59:53.641Z" },
 ]
 
 [[package]]
@@ -858,8 +865,24 @@ wheels = [
 ]
 
 [[package]]
+name = "entirius-django-todo"
+version = "0.1.0"
+source = { git = "https://github.com/entirius/entirius-django-todo?branch=develop#c9a082f128d99f89674102d391e60ba7046476c4" }
+dependencies = [
+    { name = "celery" },
+    { name = "celery-once" },
+    { name = "django", version = "5.2.18", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "djangorestframework" },
+    { name = "djangorestframework-simplejwt" },
+    { name = "drf-spectacular" },
+    { name = "entirius-django-utils" },
+    { name = "pydantic" },
+]
+
+[[package]]
 name = "entirius-django-utils"
-version = "2.3.0"
+version = "2.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -877,9 +900,9 @@ dependencies = [
     { name = "python-slugify" },
     { name = "webargs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b0/25/3418958d318b6fa0a428c49a5832c4b21ae76ed2359953718e7f3fffb8d6/entirius_django_utils-2.3.0.tar.gz", hash = "sha256:26d9ca1ef953d79363cf1902096a73cfe40d1eb64c38a168e99c7f5f32d7347e", size = 91188, upload-time = "2026-10-12T08:41:50.256Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/50/b256ace309bb8bc9520bb17db7193613ca3bda2a56a00dd725e1dc6adffd/entirius_django_utils-2.4.3.tar.gz", hash = "sha256:69c0c5988d2fdf32800b1e995b6d905a2a42ef800678496e318cd9d9df3c02d8", size = 96566, upload-time = "2026-11-04T17:51:12.572Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/8b/a24d6378e123100cded79a0334d0f8ea9c25d908e14e9274969575bd7c41/entirius_django_utils-2.3.0-py3-none-any.whl", hash = "sha256:75a00071b7aa04bab02e5cf225ce8d52b3ac61d614542f0b9873c3bfed36288e", size = 42073, upload-time = "2026-10-12T08:41:49.298Z" },
+    { url = "https://files.pythonhosted.org/packages/97/fc/cae3ea7c792f5bc7e721a0b1329a498f0edbd4705d5e8723b513e90c4742/entirius_django_utils-2.4.3-py3-none-any.whl", hash = "sha256:a5e3378ef2dea8346a48c2621eeaa9e21b35c151916315b0f804a08c64e9bc99", size = 44087, upload-time = "2026-11-04T17:51:11.422Z" },
 ]
 
 [[package]]
@@ -901,6 +924,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/2d/68/d667565e31e10360b32345e779ef14d790da4cbfabb16d3894f3d128e105/entirius_py_process_logger-2.0.0.tar.gz", hash = "sha256:4d7e3bc34fcbc91dba6a3ea3ab9580511ac3fb92d8112791c4aa3711cd0e1d82", size = 22192, upload-time = "2026-07-03T16:21:17.459Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d3/65/17c85a60d808544f87a7009167d1def3a145235af901a1243e00bbf2e527/entirius_py_process_logger-2.0.0-py3-none-any.whl", hash = "sha256:faed514a4f0e8fcc1dc746f3b582e0a14642748c45eee63017b7ba52b67874c5", size = 8851, upload-time = "2026-07-03T16:21:16.494Z" },
+]
+
+[[package]]
+name = "et-xmlfile"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
 ]
 
 [[package]]
@@ -1139,6 +1171,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/24/bf/d1bda4f6168e0b2e9e5958945e01910052158313224ada5ce1fb2e1113b8/nodeenv-1.10.0.tar.gz", hash = "sha256:996c191ad80897d076bdfba80a41994c2b47c68e224c542b48feba42ba00f8bb", size = 55611, upload-time = "2025-12-20T14:08:54.006Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/b2/d0896bdcdc8d28a7fc5717c305f1a861c26e18c05047949fb371034d98bd/nodeenv-1.10.0-py2.py3-none-any.whl", hash = "sha256:5bb13e3eed2923615535339b3c620e76779af4cb4c6a90deccc9e36b274d3827", size = 23438, upload-time = "2025-12-20T14:08:52.782Z" },
+]
+
+[[package]]
+name = "openpyxl"
+version = "3.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "et-xmlfile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32619465d2f77b29a0469500e99012523b91cc4141cd1/openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050", size = 186464, upload-time = "2024-06-28T14:03:44.161Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910, upload-time = "2024-06-28T14:03:41.161Z" },
 ]
 
 [[package]]

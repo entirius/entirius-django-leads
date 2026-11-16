@@ -97,6 +97,12 @@ class CompanyListView(AdminView):
             OpenApiParameter("segment", str, description="Score segment S1 … S4."),
             OpenApiParameter("owner", str, description=OWNER_FILTER_DESCRIPTION),
             OpenApiParameter(
+                "mine_first",
+                bool,
+                description="true = the caller's companies first, `sort` orders within each part (no effect "
+                "without a user).",
+            ),
+            OpenApiParameter(
                 "attr.<key>",
                 str,
                 description="Exact value of an active company attribute with show_in_list (select, bool or text).",

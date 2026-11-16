@@ -22,7 +22,7 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `score_points`, `owner__username` — never-scored and unowned companies last either way; `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), `segment` (`S1`–`S4`), `attr.<key>` (exact value of an active company attribute with `show_in_list` of kind `select`, `bool` or `text`; any other key is a 400), `owner` (`me` = the caller, `none` = unowned, a user id), paging | 200 `CompanyListResponse` |
+| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `score_points`, `owner__username` — never-scored and unowned companies last either way; `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), `segment` (`S1`–`S4`), `attr.<key>` (exact value of an active company attribute with `show_in_list` of kind `select`, `bool` or `text`; any other key is a 400), `owner` (`me` = the caller, `none` = unowned, a user id), `mine_first` (bool: the caller's companies first, `sort` orders within each part), paging | 200 `CompanyListResponse` |
 | POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry`, `attributes` (every `required` company attribute must be given), `owner_id` (absent = the requesting user when they can own companies, else none; null = no owner) | 201 `CompanyDetailResponse`; Activity `note` "company created" (+ "owner: <username>") |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
 | PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64), `attributes` (merged: given keys are set, a `null` key is removed; a required key may not be removed), `owner_id` (null clears) | 200 `CompanyDetailResponse`; an owner change is an Activity `note` "owner: <username \| none>" |
@@ -94,7 +94,7 @@ stays on the timeline. Removing an anonymised contact answers 200 and changes no
 | Method | Path | Body | Success |
 |---|---|---|---|
 | GET | `<channel_idx>/channel/` | — | 200 `{idx, name, default_currency, resume_days}` |
-| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all); `default_currency` (ISO 4217 of a platform currency, pre-fills new deals; null clears; unknown code → 400) | 200 `{idx, name, default_currency, resume_days}` |
+| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all); `default_currency` (ISO 4217 of a platform currency, pre-fills new deals; null clears; unknown code → 400); the whole request is validated before anything is saved). A change that moves a value writes a `settings` history entry (no company; `data.changes` = `{field: {from, to}}`) | 200 `{idx, name, default_currency, resume_days}` |
 
 `resume_days` in the response is effective: the channel's values over the defaults `{not_now: 30, out_of_office: 7}`
 — days until the "come back" task of a reply of that class (`concept.md` § Tasks). Area `leads.settings`.
@@ -134,6 +134,7 @@ Area `leads.settings`. A channel needs a stage of each kind to close deals; a ne
 | POST | `<channel_idx>/deals/<id>/transition/` | exactly one of `stage_key` or `kind` (= the first stage of that kind), `lost_reason` (≤ 255) | 200 `DealResponse`; Activity `deal` "deal <from> -> <to>" (`data = {deal_id, from, to}`); 404 unknown key; 409 `no_deal_stage` when the channel has no stage of the kind; 400 on `lost_reason` for a lost stage without one; 409 `deal_archived` for an archived deal |
 | POST | `<channel_idx>/deals/<id>/archive/` | — | 200 `DealResponse` with `archived_at`; Activity `deal` "deal archived: <title>"; an archived deal is returned unchanged; 409 `deal_open` for an open deal |
 | POST | `<channel_idx>/deals/<id>/restore/` | — | 200 `DealResponse`, `archived_at` null; Activity `deal` "deal restored: <title>"; a deal that is not archived is returned unchanged |
+| GET | `<channel_idx>/activities/actors/` | — | 200 `{results: [person, …]}` — the person filter of the channel history: each actor once, every import batch as `import:` |
 | GET | `<channel_idx>/deals/<id>/activities/` | paging | 200 `ActivityListResponse` of the entries about the deal (stage moves, edits, tasks) |
 | GET | `<channel_idx>/companies/<id>/deals/` | paging | 200 `DealListResponse` of the company, newest first, archived deals left out |
 
@@ -220,9 +221,10 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/activities/` | `company` (id), paging | 200 `ActivityListResponse` — `id, company_id, contact_id, deal_id, kind, message, data, actor, created_at`, newest first; the CRM activities carry their parts in `data` (`concept.md` § Activity data) |
+| GET | `<channel_idx>/activities/` | `company` (id), `actor` (a person of `activities/actors/`; `import:` = every import batch), `kind` (comma-separated), `date_from` / `date_to` (days, both included, server time zone), paging | 200 `ActivityListResponse` — the channel history: `id, company_id (null = about the channel), company_name, contact_id, deal_id, deal_title, kind, message, data, actor, created_at`, newest first; the CRM activities carry their parts in `data` (`concept.md` § Activity data) |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
-| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
+| POST | `<channel_idx>/imports/preview/` | `multipart/form-data` `file` (`.csv` or `.xlsx`, ≤ 20 MB); `mapping` (optional, JSON `{column: field \| "ignore"}`: the user's choices, the other columns get the proposal) | 200 `ImportPreviewResponse` — nothing is stored |
+| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: CSV or `.xlsx`, ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional); `mapping` (optional: JSON `{column: field \| "ignore"}`, columns left out are ignored; absent = the exact-name import; `auto` is refused) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |
 
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
@@ -231,6 +233,26 @@ skipped_count, row_count, size_bytes, created_by, created_at, run_rules, owner_i
 names of the file the import did not read, never repeated in `report`; `automation_started_count`: companies of the batch that entered their first
 stage with its rules, 0 when `run_rules` is off). The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
+`column_mapping: [{column, field, label}]` — which column went where, in file order (`label` null for `ignore`); `[]`
+for an import without `mapping`, whose `ignored_columns` are as before. With `mapping`, `ignored_columns` are the
+columns mapped to `ignore`.
+
+`ImportPreviewResponse`: `filename, format (csv|xlsx), encoding (csv: utf-8|utf-8-sig|utf-16|cp1250), delimiter
+(csv), sheet (xlsx: the first), row_count, columns, rows, warnings, fields`.
+- `columns[]`: `name` (the mapping key: the header stripped; an empty header is `Column <n>`, a repeated one
+  `<name> (2)`), `index`, `field` (a key of `fields` or `ignore`), `confidence` (0..1), `level` (`certain` ≥ 0.85,
+  `check`, `unrecognised`), `source` (`exact` · `header` · `custom_field` · `content` · `user` · `none`),
+  `reason` when ignored (`unrecognised` · `duplicate_field` + `conflict_with` · `no_crm_field` · `empty_column` ·
+  `user`), `concept` (a recognised idea without a built-in field: `tax_id`, `regon`, `krs`, `street`, `city`,
+  `postal_code`, `country`, `region`, `address`, `employees`, `revenue`, `linkedin`), `samples` (≤ 5 values).
+- `rows[]`: the first 5 data rows, `{row, values: {field: value}, skip_reason}` — `full_name` already split; the
+  reason is the code the import would skip the row with.
+- `warnings[]`: `{code, message}` — `no_company_key` (nothing maps to domain, website or email), `no_company_name`.
+
+400s of both (`details[].field` / `issue`): `file` — `REQUIRED`, `TOO_LARGE`, `UNSUPPORTED_FORMAT` (`.xls`, PDF, …),
+`ENCODING`, `UNREADABLE`, `NO_HEADER`; `mapping` — `INVALID_JSON`, `UNKNOWN_COLUMN`, `UNKNOWN_FIELD`; only
+`imports/`: `DUPLICATE_FIELD`, `NO_COMPANY_KEY` (the preview reports them as `duplicate_field` / a warning). How the
+proposal is made: `operations.md` § Column mapping.
 
 ## Reports
 
@@ -293,7 +315,7 @@ Routed and answering only with `ENVIRONMENT == "development"` (404 otherwise). U
 
 | Method | Path | Body | Success |
 |---|---|---|---|
-| POST | `<channel_idx>/test/import-now/` | multipart `file`, as `imports/` | 200 `ImportBatchDetailResponse` — imported in the request, no worker or shared temp dir |
+| POST | `<channel_idx>/test/import-now/` | multipart `file` and `mapping`, as `imports/` | 200 `ImportBatchDetailResponse` — imported in the request, no worker or shared temp dir |
 | POST | `<channel_idx>/test/evaluate/` | `company_id`, `trigger`, `stage_key` (default: the company's stage) | 200 `{runs: [RuleRunResponse]}` — no event key, so no redelivery dedupe |
 | POST | `<channel_idx>/test/rotate-now/` | — | 200 `{rotated}` — the daily rotation scan, this channel only |
 | POST | `<channel_idx>/test/retry-analyses/` | — | 200 `{recovered, failed}` — the intel analysis retry in-process, **every** channel |

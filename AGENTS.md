@@ -1,14 +1,15 @@
 # AGENTS.md
 
-entirius-django-leads (Django app `django_leads`) — leads and B2B pipeline module of Entirius: companies,
-contacts, stages, rules, recipient selection, retention and GDPR. Table prefix `django_leads_`.
+entirius-django-leads — leads and B2B pipeline module of Entirius, the engine of the CMS's CRM: one Django app,
+`django_leads` (companies, contacts, stages, deals, rules, recipient selection, history, retention and GDPR; table
+prefix `django_leads_`, API `api/leads/v2/`).
 
 ## Commands
 
 | Command | Meaning |
 |---|---|
 | `make install` | `uv sync --all-extras` |
-| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` |
+| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` (the `test` extra brings `django_todo`) |
 | `make check` / `fix` | ruff lint + format (+ canonical `.gitleaks.toml` guard) |
 
 ## Conventions
@@ -16,7 +17,7 @@ contacts, stages, rules, recipient selection, retention and GDPR. Table prefix `
 - English only; MPL-2.0 header on every `.py` (`insert-license`); no Claude/AI attribution in commits or PRs.
 - Layered: `models/` · `services/` (all logic, field whitelists) · `schemas/` · `api/admin/` (thin views) ·
   `signals/` · `tasks/`. No logic in models or views.
-- Never rename the package, the app label or the table prefix; never edit a released migration.
+- Never rename a package, an app label or a table prefix; never edit a released migration.
 - Access: areas live on the AppConfig (`access_areas`, `access_route_rules`), every admin view carries
   `access_area`; a new admin route without one fails `tests/test_access_ownership.py`.
 - Git flow: `develop` + `master`, PRs, semver tag on `master`. Do not commit by default — the operator decides.
@@ -43,10 +44,13 @@ src/django_leads/
 │                 task_bridge (the only django_todo importer)  channel (settings)
 │                 deal_stage (sales pipeline)  deal (only Deal writer)  deal_board (columns, totals)
 │                 sequence_note (sequence stopped / paused after a reply or a hand-written mail)
+│                 import_file (csv / xlsx → table)  import_mapping (column → field proposal, preview, mapped CSV)
+│                 import_vocabulary (header synonyms PL / EN / DE — extend here)
 ├── signals/      __init__ (stage_entered, contact_anonymised, deal_stage_changed)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge
 │                 todo_receivers (timeline, soft)
-├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks   (queue leads_default)
+├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks
+│                 (queue leads_default)
 ├── gdpr/         hooks (leads' own)  protocol (GdprHooks)  registry (discover at call time)
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)
 ├── utils/        domains (registrable_domain)  emails (normalize, hash, token)  prompts  refs
@@ -63,7 +67,7 @@ lock → pick → `request_draft` = gate + communicator draft) → `message_sent
 | Endpoint, params, response shape, error body | `docs/api.md`; `docs/openapi.yaml`; `schemas/` |
 | Models, dedup, legal basis, rules phases, outreach gate | `docs/concept.md` |
 | Which signals leads emits and consumes | `docs/concept.md` § Integration; `signals/` |
-| CSV columns, skip reasons, sweep, GDPR, retention, monitoring | `docs/operations.md` |
+| CSV columns, column mapping, skip reasons, sweep, GDPR, retention, monitoring | `docs/operations.md` |
 | Which test file covers what; BDD and e2e in the entirius-zeno harness | `docs/testing.md` |
 | ERD groupings | `docs/erd-config.yaml` |
 | Why the module is shaped this way | `docs/concept.md` |

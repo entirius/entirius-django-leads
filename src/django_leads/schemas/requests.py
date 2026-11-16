@@ -73,6 +73,9 @@ class CompanyListQuery(BaseModel):
     origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.", examples=["fair"])
     segment: ScoreSegment | None = Field(default=None, description="Score segment filter (S1 best … S4).")
     owner: str = Field(default="", pattern=OWNER_FILTER_PATTERN, description=OWNER_FILTER_DESCRIPTION, examples=["me"])
+    mine_first: bool = Field(
+        default=False, description="The caller's own companies first, then the rest; `sort` orders within each part."
+    )
 
     @field_validator("sort")
     @classmethod
@@ -234,6 +237,25 @@ class ActivityListQuery(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     company: int | None = Field(default=None, description="Company id filter.", examples=[101])
+    actor: str = Field(
+        default="",
+        max_length=128,
+        description="A person of `activities/actors/`; `import:` = every import batch.",
+        examples=["anna"],
+    )
+    kind: str = Field(
+        default="",
+        max_length=512,
+        pattern=r"^[a-z_,]*$",
+        description="Activity kinds, comma-separated; blank = every kind.",
+        examples=["task,deal"],
+    )
+    date_from: date | None = Field(default=None, description="First day, included (server time zone).")
+    date_to: date | None = Field(default=None, description="Last day, included (server time zone).")
+
+    @property
+    def kinds(self) -> list[str]:
+        return [kind for kind in self.kind.split(",") if kind]
 
 
 class AttributeOption(BaseModel):
@@ -409,6 +431,11 @@ class UploadOptions(BaseModel):
         le=USER_ID_MAX,
         default=None,
         description="Owner of created companies and of matched ones without an owner; absent = none.",
+    )
+    mapping: str | None = Field(
+        default=None,
+        description='JSON object {"<file column>": "<field key>" | "ignore"} (columns left out are ignored); '
+        "absent = the exact-name import.",
     )
 
 

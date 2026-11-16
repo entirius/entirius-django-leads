@@ -83,7 +83,9 @@ class ActivityResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(description="Activity id.", examples=[1])
-    company_id: int = Field(description="Company id.", examples=[100])
+    company_id: int | None = Field(
+        description="Company id; null = an entry about the channel (settings).", examples=[100]
+    )
     contact_id: int | None = Field(description="Contact id.", examples=[None])
     deal_id: int | None = Field(description="Deal the entry is about; null = none or deleted.", examples=[None])
     kind: str = Field(description="Activity kind.", examples=["import"])
@@ -91,6 +93,20 @@ class ActivityResponse(BaseModel):
     data: dict[str, Any] = Field(description="Structured details.", examples=[{}])
     actor: str = Field(description="Username, system or import:<batch id>.", examples=["system"])
     created_at: datetime = Field(description="Created.", examples=["2026-09-13T12:00:00Z"])
+
+
+class HistoryEntryResponse(ActivityResponse):
+    """An entry of the channel history: the activity plus the names of what it is about."""
+
+    company_name: str | None = Field(description="Company name; null = no company.", examples=["Ogród Sp. z o.o."])
+    deal_title: str | None = Field(description="Deal title; null = no deal.", examples=[None])
+
+    @classmethod
+    def of(cls, activity) -> "HistoryEntryResponse":
+        base = ActivityResponse.model_validate(activity).model_dump()
+        company = activity.company if activity.company_id else None
+        deal = activity.deal if activity.deal_id else None
+        return cls(**base, company_name=company.name if company else None, deal_title=deal.title if deal else None)
 
 
 class OwnerResponse(BaseModel):
@@ -164,6 +180,12 @@ class CompanyDetailResponse(CompanyResponse):
     )
 
 
+class ImportColumnMappingEntry(BaseModel):
+    column: str = Field(description="Column of the file.", examples=["Nazwa firmy"])
+    field: str = Field(description="Field key it went to, or ignore.", examples=["company_name"])
+    label: str | None = Field(description="English label of the field; null for ignore.", examples=["Company name"])
+
+
 class ImportBatchResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -188,6 +210,10 @@ class ImportBatchResponse(BaseModel):
     )
     automation_started_count: int = Field(
         description="Companies of the batch whose first-stage rules ran; 0 when run_rules is off.", examples=[0]
+    )
+    column_mapping: list[ImportColumnMappingEntry] = Field(
+        default_factory=list,
+        description="Which column went to which field, in file order; [] for an exact-name import (no mapping).",
     )
 
     @classmethod
@@ -233,7 +259,70 @@ class LeadTypeListResponse(BaseModel):
 
 
 class ActivityListResponse(_Page):
-    results: list[ActivityResponse] = Field(description="Timeline entries, newest first.")
+    results: list[HistoryEntryResponse] = Field(description="History entries, newest first.")
+
+
+class ActivityActorsResponse(BaseModel):
+    results: list[str] = Field(description="Every actor of the channel's history, sorted.", examples=[["manager"]])
+
+
+class ImportFieldResponse(BaseModel):
+    key: str = Field(
+        description="Field key of a mapping: built-in, attr.<key> or contact.attr.<key>.", examples=["email"]
+    )
+    label: str = Field(description="English label (built-in) or the custom field's own label.", examples=["Email"])
+    entity: str = Field(description="company or contact.", examples=["contact"])
+    custom: bool = Field(description="A custom field (attribute definition) of the channel.", examples=[False])
+    kind: str = Field(description="text for built-in fields, the attribute kind for custom ones.", examples=["text"])
+
+
+class ImportColumnProposal(BaseModel):
+    name: str = Field(
+        description="Column name (the mapping key); unique, empty header = 'Column <n>'.", examples=["WWW"]
+    )
+    index: int = Field(description="Position in the file, from 0.", examples=[1])
+    field: str = Field(description="Proposed field key, or ignore.", examples=["website"])
+    confidence: float = Field(description="0..1.", examples=[0.95])
+    level: str = Field(description="certain, check or unrecognised.", examples=["certain"])
+    source: str = Field(description="exact, header, custom_field, content, user or none.", examples=["header"])
+    reason: str | None = Field(
+        description="Why ignored: unrecognised, duplicate_field, no_crm_field, empty_column or user.", examples=[None]
+    )
+    concept: str | None = Field(
+        description="Recognised idea without a built-in field (tax_id, regon, krs, street, city, postal_code, "
+        "country, region, address, employees, revenue, linkedin).",
+        examples=[None],
+    )
+    conflict_with: str | None = Field(
+        default=None, description="With duplicate_field: the column that kept the field.", examples=[None]
+    )
+    samples: list[str] = Field(description="Up to 5 distinct non-empty values.", examples=[["https://alfa.pl"]])
+
+
+class ImportPreviewRow(BaseModel):
+    row: int = Field(description="Row number in the file (header = 1, empty rows not counted).", examples=[2])
+    values: dict[str, str] = Field(description="Non-empty values by field key after the mapping.")
+    skip_reason: str | None = Field(description="Reason code the import would skip the row with.", examples=[None])
+
+
+class ImportWarning(BaseModel):
+    code: str = Field(description="no_company_key or no_company_name.", examples=["no_company_name"])
+    message: str = Field(description="English explanation.")
+
+
+class ImportPreviewResponse(BaseModel):
+    filename: str = Field(description="Uploaded file name.", examples=["baza.xlsx"])
+    format: str = Field(description="csv or xlsx.", examples=["xlsx"])
+    encoding: str | None = Field(description="CSV: utf-8, utf-8-sig, utf-16 or cp1250.", examples=[None])
+    delimiter: str | None = Field(description="CSV: the detected separator.", examples=[None])
+    sheet: str | None = Field(description="xlsx: the sheet read (the first).", examples=["Arkusz1"])
+    row_count: int = Field(description="Non-empty data rows.", examples=[128])
+    columns: list[ImportColumnProposal] = Field(description="One entry per column, in file order.")
+    rows: list[ImportPreviewRow] = Field(description="The first 5 data rows after the mapping.")
+    warnings: list[ImportWarning] = Field(description="What would make the import skip or degrade rows.")
+    fields: list[ImportFieldResponse] = Field(
+        description="The fields a column can go to (built-in ones in display order, then the channel's active custom fields; `ignore` is not listed)."
+    )
 
 
 class ImportBatchListResponse(_Page):

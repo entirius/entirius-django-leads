@@ -15,7 +15,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_leads.api.admin.views._base import ERROR_RESPONSES, AdminView, parse
-from django_leads.api.admin.views.import_views import UPLOAD_SCHEMA, read_upload
+from django_leads.api.admin.views.import_views import UPLOAD_SCHEMA, prepared_upload
 from django_leads.enums import RuleTrigger
 from django_leads.models import Company, Stage
 from django_leads.schemas.requests import DevAnonymiseRequest, DevEvaluateRequest
@@ -96,9 +96,17 @@ class DevImportNowView(DevelopmentView):
         responses={200: ImportBatchDetailResponse, **ERROR_RESPONSES},
     )
     def post(self, request: Request, channel_idx: str) -> Response:
-        filename, content, size_bytes = read_upload(request)
-        batch = import_service.create_batch(self.channel(channel_idx), filename, size_bytes, request.user.username)
-        batch = import_service.run_content(batch, content)
+        channel = self.channel(channel_idx)
+        filename, size_bytes, prepared = prepared_upload(request, channel, request.data.get("mapping"))
+        batch = import_service.create_batch(
+            channel,
+            filename,
+            size_bytes,
+            request.user.username,
+            column_mapping=prepared.column_mapping,
+            ignored_columns=prepared.ignored_columns,
+        )
+        batch = import_service.run_content(batch, prepared.content)
         return Response(ImportBatchDetailResponse.of(batch).model_dump(mode="json"))
 
 

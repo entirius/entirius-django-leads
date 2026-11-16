@@ -41,17 +41,22 @@ dependencies = [
     "entirius-django-agreements>=2.1.0",
     "entirius-django-communicator>=0.4.0",
     "entirius-django-siteintel>=0.1.0",
+    # .xlsx imports (first sheet); MIT. defusedxml makes openpyxl refuse XML entity bombs.
+    "openpyxl>=3.1",
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
 dev  = ["ruff", "pre-commit"]
 # Soft dependency: form submissions become contacts only when django_contact_forms is installed.
 contact-forms = ["entirius-django-contact-forms"]
-# Soft dependency: reply and analysis failures notify sales admins only when django_notifications is installed.
-notifications = ["entirius-django-notifications>=0.1.0"]
+# Soft dependency: reply and analysis failures notify sales admins only when django_notifications is installed
+# (0.3.0: alerts go to one person, `recipient_user_id`).
+notifications = ["entirius-django-notifications>=0.3.0"]
 # Soft dependency django_todo (replies become tasks, tasks show in the timeline): the extra
 # `todo = ["entirius-django-todo>=0.1.0"]` lands with the first todo release on PyPI — a requirement PyPI cannot
-# resolve breaks `uv lock`. Until then the host installs entirius-django-todo next to leads.
+# resolve breaks `uv lock`. Until then the host installs entirius-django-todo next to leads; the `test` extra takes it
+# from GitHub (`tool.uv.sources`, dev and CI only — published metadata stays PyPI-only).
 test = [
     "pytest",
     "pytest-django",
@@ -59,7 +64,8 @@ test = [
     "psycopg[binary]>=3.1",
     "dj-database-url>=2.0",
     "entirius-django-contact-forms",
-    "entirius-django-notifications>=0.1.0",
+    "entirius-django-notifications>=0.3.0",
+    "entirius-django-todo>=0.1.0",
 ]
 
 [project.entry-points.leads_connectors]
@@ -73,7 +79,13 @@ Repository = "https://github.com/entirius/entirius-django-leads"
 Changelog = "https://github.com/entirius/entirius-django-leads/blob/develop/CHANGELOG.md"
 Issues = "https://github.com/entirius/entirius-django-leads/issues"
 
-# agreements 2.1.0, utils 2.1.0 and the leads-platform modules are not on PyPI until their releases — resolve the sibling clones.
+# todo 0.1.0, notifications 0.3.0 (`recipient_user_id`, which leads' alerts pass) and communicator 0.5.0
+# (reply_plan_service, which leads imports) are not on PyPI yet: dev and CI resolve them from GitHub until their
+# releases; then these three lines go.
+[tool.uv.sources]
+entirius-django-notifications = { git = "https://github.com/entirius/entirius-django-notifications", branch = "develop" }
+entirius-django-todo = { git = "https://github.com/entirius/entirius-django-todo", branch = "develop" }
+entirius-django-communicator = { git = "https://github.com/entirius/entirius-django-communicator", branch = "develop" }
 
 [build-system]
 requires = ["hatchling"]

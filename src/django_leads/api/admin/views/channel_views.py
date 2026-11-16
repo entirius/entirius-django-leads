@@ -21,7 +21,10 @@ def _dump(channel: Channel) -> dict:
     resume_days = follow_up_service.resume_days(channel)
     currency = channel.default_currency.iso3 if channel.default_currency_id else None
     body = ChannelSettingsResponse(
-        idx=channel.idx, name=channel.name, default_currency=currency, resume_days=resume_days
+        idx=channel.idx,
+        name=channel.name,
+        default_currency=currency,
+        resume_days=resume_days,
     )
     return body.model_dump()
 
@@ -54,6 +57,7 @@ class ChannelSettingsView(AdminView):
         if "default_currency" in body.model_fields_set:
             updates["default_currency"] = body.default_currency
         try:
-            return Response(_dump(channel_service.update_channel(channel, updates)))
+            updated = channel_service.update_channel(channel, updates, actor=request.user.username)
+            return Response(_dump(updated))
         except deal_service.InvalidDeal as error:
             raise ValidationError({"default_currency": [str(error)]}) from None

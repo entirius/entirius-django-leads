@@ -2,7 +2,35 @@
 
 ## Unreleased
 
-Released as 0.5.0.
+- **Review fixes (history, channel settings).** `PATCH channel/` saves nothing when any part of the request is
+  invalid. Migration `0017` is reversible with `settings` entries present (they are deleted on the way back) and
+  backfills before it builds the indexes. `mine_first` is in the OpenAPI.
+- **Import understands the file's own headers (U17).** `POST imports/preview/` proposes for every column a CRM field
+  with a confidence and where it came from (the exact name, the channel's custom fields, a dictionary of PL / EN / DE
+  header words in `services/import_vocabulary.py`, the values: email, website / domain, phone, NIP and REGON with check
+  digit, postal code, lead type, language), plus the first 5 rows after the mapping with the reason a row would be
+  skipped. The legal basis is never guessed: it comes from a header or from the user's mapping. One field takes one
+  column (the more certain wins, `duplicate_field`); `full_name` is split into first and last name. `POST imports/` and
+  `test/import-now/` take the confirmed `mapping` (`{column: field | "ignore"}`); the batch keeps it as
+  `column_mapping` (migration `0018`). Files: `.xlsx` (first sheet; new dependency `openpyxl`, MIT, with `defusedxml`)
+  and CSV with `,` `;` tab `|`, UTF-8 / UTF-16 BOM / cp1250. Limits, for xlsx and CSV alike: `LEADS_IMPORT_MAX_ROWS`
+  (100 000), `LEADS_IMPORT_MAX_COLUMNS` (200) and `LEADS_IMPORT_MAX_UNPACKED_MB` (200, xlsx size after unzipping);
+  over a limit the answer is 400. A corrupt sheet is a 400 too. Without `mapping` the exact-name import is unchanged; it
+  now also reads `description` (company notes) and accepts xlsx / cp1250 / `;` files with exact names. A file named
+  `name,domain,email` now gets its company names (test C9). The `notifications` extra needs
+  `entirius-django-notifications>=0.3.0` (alerts to the company owner, `recipient_user_id`).
+
+- **History: the channel's journal of every activity.** `Activity.channel` (set on every entry, backfilled from the
+  company) and a nullable `company` (migration `0017`, indexes on channel + date / actor / kind). `activities/` filters
+  by `actor`, `kind` (comma-separated), `date_from` / `date_to` and carries `company_name` / `deal_title`;
+  `activities/actors/` lists the person filter: one entry per actor and one `import:` for every import batch. A channel settings change writes a `settings` entry with old and new
+  values. Leads purges no entries by age; retention is the GDPR one.
+- **The company list can put the caller's companies first.** `companies/?mine_first=true` lists the companies the
+  caller owns before the rest, `sort` ordering within each part (the task dialog's company picker).
+
+- **A referral request may reach the wrong person.** The `recipient_check` receiver lets a communicator referral
+  request (`referral_request`, the answer to a `wrong_person` reply) reach a wrong-person contact; every other reason
+  still refuses it.
 
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
   `POST deals/<id>/archive/` (won or lost only, 409 `deal_open`) and `POST deals/<id>/restore/`, both idempotent,

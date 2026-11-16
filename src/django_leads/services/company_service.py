@@ -7,7 +7,7 @@
 from typing import Any
 
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, F, OrderBy, OuterRef, Q, QuerySet
+from django.db.models import Case, Exists, F, OrderBy, OuterRef, Q, QuerySet, When
 from django.utils import timezone
 
 from django_leads.enums import UNKNOWN_LEAD_TYPE, ActivityKind, AttributeEntity, AttributeKind
@@ -21,7 +21,7 @@ from django_leads.services import (
     suppression_service,
 )
 
-FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin")
+FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin", "description")
 # `do_not_contact` has its own writer: `set_do_not_contact`.
 EDITABLE_FIELDS = frozenset({"name", "website", "lead_type", "industry", "description", "external_ref", "origin"})
 SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at", "score_points", "owner__username"})
@@ -147,11 +147,13 @@ def list_companies(
     attributes: dict[str, str] | None = None,
     owner: str = "",
     user_id: int | None = None,
+    mine_first: bool = False,
 ) -> QuerySet[Company]:
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
     active lead type of the channel (`UnknownLeadType`); `attributes` keys must be list filters (`filter_attributes`);
     `owner` is `me` (= `user_id`), `none` or a user id (`owner_service.filter_by_owner`).
-    Never-scored and unowned companies sort last on `score_points` / `owner__username` either way."""
+    Never-scored and unowned companies sort last on `score_points` / `owner__username` either way. `mine_first` puts
+    the companies `user_id` owns before the rest (the task dialog's company picker)."""
     if sort.lstrip("-") not in SORT_FIELDS:
         raise ValueError(f"unknown sort {sort!r}")
     companies = Company.objects.filter(channel=channel).select_related("stage")
@@ -169,6 +171,9 @@ def list_companies(
         companies = filter_attributes(channel, companies, attributes)
     companies = filter_flags(companies, lead_type, do_not_contact, has_reply)
     companies = owner_service.filter_by_owner(companies, owner, user_id)
+    if mine_first and user_id is not None:
+        companies = companies.annotate(not_mine=Case(When(owner_id=user_id, then=0), default=1))
+        return companies.order_by("not_mine", _ordering(sort), "id")
     return companies.order_by(_ordering(sort), "id")
 
 
