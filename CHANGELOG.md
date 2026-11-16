@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Import understands the file's own headers (U17).** `POST imports/preview/` proposes for every column a CRM field
+  with a confidence and where it came from — the exact name, the channel's custom fields, a dictionary of PL / EN / DE
+  header words (`services/import_vocabulary.py`), the values (email, website / domain, phone, NIP and REGON with check
+  digit, postal code, legal basis, lead type, language), and optionally the AI toolbox for what the rules leave
+  unrecognised (`LEADS_IMPORT_AI_MODEL`, off by default; header and ≤ 5 values per column, never the file) — plus the
+  first 5 rows after the mapping with the reason a row would be skipped. One field takes one column (the more certain
+  wins, `duplicate_field`); `full_name` is split into first and last name. `POST imports/` and `test/import-now/`
+  take the confirmed `mapping` (`{column: field | "ignore"}` or `auto`); the batch keeps it as `column_mapping`
+  (migration `0020`). `GET imports/fields/` lists the fields. Files: `.xlsx` (first sheet; new dependency
+  `openpyxl`, MIT) and CSV with `,` `;` tab `|`, UTF-8 / UTF-16 BOM / cp1250. Without `mapping` the exact-name import
+  is unchanged; it now also reads `description` (company notes) and accepts xlsx / cp1250 / `;` files with exact
+  names. A file named `name,domain,email` now gets its company names (test C9).
 - **Two new apps in the package: AI CRM and Prospecting** (formerly planned as `entirius-django-ai-crm` and
   `entirius-django-prospecting`, never released — they ship here, one distribution, one release). Each is optional:
   enabled only when the host lists it in `INSTALLED_APPS` after `django_leads`, routed by its own URL module; leads

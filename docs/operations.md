@@ -34,6 +34,40 @@ same stripped mapping, so a padded header never imports empty values. Columns (a
   `multiselect` cell is comma-separated, a `bool` cell `true`/`false`/`yes`/`no`/`1`/`0`); a blank cell sets nothing;
   `required` is not enforced by the import. A matched company or contact gets only the keys it does not hold yet.
 
+`description` (free text) fills the company notes; any other column is reported in `ignored_columns`. A file in
+another encoding (cp1250, UTF-16 with BOM), with another separator (`;`, tab, `|`) or an `.xlsx` (first sheet) is read
+the same way when its header holds these exact names.
+
+### Column mapping (files with their own headers)
+
+A file named the way people name spreadsheet columns (`Nazwa firmy`, `WWW`, `Adres e-mail`, `Imię i nazwisko`, `NIP`)
+goes through `POST imports/preview/`, then `POST imports/` with the confirmed `mapping` (`api.md` § Timeline and
+imports). The file is read whole: CSV with the separator sniffed from its first lines and the encoding UTF-8 (BOM),
+UTF-16 (BOM) or else cp1250; `.xlsx` through openpyxl, first sheet, the first non-empty row as header, cell values as
+a CSV export shows them (`48600100200.0` → `48600100200`, dates ISO). Empty rows are dropped, so report row numbers
+count non-empty rows. The mapped file is rewritten as the import's own CSV before it is stored — the queued run and
+its report are those of an exact-name file.
+
+The proposal for each column, first match wins:
+
+1. the exact column name (`company_name`, `attr.<key>` of an active definition) — confidence 1.0;
+2. a custom field whose key or label is the header — 0.97;
+3. a word of `services/import_vocabulary.py` (PL / EN / DE synonyms per field, compared without case, accents,
+   spaces, `_`, `-`, a plural `s`) — 0.95; a concept without a built-in field (NIP, REGON, KRS, street, city, postal
+   code, country, employees, …) goes to a custom field named like it, else it is ignored as `no_crm_field`;
+4. a synonym as whole words inside a longer header (`Telefon komórkowy służbowy`) — 0.75 (0.55 for a lone `nazwa`,
+   `adres`, …);
+5. the values (the first 200 non-empty ones, ≥ 80 % must fit): email, website (scheme, `www.` or a path) or domain,
+   legal basis, postal code `00-000`, NIP and REGON with a valid check digit, phone (7–15 digits), an active lead type
+   code, a language code — 0.6–0.8. Values that are clearly addresses, sites or phones overrule a free-text header
+   (`Kontakt` full of emails is the email column);
+6. with `LEADS_IMPORT_AI_MODEL` set (and `AI_TOOLBOX_ENABLED`), one toolbox call for the columns still unrecognised:
+   their header and at most 5 values each, never the file — 0.6; a failing toolbox leaves them unrecognised.
+
+One field takes one column: the user's choice, then the higher confidence, then the earlier column; the others are
+ignored as `duplicate_field`. `full_name` is split (`Jan Kowalski` → Jan / Kowalski, `Kowalski, Jan` → Jan /
+Kowalski) and gives way to `first_name` / `last_name` columns.
+
 ### How a run works
 
 The API writes the upload to `LEADS_IMPORT_TMP_DIR/<batch_id>.csv` and queues a message carrying the batch id only —
@@ -131,7 +165,7 @@ stage, and the contact has no Activity of its own after the cutoff. Shorten or l
 
 | Need | Production shell | Development (`ENVIRONMENT=development`) |
 |---|---|---|
-| Import without a worker | `leads_import_csv --sync` | `POST test/import-now/` |
+| Import without a worker | `leads_import_csv --sync` | `POST test/import-now/` (takes `mapping` too) |
 | Evaluate rules now | `rule_service.evaluate_rules(company, trigger, stage=…)` | `POST test/evaluate/` |
 | Rotation scan | `tasks.rotate_unresponsive.delay()` | `POST test/rotate-now/` (this channel) |
 | Retention at a given clock | `tasks.anonymise_inactive.delay(as_of="<ISO>")` | `POST test/anonymise-now/` `{as_of}` (every channel) |

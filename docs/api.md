@@ -245,7 +245,9 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 |---|---|---|---|
 | GET | `<channel_idx>/activities/` | `company` (id), `actor` (a person of `activities/actors/`: also its `"<actor> via …"` entries; `import:` = every import batch), `kind` (comma-separated), `date_from` / `date_to` (days, both included, server time zone), paging | 200 `ActivityListResponse` — the channel history: `id, company_id (null = about the channel), company_name, contact_id, deal_id, deal_title, kind, message, data, actor, created_at`, newest first; the CRM activities carry their parts in `data` (`concept.md` § Activity data) |
 | GET | `<channel_idx>/imports/` | paging | 200 `ImportBatchListResponse`, newest first, without `report` |
-| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: UTF-8 CSV (BOM allowed), ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
+| GET | `<channel_idx>/imports/fields/` | — | 200 `ImportFieldListResponse` `{results: [{key, label, entity, custom, kind}]}` — the fields a column can go to: built-in ones in display order, then the active custom fields (`attr.<key>`, `contact.attr.<key>`); `ignore` is not listed |
+| POST | `<channel_idx>/imports/preview/` | `multipart/form-data` `file` (`.csv` or `.xlsx`, ≤ 20 MB); `mapping` (optional, JSON `{column: field \| "ignore"}`: the user's choices, the other columns get the proposal) | 200 `ImportPreviewResponse` — nothing is stored |
+| POST | `<channel_idx>/imports/` | `multipart/form-data` field `file`: CSV or `.xlsx`, ≤ 20 MB; `run_rules` (`true` / `false`, default `false`); `owner_id` (optional); `mapping` (optional: JSON `{column: field \| "ignore"}`, columns left out are ignored, or `auto` = the proposal as it is; absent = the exact-name import) | 202 `ImportBatchResponse` (`pending`); the run is queued after commit |
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |
 
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
@@ -254,6 +256,26 @@ skipped_count, row_count, size_bytes, created_by, created_at, run_rules, owner_i
 names of the file the import did not read, never repeated in `report`; `automation_started_count`: companies of the batch that entered their first
 stage with its rules, 0 when `run_rules` is off). The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.
+`column_mapping: [{column, field, label}]` — which column went where, in file order (`label` null for `ignore`); `[]`
+for an import without `mapping`, whose `ignored_columns` are as before. With `mapping`, `ignored_columns` are the
+columns mapped to `ignore`.
+
+`ImportPreviewResponse`: `filename, format (csv|xlsx), encoding (csv: utf-8|utf-8-sig|utf-16|cp1250), delimiter
+(csv), sheet (xlsx: the first), row_count, columns, rows, warnings, fields`.
+- `columns[]`: `name` (the mapping key: the header stripped; an empty header is `Column <n>`, a repeated one
+  `<name> (2)`), `index`, `field` (a key of `fields` or `ignore`), `confidence` (0..1), `level` (`certain` ≥ 0.85,
+  `check`, `unrecognised`), `source` (`exact` · `header` · `custom_field` · `content` · `ai` · `user` · `none`),
+  `reason` when ignored (`unrecognised` · `duplicate_field` + `conflict_with` · `no_crm_field` · `empty_column` ·
+  `user`), `concept` (a recognised idea without a built-in field: `tax_id`, `regon`, `krs`, `street`, `city`,
+  `postal_code`, `country`, `region`, `address`, `employees`, `revenue`, `linkedin`), `samples` (≤ 5 values).
+- `rows[]`: the first 5 data rows, `{row, values: {field: value}, skip_reason}` — `full_name` already split; the
+  reason is the code the import would skip the row with.
+- `warnings[]`: `{code, message}` — `no_company_key` (nothing maps to domain, website or email), `no_company_name`.
+
+400s of both (`details[].field` / `issue`): `file` — `REQUIRED`, `TOO_LARGE`, `UNSUPPORTED_FORMAT` (`.xls`, PDF, …),
+`ENCODING`, `UNREADABLE`, `NO_HEADER`; `mapping` — `INVALID_JSON`, `UNKNOWN_COLUMN`, `UNKNOWN_FIELD`; only
+`imports/`: `DUPLICATE_FIELD`, `NO_COMPANY_KEY` (the preview reports them as `duplicate_field` / a warning). How the
+proposal is made: `operations.md` § Column mapping.
 
 ## Reports
 
@@ -316,7 +338,7 @@ Routed and answering only with `ENVIRONMENT == "development"` (404 otherwise). U
 
 | Method | Path | Body | Success |
 |---|---|---|---|
-| POST | `<channel_idx>/test/import-now/` | multipart `file`, as `imports/` | 200 `ImportBatchDetailResponse` — imported in the request, no worker or shared temp dir |
+| POST | `<channel_idx>/test/import-now/` | multipart `file` and `mapping`, as `imports/` | 200 `ImportBatchDetailResponse` — imported in the request, no worker or shared temp dir |
 | POST | `<channel_idx>/test/evaluate/` | `company_id`, `trigger`, `stage_key` (default: the company's stage) | 200 `{runs: [RuleRunResponse]}` — no event key, so no redelivery dedupe |
 | POST | `<channel_idx>/test/rotate-now/` | — | 200 `{rotated}` — the daily rotation scan, this channel only |
 | POST | `<channel_idx>/test/retry-analyses/` | — | 200 `{recovered, failed}` — the intel analysis retry in-process, **every** channel |

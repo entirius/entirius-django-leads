@@ -32,6 +32,8 @@ class ImportBatch(BaseModel):
     automation_started_count = models.PositiveIntegerField(default=0)
     # Header names of the file the import does not read.
     ignored_columns = models.JSONField(default=list, blank=True)
+    # `[{column, field, label}]` of an import with a column mapping (file order); [] for an exact-name import.
+    column_mapping = models.JSONField(default=list, blank=True)
     # Companies the import creates get this owner; matched companies get it only while they have none.
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

@@ -32,6 +32,10 @@ item below: the rule, then where it is enforced.
 
 - **No CSV content in the broker, the database or the logs.** The task message is the batch id; the report keeps row
   numbers and reason codes only. A new skip reason is a code, never the offending value.
+- **A mapped import is rewritten before it is stored.** `import_mapping_service.prepare_import` turns any upload with
+  `mapping` into the import's own CSV, so `run_file` reads one format; a new import field is a `CandidateRow` field,
+  a `BUILTIN_FIELDS` entry and a `FIELD_SYNONYMS` entry — never a branch in the run. Without `mapping` a UTF-8 file is
+  stored as it came (the exact-name import must not change).
 - **Only `OperationalError` may leave `run_file`** — it is the task retry. Anything else must end the batch
   `failed` with a code; a batch left `running` waits for the stale sweep.
 - **A chunk's counters and `last_row_done` commit with its rows.** Moving the progress save outside the chunk
