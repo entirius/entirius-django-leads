@@ -240,8 +240,7 @@ class ActivityListQuery(BaseModel):
     actor: str = Field(
         default="",
         max_length=128,
-        description='A person of `activities/actors/`: that actor and its "<actor> via …" entries; `import:` = every '
-        "import batch.",
+        description="A person of `activities/actors/`; `import:` = every import batch.",
         examples=["anna"],
     )
     kind: str = Field(

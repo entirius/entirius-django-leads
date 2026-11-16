@@ -196,9 +196,12 @@ def check_csv_size(text: str) -> None:
     """The row and column limits for a CSV that goes to the import as it is (the exact-name import)."""
     rows = 0
     columns = 0
-    for row in csv.reader(io.StringIO(text, newline="")):
-        rows += 1
-        columns = max(columns, len(row))
+    try:
+        for row in csv.reader(io.StringIO(text, newline="")):
+            rows += 1
+            columns = max(columns, len(row))
+    except csv.Error:
+        raise ImportFileError("unreadable", "The CSV file cannot be read.") from None
     _check_size(max(rows - 1, 0), columns)
 
 

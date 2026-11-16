@@ -55,6 +55,7 @@ src/django_leads/
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)
 ├── utils/        domains (registrable_domain)  emails (normalize, hash, token)  prompts  refs
 └── management/commands/  leads_import_csv  leads_gdpr
+```
 
 Flow: import / form / manual → first stage → `transition_stage` → `stage_entered` → `rule_service` (claim under
 lock → pick → `request_draft` = gate + communicator draft) → `message_sent` / `reply_received` /

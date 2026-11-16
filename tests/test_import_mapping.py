@@ -16,7 +16,7 @@ from django_leads import settings as leads_settings
 from django_leads.enums import ImportStatus
 from django_leads.models import Company, Contact, ImportBatch
 from django_leads.services import attribute_service, import_mapping_service
-from django_leads.services.import_file_service import ImportFileError, read_table, sniff_delimiter
+from django_leads.services.import_file_service import ImportFileError, _sheet_rows, read_table, sniff_delimiter
 from tests.conftest import api_url
 
 
@@ -489,6 +489,35 @@ def test_too_many_rows_is_a_400(admin_api, channel, monkeypatch, kind, mapping):
     content, name = (csv_text(ROWS), "a.csv") if kind == "csv" else (xlsx_bytes(ROWS), "a.xlsx")
     assert issue(import_now(admin_api, content, name=name, mapping=mapping)) == ("file", "TOO_MANY_ROWS")
     assert not ImportBatch.objects.exists()
+
+
+def test_a_file_part_as_mapping_is_a_400(admin_api, channel):
+    body = {"file": upload(C9), "mapping": upload("{}", "mapping.json")}
+    for path in ("imports/preview/", "test/import-now/"):
+        assert issue(admin_api.post(api_url(path), body, format="multipart")) == ("mapping", "INVALID_JSON")
+    assert not ImportBatch.objects.exists()
+
+
+def test_a_csv_cell_past_the_parser_limit_is_unreadable(admin_api, channel):
+    content = f"domain,email\n{'a' * 131_073},jan@a.pl\n"
+    assert issue(import_now(admin_api, content, mapping=None)) == ("file", "UNREADABLE")
+    assert not ImportBatch.objects.exists()
+
+
+def test_a_sheet_is_read_no_further_than_the_row_limit(monkeypatch):
+    """The cap stops the reading itself, not only the count afterwards: a huge sheet costs no memory."""
+    monkeypatch.setattr(leads_settings, "LEADS_IMPORT_MAX_ROWS", 3)
+    read = []
+
+    class Sheet:
+        def iter_rows(self, **_):
+            for number in range(1000):
+                read.append(number)
+                yield (f"row{number}", "x")
+
+    with pytest.raises(ImportFileError) as error:
+        _sheet_rows(Sheet())
+    assert (error.value.code, len(read)) == ("too_many_rows", 5)
 
 
 def test_the_row_limit_counts_data_rows_only(admin_api, channel, monkeypatch):

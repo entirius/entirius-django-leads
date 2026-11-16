@@ -78,21 +78,18 @@ def list_activities(
 
 
 IMPORT_ACTOR = "import:"  # every import batch ("import:<id>") is one entry of the person filter
-VIA = " via "  # a person acting through another module: "anna via <module> (cms)"
 
 
 def _actor_filter(actor: str) -> Q:
-    """`import:` = every import batch; a person = their own entries and the ones they made through a module."""
+    """`import:` = every import batch; a person = their own entries."""
     if actor == IMPORT_ACTOR:
         return Q(actor__startswith=IMPORT_ACTOR)
-    return Q(actor=actor) | Q(actor__startswith=f"{actor}{VIA}")
+    return Q(actor=actor)
 
 
 def person_of(actor: str) -> str:
-    """The person filter's entry of an actor: the person before " via ", `import:` for every import batch."""
-    if actor.startswith(IMPORT_ACTOR):
-        return IMPORT_ACTOR
-    return actor.split(VIA, 1)[0]
+    """The person filter's entry of an actor: the actor, `import:` for every import batch."""
+    return IMPORT_ACTOR if actor.startswith(IMPORT_ACTOR) else actor
 
 
 def list_actors(channel: Channel) -> list[str]:

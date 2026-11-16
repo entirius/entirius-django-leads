@@ -377,7 +377,7 @@ def parse_mapping(raw: str | None) -> dict[str, str] | None:
         return None
     try:
         value = json.loads(raw)
-    except ValueError:
+    except (TypeError, ValueError):  # TypeError: the part was a file
         value = None
     if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
         raise MappingError("invalid_json", 'The mapping must be a JSON object {"column": "field"}.')

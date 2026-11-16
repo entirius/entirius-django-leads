@@ -135,8 +135,6 @@ def record_reply(thread, reply) -> bool:
     contact = company.contacts.filter(email__iexact=thread.recipient_email).first()
     intent = reply.intent
     data = {"event": "reply", "thread_id": thread.pk, "reply_id": reply.pk, "class": intent}
-    if return_date := getattr(reply, "intent_return_date", None):
-        data["return_date"] = return_date.isoformat()
     message = f"reply received: {intent}" if intent else "reply received"
     activity_service.record(company, ActivityKind.REPLY, message, contact=contact, data=data)
     if contact is not None and intent == WRONG_PERSON:
