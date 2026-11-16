@@ -81,8 +81,11 @@ def create_batch(
     *,
     run_rules: bool = False,
     owner: AbstractBaseUser | None = None,
+    column_mapping: list[dict] | None = None,
+    ignored_columns: list[str] | None = None,
 ) -> ImportBatch:
-    """`owner` (an assignable user, `owner_service.resolve_owner`) goes to created and to unowned matched companies."""
+    """`owner` (an assignable user, `owner_service.resolve_owner`) goes to created and to unowned matched companies.
+    An import with a column mapping notes it and its ignored columns here; the run then finds no unknown header."""
     return ImportBatch.objects.create(
         channel=channel,
         filename=filename,
@@ -90,6 +93,8 @@ def create_batch(
         created_by=created_by,
         run_rules=run_rules,
         owner=owner,
+        column_mapping=column_mapping or [],
+        ignored_columns=ignored_columns or [],
     )
 
 
@@ -277,6 +282,7 @@ def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any]
         "lead_type": _row_lead_type(raw, lookups.lead_types),
         "industry": raw["industry"],
         "origin": raw["origin"],
+        "description": raw.get("description", ""),
         "source": LeadSource.CSV,
         "attributes": _row_attributes(raw.get("attributes") or {}, lookups.company_attributes),
     }
