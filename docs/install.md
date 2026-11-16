@@ -48,20 +48,6 @@ urlpatterns.append(path("", include("django_leads.urls")))
 - `test/import-now/`, `test/evaluate/`, `test/rotate-now/`, `test/anonymise-now/` — only when
   `ENVIRONMENT == "development"`; the views also answer 404 outside it.
 
-### The optional apps: AI CRM and Prospecting
-
-The package carries two more apps; each is enabled only when listed, after `django_leads`, and routed by its own URL
-module. Leads runs the same without them.
-
-```python
-INSTALLED_APPS += ["django_ai_crm", "django_prospecting"]  # after "django_leads"
-urlpatterns.append(path("", include("django_ai_crm.urls")))  # api/ai-crm/v2/admin/<channel_idx>/
-urlpatterns.append(path("", include("django_prospecting.urls")))  # api/prospecting/v2/admin/<channel_idx>/
-```
-
-Settings (`AI_CRM_*`, `PROSPECTING_*`), access areas and API: `ai-crm.md`, `prospecting.md`. `django_prospecting`
-needs a worker on `prospecting_default` (below); neither needs a beat entry.
-
 ## Settings
 
 Defaults: `django_leads/settings.py`. Every value is read **once, at import** of that module — see `gotchas.md`.
@@ -89,7 +75,7 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 
 ## Celery
 
-Every task of `django_leads` runs on `LEADS_QUEUE_DEFAULT`; `django_prospecting` has its own queue. The host owns
+Every task of `django_leads` runs on `LEADS_QUEUE_DEFAULT`. The host owns
 the beat schedule — the package registers none.
 
 | Task | Trigger | Schedule the host adds |
@@ -103,10 +89,6 @@ the beat schedule — the package registers none.
 | `django_leads.retry_failed_analyses` | beat | every 10 minutes |
 | `django_leads.rotate_unresponsive` | beat | daily |
 | `django_leads.anonymise_inactive` | beat | daily |
-| `django_leads.purge_history` | beat | daily (deletes history entries older than `Channel.history_months`, default 24; keeps legal basis, opt-out and anonymisation entries, spam complaints and each company's first `sent`) |
-| `django_leads.refresh_potential` | beat | daily (silence, return days of the potential dot) |
-| `django_leads.refresh_channel_potential` | `PATCH channel/` with `potential` | — |
-| `django_prospecting.run_search` (queue `PROSPECTING_QUEUE_DEFAULT`, `prospecting_default`) | a new people search, on commit (`contact_needed`, `POST people/searches/`) | — |
 
 ```python
 CELERY_BEAT_SCHEDULE = {
@@ -114,8 +96,6 @@ CELERY_BEAT_SCHEDULE = {
     "leads-retry-analyses": {"task": "django_leads.retry_failed_analyses", "schedule": 600},
     "leads-rotate-unresponsive": {"task": "django_leads.rotate_unresponsive", "schedule": crontab(hour=5, minute=0)},
     "leads-anonymise-inactive": {"task": "django_leads.anonymise_inactive", "schedule": crontab(hour=4, minute=0)},
-    "leads-purge-history": {"task": "django_leads.purge_history", "schedule": crontab(hour=4, minute=30)},
-    "leads-refresh-potential": {"task": "django_leads.refresh_potential", "schedule": crontab(hour=5, minute=30)},
 }
 ```
 

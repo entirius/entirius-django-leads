@@ -1,18 +1,15 @@
 # AGENTS.md
 
-entirius-django-leads — leads and B2B pipeline module of Entirius. One distribution, three Django apps:
-`django_leads` (companies, contacts, stages, rules, recipient selection, retention and GDPR; table prefix
-`django_leads_`), and two optional apps enabled only when listed in `INSTALLED_APPS`: `django_ai_crm` (a
-salesperson's day plan and an agent over REST API v2 and MCP, for the CMS, the terminal, Claude Code and ChatGPT;
-`django_ai_crm_`, `api/ai-crm/v2/`) and `django_prospecting` (new people to contact at a company;
-`django_prospecting_`, `api/prospecting/v2/`, queue `prospecting_default`).
+entirius-django-leads — leads and B2B pipeline module of Entirius, the engine of the CMS's CRM: one Django app,
+`django_leads` (companies, contacts, stages, deals, rules, recipient selection, history, retention and GDPR; table
+prefix `django_leads_`, API `api/leads/v2/`).
 
 ## Commands
 
 | Command | Meaning |
 |---|---|
 | `make install` | `uv sync --all-extras` |
-| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` (the `test` extra brings todo and access for `tests/ai_crm/`) |
+| `make test` | pytest — sqlite by default, PostgreSQL with `DATABASE_URL` (the `test` extra brings `django_todo`) |
 | `make check` / `fix` | ruff lint + format (+ canonical `.gitleaks.toml` guard) |
 
 ## Conventions
@@ -21,11 +18,6 @@ salesperson's day plan and an agent over REST API v2 and MCP, for the CMS, the t
 - Layered: `models/` · `services/` (all logic, field whitelists) · `schemas/` · `api/admin/` (thin views) ·
   `signals/` · `tasks/`. No logic in models or views.
 - Never rename a package, an app label or a table prefix; never edit a released migration.
-- `django_leads` never imports `django_ai_crm` or `django_prospecting`: leads works without them. They reach leads
-  only through its public services and signals, lazily, behind `apps.is_installed("django_leads")`
-  (`django_ai_crm/services/crm.py`, `django_prospecting/services/leads_bridge.py`, `signals/leads_receivers.py`).
-- One version: `django_ai_crm.__version__` and `django_prospecting.__version__` are `django_leads.__version__`
-  (munin reports each app with it); one CHANGELOG, one release.
 - Access: areas live on the AppConfig (`access_areas`, `access_route_rules`), every admin view carries
   `access_area`; a new admin route without one fails `tests/test_access_ownership.py`.
 - Git flow: `develop` + `master`, PRs, semver tag on `master`. Do not commit by default — the operator decides.
@@ -52,34 +44,15 @@ src/django_leads/
 │                 task_bridge (the only django_todo importer)  channel (settings)
 │                 deal_stage (sales pipeline)  deal (only Deal writer)  deal_board (columns, totals)
 │                 sequence_note (sequence stopped / paused after a reply or a hand-written mail)
-│                 potential (the potential dot: rules, events, daily sweep, manual colour)
 ├── signals/      __init__ (stage_entered, contact_anonymised, deal_stage_changed)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge
 │                 todo_receivers (timeline, soft)
-├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks  potential_tasks
+├── tasks/        import_tasks  intel_tasks  rule_tasks  rotation_tasks  retention_tasks
 │                 (queue leads_default)
 ├── gdpr/         hooks (leads' own)  protocol (GdprHooks)  registry (discover at call time)
 ├── connectors/   base (Connector, CandidateRow)  csv  twenty (interface only)  registry (entry points)
 ├── utils/        domains (registrable_domain)  emails (normalize, hash, token)  prompts  refs
 └── management/commands/  leads_import_csv  leads_gdpr
-
-src/django_ai_crm/        (optional app; docs/ai-crm.md)
-├── apps.py (area ai_crm.agent)  enums.py  settings.py (AI_CRM_*, read lazily)  urls.py  admin.py
-├── models/       proposal
-├── schemas/      requests.py  tools.py (arguments of every tool = MCP inputSchema)
-├── api/admin/    views/ _base  agent (plan, tools, proposals, chat)  mcp (JSON-RPC, streamable HTTP)
-└── services/     caller (actor, permissions)  crm (the only importer of todo / leads / communicator)  plan
-                  tool (every change)  proposal (irreversible actions)  chat (commands + toolbox)  mcp  texts
-
-src/django_prospecting/   (optional app; docs/prospecting.md)
-├── apps.py (areas, connects the contact_needed receiver)  enums.py  settings.py (read at import)  urls.py  admin.py
-├── models/       people_search  candidate  candidate_check  company_prospect
-├── providers/    base  toolbox_search  fixed_search  stub_tester
-├── services/     search (start, run, checks)  pattern  candidate  leads_bridge (the only leads caller)  company
-├── signals/      leads_receivers (contact_needed → search)
-├── api/admin/    views/ _base  people  company
-└── tasks/        search (run_search, queue prospecting_default)
-```
 
 Flow: import / form / manual → first stage → `transition_stage` → `stage_entered` → `rule_service` (claim under
 lock → pick → `request_draft` = gate + communicator draft) → `message_sent` / `reply_received` /
@@ -88,9 +61,6 @@ lock → pick → `request_draft` = gate + communicator draft) → `message_sent
 | Topic | Where |
 |---|---|
 | A setting's name, default, meaning; Celery queue and beat | `docs/install.md` |
-| The AI CRM app: tools, REST, MCP, settings, tests | `docs/ai-crm.md` |
-| The Prospecting app: search, checks, settings, API, tests | `docs/prospecting.md` |
-| Connecting the terminal, Claude Code, ChatGPT | `README.md` § Connect from the terminal, Claude Code and ChatGPT |
 | Endpoint, params, response shape, error body | `docs/api.md`; `docs/openapi.yaml`; `schemas/` |
 | Models, dedup, legal basis, rules phases, outreach gate | `docs/concept.md` |
 | Which signals leads emits and consumes | `docs/concept.md` § Integration; `signals/` |

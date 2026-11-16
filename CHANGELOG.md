@@ -2,86 +2,23 @@
 
 ## Unreleased
 
-- **Review fixes (history, potential dot, channel settings).** The potential dot's own entries no longer move
-  `Company.last_activity_at` (the daily sweep used to push the retention clock out: `activity_service.record(...,
-  touch=False)`). The sweep isolates each company (a failure is logged, the loop goes on) and cuts the "Come back"
-  task title to 255 characters. The history purge keeps legal basis, opt-out and anonymisation entries, spam
-  complaints and each company's first `sent`. `PATCH channel/` saves nothing when any part of the request is invalid,
-  and a change of the `potential` thresholds writes a `settings` entry (`potential_settings`: from, to) and recomputes
-  the channel only when a value moved. "Nobody left to mail" is one definition (the outreach gate): the dot shows
-  `looking_for_person` for a company whose contacts have no legal basis or are suppressed or bounced, and a hard bounce
-  of the last person sends `contact_needed` (reason `hard_bounce`). Migration `0017` is reversible with `settings`
-  entries present (they are deleted on the way back) and backfills before it builds the indexes. `mine_first` is in
-  the OpenAPI.
-- **Two new apps in the package: AI CRM and Prospecting** (formerly planned as `entirius-django-ai-crm` and
-  `entirius-django-prospecting`, never released — they ship here, one distribution, one release). Each is optional:
-  enabled only when the host lists it in `INSTALLED_APPS` after `django_leads`, routed by its own URL module; leads
-  runs the same without them. Their `__version__` is the version of leads (munin reports `ai_crm` and `prospecting`
-  with it). Dependencies: `entirius-django-utils>=2.4.0`; the `test` extra adds `respx`.
-  - `django_ai_crm` (`docs/ai-crm.md`): a salesperson's day plan (their overdue and today tasks, drafts and replies
-    waiting) and tools that update the CRM — `get_day_plan`, `close_task`, `create_task`,
-    `add_note`, `move_deal`, `mark_do_not_contact`, `approve_draft`, `list_proposals`, `confirm_proposal`,
-    `reject_proposal`. Only the caller's own tasks, companies and deals; each tool asks django-access for the area it
-    changes; a lost deal, Do not contact and sending a draft are a `Proposal` (migration `django_ai_crm.0001`) that
-    runs only on the same user's confirm. Every change signed `"<username> via ai-crm (<cms | api | mcp>)"`. Chat:
-    commands in English and Polish, other text through the AI toolbox (`AI_CRM_MODEL`). Admin API v2 under
-    `api/ai-crm/v2/admin/<channel_idx>/`: `plan/`, `tools/`, `tools/<name>/`, `proposals/`, `chat/`, `mcp/` (MCP
-    server, streamable HTTP, JSON-RPC 2.0) — for the CMS, the terminal, Claude Code and ChatGPT (README). Access area
-    `ai_crm.agent`. Settings `AI_CRM_MODEL`, `AI_CRM_MAX_TOKENS`, `AI_CRM_MAX_ACTIONS`, `AI_CRM_PROPOSAL_TTL_HOURS`.
-  - `django_prospecting` (`docs/prospecting.md`): new people to contact at a company that lost its last person to
-    mail (U3). The `contact_needed` signal of leads starts a search (task `django_prospecting.run_search`, queue
-    `prospecting_default`); a public search provider (`toolbox`, or `fixed` for test stacks), the company's address
-    pattern, guessed addresses tested without sending (`stub` tester for test stacks), four checks per person with
-    source and date (`ok` / `no_info` after `PROSPECTING_MAX_ATTEMPTS`); an accepted candidate becomes a contact
-    through `candidate_service.accept_candidate`. Companies: a placeholder list. Admin API v2 under
-    `api/prospecting/v2/admin/<channel_idx>/`: `companies/`, `people/searches/`, `people/candidates/`,
-    `…/accept/`, `…/reject/`, `people/limits/`. Access areas `prospecting.people` (pii), `prospecting.companies`.
-    Models `PeopleSearch`, `Candidate`, `CandidateCheck`, `CompanyProspect` (migration `django_prospecting.0001`).
-
-  - Review fixes. Prospecting: the channel of the URL must exist and `subject_ref` must be a company of it; name and
-    domain of a manual search come from leads (the body is `{subject_ref}` only), `accept_candidate` takes
-    `channel_idx` and refuses a company of another channel and an erased or anonymised address; a search fails on
-    any error and a queued one older than `PROSPECTING_QUEUED_STALE_MINUTES` (60) no longer blocks the company;
-    erased guesses are not tested; `profile_url` keeps http(s) only; reason `hard_bounce` (migration
-    `django_prospecting.0002`). GDPR export and erase hooks for candidates (`django_prospecting.gdpr`) and
-    proposals (`django_ai_crm.gdpr`). AI CRM: Pydantic response schemas (`PlanResponse`, `ToolResultResponse`,
-    `ChatResponse`, `ProposalListResponse`, `ToolListResponse`) replace untyped objects (every plan item field is
-    present, null when unused); the dead "companies due to come back" source is gone. CI: the `test` extra brings
-    `entirius-django-todo` and `entirius-django-access` (todo and communicator 0.5.0 from GitHub until released), so
-    `tests/ai_crm/` runs.
+- **Review fixes (history, channel settings).** `PATCH channel/` saves nothing when any part of the request is
+  invalid. Migration `0017` is reversible with `settings` entries present (they are deleted on the way back) and
+  backfills before it builds the indexes. `mine_first` is in the OpenAPI.
 
 - **History: the channel's journal of every activity.** `Activity.channel` (set on every entry, backfilled from the
   company) and a nullable `company` (migration `0017`, indexes on channel + date / actor / kind). `activities/` filters
   by `actor`, `kind` (comma-separated), `date_from` / `date_to` and carries `company_name` / `deal_title`;
-  `activities/actors/` lists the person filter: one entry per person (`"anna via ai-crm (cms)"` is `anna`, whose filter
+  `activities/actors/` lists the person filter: one entry per person (`"anna via <module> (cms)"` is `anna`, whose filter
   takes both) and one `import:` for every import batch. A channel settings change writes a `settings` entry with old and new
-  values. `Channel.history_months` (default 24, `channel/`) and the daily `django_leads.purge_history` beat delete
-  older entries.
+  values. Leads purges no entries by age; retention is the GDPR one.
 - **The company list can put the caller's companies first.** `companies/?mine_first=true` lists the companies the
   caller owns before the rest, `sort` ordering within each part (the task dialog's company picker).
 
-- **Potential dot of a company (green / orange / red).** New fields `potential`, `potential_reason`,
-  `potential_return_on`, `potential_manual`, `potential_comment`, `potential_changed_at` on `Company` and
-  `potential_settings` on `Channel` (migration `0018`, in `CompanyResponse`). `potential_service` computes the colour
-  from what leads stores, first match wins: manual → do not contact (red) → spam complaint (red) → an open or won deal
-  (green) → every deal lost (red) → the last reply newer than the last mail (its class colour) → nobody left to mail
-  (orange `looking_for_person`) → 120 days without a reply (red) → a skipped draft (orange, back after 30 days) → a
-  mail sent (orange). A red comes back orange (`came_back`) after 90 days with a "Come back to <company>" task for the
-  owner. An opt-out or a wrong person blocks only that person. Recomputed after a reply, a sent mail, a skipped draft
-  (communicator `message_skipped`, soft), a deal opened / moved / deleted, an opt-out, do not contact and a bounce;
-  daily by the new beat task `django_leads.refresh_potential`. `POST companies/<id>/potential/` sets a manual colour
-  (`comment` required, optional `return_on`; anything but red on a do-not-contact or complained company is 409
-  `legal_block`), `DELETE` goes back to the rules; a manual colour holds until a new reply or a deal change.
-  `companies/?potential=green|orange|red|none` filters the list. `channel/` reads and replaces the thresholds
-  (`potential`: `silence_days`, `skip_return_days`, `red_return_days`, `reply_colours`); a change recomputes the
-  channel (`django_leads.refresh_channel_potential`). Every change of a dot is an Activity `potential` with from, to,
-  reason, return day, actor and comment.
-- **Another person for a company (U3).** A `wrong_person` flag or an opt-out that leaves a company with nobody the
-  gate lets through records "looking for another person" and sends the new signal `contact_needed` on commit
-  (`django_leads.signals`); a do-not-contact company is not searched for. `candidate_service.accept_candidate` (the
-  public service for a prospecting module) adds an accepted person as a contact: new `LeadSource.PROSPECTING`
-  (migration `0019`), legal basis legitimate interest. The `recipient_check` receiver lets a communicator referral
-  request (`referral_request`) reach a wrong-person contact; every other reason still refuses it.
+- **A referral request may reach the wrong person.** The `recipient_check` receiver lets a communicator referral
+  request (`referral_request`, the answer to a `wrong_person` reply) reach a wrong-person contact; every other reason
+  still refuses it.
+
 - **A closed deal can be archived.** `Deal.archived_at` (migration `0016`, in `DealResponse`);
   `POST deals/<id>/archive/` (won or lost only, 409 `deal_open`) and `POST deals/<id>/restore/`, both idempotent,
   with Activity `deal` "deal archived: <title>" / "deal restored: <title>" (`event` `deal_archived` /

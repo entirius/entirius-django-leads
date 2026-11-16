@@ -4,12 +4,9 @@ description: Every admin API v2 endpoint — method, path, parameters, response 
 ---
 
 All endpoints live under `/api/leads/v2/admin/` (the host includes `django_leads.urls`). The machine-readable
-contract is `docs/openapi.yaml` (generated from the service, filtered to `/api/leads/`, `/api/ai-crm/` and `/api/prospecting/`); this page adds what the
+contract is `docs/openapi.yaml` (generated from the service, filtered to `/api/leads/`); this page adds what the
 schema cannot say. Views are thin: parse into a Pydantic schema (`schemas/requests.py`), call a service, dump a
 response schema (`schemas/responses.py`). Field whitelists live in the services.
-
-The optional apps of the package have their own prefixes and pages: `api/ai-crm/v2/admin/` (`ai-crm.md`) and
-`api/prospecting/v2/admin/` (`prospecting.md`); `docs/openapi.yaml` carries their paths too.
 
 ## Auth, scoping, paging
 
@@ -25,15 +22,13 @@ The optional apps of the package have their own prefixes and pages: `api/ai-crm/
 
 | Method | Path | Body / params | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `score_points`, `owner__username` — never-scored and unowned companies last either way; `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), `segment` (`S1`–`S4`), `attr.<key>` (exact value of an active company attribute with `show_in_list` of kind `select`, `bool` or `text`; any other key is a 400), `owner` (`me` = the caller, `none` = unowned, a user id), `mine_first` (bool: the caller's companies first, `sort` orders within each part), `potential` (`green`, `orange`, `red`, `none` = no dot), paging | 200 `CompanyListResponse` |
+| GET | `<channel_idx>/companies/` | `stage` (key), `search` (substring of name or domain), `sort` (`name`, `domain`, `stage_entered_at`, `last_activity_at`, `score_points`, `owner__username` — never-scored and unowned companies last either way; `-` prefix; default `name`), `lead_type` (an active lead type code of the channel or `UNKNOWN`; anything else is a 400), `do_not_contact` (bool), `has_reply` (bool: at least one `reply` Activity), `origin` (exact), `segment` (`S1`–`S4`), `attr.<key>` (exact value of an active company attribute with `show_in_list` of kind `select`, `bool` or `text`; any other key is a 400), `owner` (`me` = the caller, `none` = unowned, a user id), `mine_first` (bool: the caller's companies first, `sort` orders within each part), paging | 200 `CompanyListResponse` |
 | POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry`, `attributes` (every `required` company attribute must be given), `owner_id` (absent = the requesting user when they can own companies, else none; null = no owner) | 201 `CompanyDetailResponse`; Activity `note` "company created" (+ "owner: <username>") |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
 | PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64), `attributes` (merged: given keys are set, a `null` key is removed; a required key may not be removed), `owner_id` (null clears) | 200 `CompanyDetailResponse`; an owner change is an Activity `note` "owner: <username \| none>" |
 | POST | `<channel_idx>/companies/assign/` | `company_ids` (1–200 companies of the channel), `owner_id` (null clears) | 200 `{updated}` (companies whose owner changed); one Activity `note` per change; more than 200 ids or an id of another channel is a 400 on `company_ids` |
 | GET | `<channel_idx>/assignable-users/` | `search` (substring of username, first or last name) | 200 `{results: [{id, username, name}]}` — active staff by name, at most 50; nothing else about a user |
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
-| POST | `<channel_idx>/companies/<id>/potential/` | `colour` (`green` · `orange` · `red`), `comment` (1–255, required), `return_on` (date, optional: the manual colour ends that day) | 200 `CompanyDetailResponse`; Activity `potential` with actor and comment; 409 `LEGAL_BLOCK` for anything but red on a do-not-contact or complained company |
-| DELETE | `<channel_idx>/companies/<id>/potential/` | — | 200 `CompanyDetailResponse`: back to the rules |
 | POST | `<channel_idx>/companies/<id>/score/` | — | 200 `ScoreResponse` `{segment, points, disqualified, reasons, reasons_structured: [{field, kind, points, label}], profile_id}`; stores `score_points`, `score_segment`, `scored_at`; Activity `score` with the reasons |
 | POST | `<channel_idx>/companies/<id>/communicate/` | `template_key`, `contact_id` | 201 `{message_id, status}` — a reviewable communicator draft |
 | POST | `<channel_idx>/companies/<id>/compose/` | `contact_id`, `subject` (1–255), `body` (plain text, the legal footer is added), `reply_id` (optional: a reply of a thread of this company) | 201 `{message_id, status}` — approved, from the owner's mailbox; Activity `draft` "written by hand" |
@@ -44,8 +39,7 @@ The optional apps of the package have their own prefixes and pages: `api/ai-crm/
 `CompanyResponse`: `id, name, domain, website, lead_type, industry, description, platform, hooks, stage
 {id, key, label, order, kind, is_terminal}, stage_entered_at, source, external_ref, do_not_contact,
 customer_uid, rotation_count, last_activity_at, origin, attributes, score_points (null = never scored), score_segment
-("" = never scored), scored_at, owner {id, username, name} | null, potential ("" = not written to yet),
-potential_reason, potential_return_on, potential_manual, potential_comment, potential_changed_at`. `CompanyDetailResponse` adds `contacts` (all), `activities`
+("" = never scored), scored_at, owner {id, username, name} | null`. `CompanyDetailResponse` adds `contacts` (all), `activities`
 (last 20, newest first), `deals` (`{open, won, lost}` counts, one query) and `customer_name` (the linked customer's name, `""` without `django_accounts` or when
 the customer is gone — the uid stays the reference). `stage`, `domain`, `hooks`, the score fields and `customer_uid`
 are not writable here. A refused attribute (unknown or inactive key, a value its kind refuses, a missing required
@@ -99,28 +93,11 @@ stays on the timeline. Removing an anonymised contact answers 200 and changes no
 
 | Method | Path | Body | Success |
 |---|---|---|---|
-| GET | `<channel_idx>/channel/` | — | 200 `{idx, name, default_currency, resume_days, history_months, potential}` |
-| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all); `default_currency` (ISO 4217 of a platform currency, pre-fills new deals; null clears; unknown code → 400); `history_months` (1–120, months the history is kept; default 24); `potential` (see below; the whole request is validated before anything is saved). A change that moves a value writes a `settings` history entry (no company; `data.changes` = `{field: {from, to}}`) | 200 `{idx, name, default_currency, resume_days, history_months, potential}` |
+| GET | `<channel_idx>/channel/` | — | 200 `{idx, name, default_currency, resume_days}` |
+| PATCH | `<channel_idx>/channel/` | `resume_days` `{not_now, out_of_office}` (1–365 days; replaces the stored values, a key left out or null = the default; `resume_days: null` resets all); `default_currency` (ISO 4217 of a platform currency, pre-fills new deals; null clears; unknown code → 400); the whole request is validated before anything is saved). A change that moves a value writes a `settings` history entry (no company; `data.changes` = `{field: {from, to}}`) | 200 `{idx, name, default_currency, resume_days}` |
 
 `resume_days` in the response is effective: the channel's values over the defaults `{not_now: 30, out_of_office: 7}`
 — days until the "come back" task of a reply of that class (`concept.md` § Tasks). Area `leads.settings`.
-
-`potential` (GET and PATCH, effective in the response): `{silence_days: 120, skip_return_days: 30, red_return_days:
-90, reply_colours: {interested: green, not_now: orange, out_of_office: orange, unclear: orange, wrong_person: orange,
-not_interested: red}}`; a PATCH replaces the stored values (a key left out = the default, `potential: null` resets
-all) and recomputes every company of the channel except manual colours.
-
-### Potential dot
-
-`potential_service` is the only writer; first match wins: manual → `do_not_contact` (red, no return) → `complaint`
-(red, no return) → `deal_open` / `deal_won` (green) → `deals_lost` (red) → the last reply newer than the last mail
-(`reply:<class>` in its colour; `unsubscribe` counts only when nobody is left) → `looking_for_person` (orange: a mail
-went out and no contact passes the outreach gate any more: no legal basis, suppression and hard bounce count like an opt-out) → `silence` (red after `silence_days`) → `draft_skipped` (orange,
-`return_on` = skip + `skip_return_days`) → `awaiting_reply` (orange). A red's `return_on` is + `red_return_days`;
-on that day the dot turns orange `came_back` and the owner gets a todo task "Come back to <company>" (Today).
-Recomputed after every reply, sent mail, skipped draft, deal change, opt-out, do-not-contact change and bounce, and
-daily by `django_leads.refresh_potential` (a company that fails is logged, the rest go on). A change of a dot never
-moves `last_activity_at`: the retention clock runs on what people did.
 
 ## Stages
 
@@ -157,7 +134,7 @@ Area `leads.settings`. A channel needs a stage of each kind to close deals; a ne
 | POST | `<channel_idx>/deals/<id>/transition/` | exactly one of `stage_key` or `kind` (= the first stage of that kind), `lost_reason` (≤ 255) | 200 `DealResponse`; Activity `deal` "deal <from> -> <to>" (`data = {deal_id, from, to}`); 404 unknown key; 409 `no_deal_stage` when the channel has no stage of the kind; 400 on `lost_reason` for a lost stage without one; 409 `deal_archived` for an archived deal |
 | POST | `<channel_idx>/deals/<id>/archive/` | — | 200 `DealResponse` with `archived_at`; Activity `deal` "deal archived: <title>"; an archived deal is returned unchanged; 409 `deal_open` for an open deal |
 | POST | `<channel_idx>/deals/<id>/restore/` | — | 200 `DealResponse`, `archived_at` null; Activity `deal` "deal restored: <title>"; a deal that is not archived is returned unchanged |
-| GET | `<channel_idx>/activities/actors/` | — | 200 `{results: [person, …]}` — the person filter of the channel history: each actor once, `"anna via ai-crm (cms)"` as `anna`, every import batch as `import:` |
+| GET | `<channel_idx>/activities/actors/` | — | 200 `{results: [person, …]}` — the person filter of the channel history: each actor once, `"anna via <module> (cms)"` as `anna`, every import batch as `import:` |
 | GET | `<channel_idx>/deals/<id>/activities/` | paging | 200 `ActivityListResponse` of the entries about the deal (stage moves, edits, tasks) |
 | GET | `<channel_idx>/companies/<id>/deals/` | paging | 200 `DealListResponse` of the company, newest first, archived deals left out |
 

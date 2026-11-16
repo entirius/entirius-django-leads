@@ -188,17 +188,10 @@ reply sets `Contact.wrong_person_at`; the gate, the recipient pick and the rotat
 address's drafts waiting for review are withdrawn (communicator `review_service.withdraw`, "the contact is flagged as
 the wrong person").
 
-### Another person (U3)
-
-When a `wrong_person` flag or an opt-out leaves a company with no contact the gate lets through (and the company
-itself is not do not contact), `candidate_service.look_for_another_person` records Activity `note` "looking for
-another person" (`data.event` `contact_needed`, `data.reason` `wrong_person` | `opted_out`) and sends
-`contact_needed` on commit (subject_ref, channel_idx, company_name, domain, reason). Only the person is blocked,
-never the company. A prospecting module (`entirius-django-prospecting`) listens and searches; a person a salesperson
-accepts there comes back through `candidate_service.accept_candidate` as a contact with source `prospecting` and
-legal basis legitimate interest (Activity "contact added from prospecting: <name>", `data.source` = where the
-person was found), so the gate lets it be mailed. A referral request of communicator (`Message.referral_request`,
-the answer to a `wrong_person` reply asking who the right person is) passes the gate's `wrong_person` reason only.
+A referral request of communicator (`Message.referral_request`, the answer to a `wrong_person` reply asking who the
+right person is) passes the gate's `wrong_person` reason only (`recipient_check` receiver, `REFERRAL_ALLOWED`); every
+other reason refuses it as usual. Nothing looks for another person automatically: a company that lost its last
+person simply has nobody to mail until a salesperson adds one.
 
 The draft passes the company's `lead_type` as communicator's `audience`: one `template_key` per rule, the lead type
 picks the template variant — communicator's cascade (language, lead type) → (language, any) → (channel default
