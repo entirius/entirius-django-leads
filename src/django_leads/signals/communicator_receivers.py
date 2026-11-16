@@ -8,7 +8,6 @@ recipient check (approval, approval lists, delivery)."""
 
 import logging
 
-from django_communicator import signals as communicator_signals
 from django_communicator.services.reply_plan_service import reply_title
 from django_communicator.signals import (
     REPLY_ALERTED,
@@ -30,7 +29,6 @@ from django_leads.services import (
     company_service,
     contact_service,
     follow_up_service,
-    potential_service,
     recipient_service,
     sequence_note_service,
     stage_event_service,
@@ -55,9 +53,6 @@ def connect() -> None:
     optout_confirmed.connect(on_optout_confirmed, dispatch_uid="django_leads.on_optout_confirmed")
     message_bounced.connect(on_message_bounced, dispatch_uid="django_leads.on_message_bounced")
     recipient_check.connect(on_recipient_check, dispatch_uid="django_leads.on_recipient_check")
-    # Soft: a communicator before `message_skipped` has no such signal (the potential dot then misses skips).
-    if message_skipped := getattr(communicator_signals, "message_skipped", None):
-        message_skipped.connect(on_message_skipped, dispatch_uid="django_leads.on_message_skipped")
 
 
 def handle_reply_received(sender, thread, reply, **kwargs) -> str | None:
@@ -72,10 +67,6 @@ def handle_reply_received(sender, thread, reply, **kwargs) -> str | None:
 
 def on_company_skipped(sender, subject_ref, **kwargs) -> None:
     after_commit(lambda: block_company(subject_ref), "on_company_skipped")
-
-
-def on_message_skipped(sender, message, subject_ref, reason="", **kwargs) -> None:
-    after_commit(lambda: record_skipped(message, subject_ref, reason), "on_message_skipped")
 
 
 def on_message_sent(sender, message, **kwargs) -> None:
@@ -153,7 +144,6 @@ def record_reply(thread, reply) -> bool:
     company = stage_event_service.apply(company, stage_event_service.reply_event(intent))
     sequence_note_service.record(company, contact, thread_id=thread.pk, since=reply.received_at, actor="system")
     follow_up_service.on_reply(company, contact, reply)
-    potential_service.on_event(company, reset_manual=True)
     return alert_reply(company, reply)
 
 
@@ -187,18 +177,6 @@ def record_sent(message) -> None:
     )
     if first:
         stage_event_service.apply(company, StageEvent.FIRST_SENT)
-    potential_service.on_event(company)
-
-
-def record_skipped(message, subject_ref: str, reason: str) -> None:
-    """A skipped draft: orange, back to the queue after `skip_return_days` (`potential_service`)."""
-    company = company_from_ref(subject_ref)
-    if company is None:
-        return
-    contact = company.contacts.filter(email__iexact=message.thread.recipient_email).first()
-    reviewer = getattr(message, "reviewed_by", None)  # the user who clicked Skip
-    actor = getattr(reviewer, "username", "") or "reviewer"
-    potential_service.record_skipped(company, contact=contact, message_id=message.pk, reason=reason, actor=actor)
 
 
 def finish_sequence(thread) -> None:
@@ -217,4 +195,3 @@ def record_bounce(message, reason: str) -> None:
     contact = company.contacts.filter(email__iexact=message.thread.recipient_email).first()
     data = {"message_id": message.pk, "reason": reason}
     activity_service.record(company, ActivityKind.NOTE, "address invalid: hard bounce", contact=contact, data=data)
-    potential_service.on_event(company)

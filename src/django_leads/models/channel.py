@@ -27,14 +27,10 @@ class Channel(BaseModel):
     retention_days = models.PositiveIntegerField(null=True, blank=True)
     # Days until a "come back" task per reply class (`not_now`, `out_of_office`); a missing key = the default.
     resume_days = models.JSONField(default=dict, blank=True)
-    # Thresholds of the potential dot (`potential_service.thresholds`); a missing key = the default.
-    potential_settings = models.JSONField(default=dict, blank=True)
     # Pre-fills the currency of a new deal.
     default_currency = models.ForeignKey(
         "django_regional.Currency", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
-    # History (`Activity`) entries older than this many months are deleted by the daily purge.
-    history_months = models.PositiveSmallIntegerField(default=24)
 
     objects = ChannelManager()
 

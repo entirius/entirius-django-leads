@@ -61,6 +61,8 @@ REST_FRAMEWORK = {
 }
 SPECTACULAR_SETTINGS = {"TITLE": "django-leads Admin API v2", "VERSION": "2.0.0", "OAS_VERSION": "3.1.0"}
 DATABASES = {"default": dj_database_url.config(default="sqlite://:memory:")}
+if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
+    INSTALLED_APPS.append("django.contrib.postgres")  # the GinIndex of Company.attributes
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}

@@ -16,8 +16,7 @@ from django_leads.models import Channel
 from django_leads.services import activity_service, deal_service
 
 DEFAULT_CURRENCY = "default_currency"
-POTENTIAL = "potential_settings"
-EDITABLE_FIELDS = frozenset({"resume_days", "default_currency", "history_months", POTENTIAL})
+EDITABLE_FIELDS = frozenset({"resume_days", "default_currency"})
 
 
 def update_channel(channel: Channel, updates: dict[str, Any], *, actor: str = "system") -> Channel:
@@ -33,15 +32,11 @@ def update_channel(channel: Channel, updates: dict[str, Any], *, actor: str = "s
         for field, value in values.items():
             setattr(channel, field, value)
         channel.save(update_fields=[*updates, "modified_at"])
-        changes = _record_changes(channel, updates, before, actor)
-        if POTENTIAL in changes:  # the thresholds moved: every company of the channel is recomputed
-            from django_leads.tasks import refresh_channel_potential
-
-            transaction.on_commit(lambda: refresh_channel_potential.delay(channel.pk))
+        _record_changes(channel, updates, before, actor)
     return channel
 
 
-def _record_changes(channel: Channel, updates: dict[str, Any], before: dict[str, Any], actor: str) -> dict:
+def _record_changes(channel: Channel, updates: dict[str, Any], before: dict[str, Any], actor: str) -> None:
     changes = {
         field: {"from": before[field], "to": _value(channel, field)}
         for field in sorted(updates)
@@ -51,7 +46,6 @@ def _record_changes(channel: Channel, updates: dict[str, Any], before: dict[str,
         message = f"settings: {', '.join(changes)}"
         data = {"event": "channel_settings", "changes": changes}
         activity_service.record_channel(channel, ActivityKind.SETTINGS, message, data=data, actor=actor)
-    return changes
 
 
 def _value(channel: Channel, field: str) -> Any:

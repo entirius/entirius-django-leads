@@ -36,11 +36,6 @@ class Migration(migrations.Migration):
                 to="django_leads.channel",
             ),
         ),
-        migrations.AddField(
-            model_name="channel",
-            name="history_months",
-            field=models.PositiveSmallIntegerField(default=24),
-        ),
         migrations.AlterField(
             model_name="activity",
             name="company",

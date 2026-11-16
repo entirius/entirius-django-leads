@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Admin API v2 — companies: list, create, detail, patch, stage transition, manual potential colour."""
+"""Admin API v2 — companies: list, create, detail, patch, stage transition."""
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,7 +22,6 @@ from django_leads.schemas.requests import (
     CompanyCreateRequest,
     CompanyListQuery,
     CompanyUpdateRequest,
-    PotentialRequest,
     TransitionRequest,
 )
 from django_leads.schemas.responses import (
@@ -38,7 +37,6 @@ from django_leads.services import (
     deal_service,
     lead_type_service,
     owner_service,
-    potential_service,
     stage_service,
 )
 
@@ -104,7 +102,6 @@ class CompanyListView(AdminView):
                 description="true = the caller's companies first, `sort` orders within each part (no effect "
                 "without a user).",
             ),
-            OpenApiParameter("potential", str, description="Potential dot: green, orange, red or none (no dot)."),
             OpenApiParameter(
                 "attr.<key>",
                 str,
@@ -208,44 +205,4 @@ class CompanyTransitionView(AdminView):
         if stage is None:
             raise NotFound("Stage not found.")
         company = stage_service.transition_stage(company, stage, actor=request.user.username)
-        return Response(detail(company))
-
-
-class CompanyPotentialView(AdminView):
-    access_area = "leads.companies"
-
-    def company(self, channel_idx: str, pk: int) -> Company:
-        companies = Company.objects.filter(channel=self.channel(channel_idx)).select_related("stage", "owner")
-        return self.get_in(companies, pk, "Company")
-
-    @extend_schema(
-        tags=_TAGS,
-        operation_id="leads_company_potential_set",
-        summary="Set the potential colour by hand",
-        description="A required comment says why it differs from the rules. The manual colour holds until a new "
-        "reply, a deal change or its `return_on`. Anything but red on a company that may never be mailed (do not "
-        "contact, spam complaint) is a 409 `legal_block`. Activity `potential` with the actor and the comment.",
-        request=PotentialRequest,
-        responses={200: CompanyDetailResponse, **ERROR_RESPONSES, 409: None},
-    )
-    def post(self, request: Request, channel_idx: str, pk: int) -> Response:
-        body = parse(PotentialRequest, request.data)
-        company = self.company(channel_idx, pk)
-        try:
-            company = potential_service.set_manual(
-                company, body.colour, body.comment, return_on=body.return_on, actor=request.user.username
-            )
-        except potential_service.LegalBlock as error:
-            raise Conflict(str(error), code="legal_block") from None
-        return Response(detail(company))
-
-    @extend_schema(
-        tags=_TAGS,
-        operation_id="leads_company_potential_reset",
-        summary="Back to the rules",
-        description="Ends a manual colour and recomputes the dot.",
-        responses={200: CompanyDetailResponse, **ERROR_RESPONSES},
-    )
-    def delete(self, request: Request, channel_idx: str, pk: int) -> Response:
-        company = potential_service.clear_manual(self.company(channel_idx, pk), actor=request.user.username)
         return Response(detail(company))

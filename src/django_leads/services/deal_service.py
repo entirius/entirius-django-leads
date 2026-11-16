@@ -101,7 +101,6 @@ def create(company: Company, fields: dict[str, Any], *, owner: AbstractBaseUser 
     _assign(deal, values)
     deal.save()
     _record(deal, f"deal opened: {deal.title}", actor, event="deal_opened")
-    _refresh_potential(deal.company)
     return deal
 
 
@@ -143,7 +142,6 @@ def transition(deal: Deal, stage: DealStage, *, actor: str, lost_reason: str = "
     deal.save(update_fields=["stage", "stage_entered_at", "closed_at", "lost_reason", "modified_at"])
     _record(deal, f"deal {previous.key} -> {stage.key}", actor, **_move_data(previous, stage, deal.lost_reason))
     transaction.on_commit(lambda: deal_stage_changed.send(sender=Deal, deal=deal, previous=previous, stage=stage))
-    _refresh_potential(deal.company)
     return deal
 
 
@@ -157,9 +155,7 @@ def delete(deal: Deal, *, actor: str) -> None:
     task_bridge.cancel_about(deal.channel.idx, deal_ref(deal), reason=DEAL_DELETED)
     data = {"deal_id": deal.pk, "event": "deal_deleted", "title": deal.title}
     activity_service.record(deal.company, ActivityKind.DEAL, f"deal deleted: {deal.title}", data=data, actor=actor)
-    company = deal.company
     deal.delete()
-    _refresh_potential(company)
 
 
 @transaction.atomic
@@ -304,10 +300,3 @@ def _move_data(previous: DealStage, stage: DealStage, lost_reason: str) -> dict[
 def _record(deal: Deal, message: str, actor: str, **data: Any) -> None:
     data = {"deal_id": deal.pk, "title": deal.title, **data}
     activity_service.record(deal.company, ActivityKind.DEAL, message, deal=deal, data=data, actor=actor)
-
-
-def _refresh_potential(company: Company) -> None:
-    """A deal change recomputes the potential dot and ends a manual colour."""
-    from django_leads.services import potential_service
-
-    potential_service.on_event(company, reset_manual=True)

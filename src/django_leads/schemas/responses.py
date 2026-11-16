@@ -60,7 +60,7 @@ class ContactResponse(BaseModel):
     phone: str = Field(description="Phone.", examples=[""])
     language: str | None = Field(description="ISO 639-1 code.", examples=["pl"])
     is_primary: bool = Field(description="Primary contact.", examples=[True])
-    source: str = Field(description="csv, form, manual, connector or prospecting.", examples=["csv"])
+    source: str = Field(description="csv, form, manual or connector.", examples=["csv"])
     legal_basis: str | None = Field(description="GDPR legal basis; null when none.", examples=["consent"])
     opt_out_at: datetime | None = Field(description="Opted out.", examples=[None])
     anonymised_at: datetime | None = Field(description="Anonymised.", examples=[None])
@@ -143,7 +143,7 @@ class CompanyResponse(BaseModel):
     hooks: list[Any] = Field(description="Outreach hooks (read-only).", examples=[[]])
     stage: StageResponse = Field(description="Current stage.")
     stage_entered_at: datetime = Field(description="Entered the current stage.", examples=["2026-09-13T12:00:00Z"])
-    source: str = Field(description="csv, form, manual, connector or prospecting.", examples=["csv"])
+    source: str = Field(description="csv, form, manual or connector.", examples=["csv"])
     external_ref: str = Field(description="External reference.", examples=[""])
     do_not_contact: bool = Field(description="Never contact.", examples=[False])
     customer_uid: str | None = Field(description="Linked customer uid (read-only).", examples=[None])
@@ -155,16 +155,6 @@ class CompanyResponse(BaseModel):
     score_segment: str = Field(description="S1 (best) … S4 of the last scoring; empty = never scored.", examples=["S2"])
     scored_at: datetime | None = Field(description="Last scored.", examples=[None])
     owner: OwnerResponse | None = Field(description="Owner; null = none.", examples=[None])
-    potential: str = Field(description="green, orange, red; empty = not written to yet (no dot).", examples=["orange"])
-    potential_reason: str = Field(
-        description="Why: manual, do_not_contact, complaint, deal_open, deal_won, deals_lost, reply:<class>, reply, "
-        "looking_for_person, silence, draft_skipped, came_back, awaiting_reply.",
-        examples=["reply:not_now"],
-    )
-    potential_return_on: date | None = Field(description="Come-back day; null = none.", examples=["2027-02-15"])
-    potential_manual: bool = Field(description="Set by a salesperson (★).", examples=[False])
-    potential_comment: str = Field(description="The salesperson's reason of a manual colour.", examples=[""])
-    potential_changed_at: datetime | None = Field(description="Last change of the dot.", examples=[None])
 
     @classmethod
     def of(cls, company) -> "CompanyResponse":
@@ -357,11 +347,6 @@ class ChannelSettingsResponse(BaseModel):
     resume_days: dict[str, int] = Field(
         description="Effective days until a follow-up task per reply class (not_now, out_of_office).",
         examples=[{"not_now": 30, "out_of_office": 7}],
-    )
-    history_months: int = Field(description="History entries older than this many months are deleted.", examples=[24])
-    potential: dict[str, Any] = Field(
-        description="Effective potential thresholds: silence_days, skip_return_days, red_return_days, reply_colours.",
-        examples=[{"silence_days": 120, "skip_return_days": 30, "red_return_days": 90, "reply_colours": {}}],
     )
 
 

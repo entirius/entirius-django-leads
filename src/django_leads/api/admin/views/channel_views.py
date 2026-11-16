@@ -1,8 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Admin API v2 — channel settings: days until a follow-up task per reply class, default deal currency, months the
-history is kept, potential dot thresholds."""
+"""Admin API v2 — channel settings: days until a follow-up task per reply class, default deal currency."""
 
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import ValidationError
@@ -13,7 +12,7 @@ from django_leads.api.admin.views._base import ERROR_RESPONSES, AdminView, parse
 from django_leads.models import Channel
 from django_leads.schemas.requests import ChannelSettingsRequest
 from django_leads.schemas.responses import ChannelSettingsResponse
-from django_leads.services import channel_service, deal_service, follow_up_service, potential_service
+from django_leads.services import channel_service, deal_service, follow_up_service
 
 _TAGS = ["Leads Channel"]
 
@@ -26,8 +25,6 @@ def _dump(channel: Channel) -> dict:
         name=channel.name,
         default_currency=currency,
         resume_days=resume_days,
-        history_months=channel.history_months,
-        potential=potential_service.thresholds(channel),
     )
     return body.model_dump()
 
@@ -59,11 +56,6 @@ class ChannelSettingsView(AdminView):
             updates["resume_days"] = body.resume_days.model_dump(exclude_none=True) if body.resume_days else {}
         if "default_currency" in body.model_fields_set:
             updates["default_currency"] = body.default_currency
-        if body.history_months is not None:
-            updates["history_months"] = body.history_months
-        if "potential" in body.model_fields_set:  # null resets to the defaults
-            values = body.potential.model_dump(exclude_none=True) if body.potential else {}
-            updates["potential_settings"] = values
         try:
             updated = channel_service.update_channel(channel, updates, actor=request.user.username)
             return Response(_dump(updated))

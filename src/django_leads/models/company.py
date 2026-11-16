@@ -7,7 +7,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django_utils.models.base_model import BaseModel
 
-from django_leads.enums import UNKNOWN_LEAD_TYPE, LeadSource, Potential
+from django_leads.enums import UNKNOWN_LEAD_TYPE, LeadSource
 
 
 class Company(BaseModel):
@@ -43,16 +43,6 @@ class Company(BaseModel):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
-    # The potential dot — written only through `potential_service`; "" = not written to yet.
-    potential = models.CharField(max_length=8, choices=Potential.choices, blank=True, default="")
-    # Why: a code of `potential_service` (`reply:not_now`, `silence`, `draft_skipped`, `manual` …).
-    potential_reason = models.CharField(max_length=64, blank=True, default="")
-    # "Come back": the day a red (or a skipped draft) turns orange again and shows on Today.
-    potential_return_on = models.DateField(null=True, blank=True)
-    # Set by a salesperson: holds until a new reply or a deal change; the comment says why.
-    potential_manual = models.BooleanField(default=False)
-    potential_comment = models.CharField(max_length=255, blank=True, default="")
-    potential_changed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "companies"
@@ -61,7 +51,6 @@ class Company(BaseModel):
         indexes = [
             models.Index(fields=["channel", "stage"], name="leads_company_channel_stage"),
             models.Index(fields=["channel", "owner"], name="leads_company_channel_owner"),
-            models.Index(fields=["channel", "potential"], name="leads_company_channel_potent"),
             # The list filter `attr.<key>=<value>` is a containment (`@>`) lookup, which this index serves.
             GinIndex(fields=["attributes"], name="leads_company_attributes_gin"),
         ]

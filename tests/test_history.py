@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""U11 — the channel history: every activity, filters, settings entries, purge."""
+"""U11 — the channel history: every activity, filters, settings entries."""
 
 from datetime import datetime, timedelta
 
@@ -13,7 +13,6 @@ from django.utils import timezone
 from django_leads.enums import ActivityKind
 from django_leads.models import Activity, Channel
 from django_leads.services import activity_service
-from django_leads.tasks import purge_history
 from tests.conftest import api_url
 
 pytestmark = pytest.mark.django_db
@@ -82,8 +81,8 @@ def test_actors_list_the_person_filter(admin_api, company, shop):
 
 def test_a_person_takes_their_entries_through_a_module_and_imports_are_one(admin_api, company, shop):
     _entry(company, ActivityKind.NOTE, "manager")
-    _entry(company, ActivityKind.NOTE, "manager via ai-crm (cms)")
-    _entry(shop, ActivityKind.NOTE, "manager via ai-crm (mcp)")
+    _entry(company, ActivityKind.NOTE, "manager via agent (cms)")
+    _entry(shop, ActivityKind.NOTE, "manager via agent (mcp)")
     _entry(shop, ActivityKind.NOTE, "managers")
     _entry(company, ActivityKind.IMPORT, "import:1")
     _entry(shop, ActivityKind.IMPORT, "import:2")
@@ -96,60 +95,13 @@ def test_a_person_takes_their_entries_through_a_module_and_imports_are_one(admin
 
 def test_settings_change_is_in_the_history(admin_api, channel):
     url = api_url("channel/")
-    response = admin_api.patch(url, {"history_months": 12, "resume_days": {"not_now": 10}}, format="json")
-    assert response.status_code == 200 and response.json()["history_months"] == 12
+    response = admin_api.patch(url, {"resume_days": {"not_now": 10}}, format="json")
+    assert response.status_code == 200 and response.json()["resume_days"]["not_now"] == 10
     entry = admin_api.get(api_url("activities/?kind=settings")).json()["results"][0]
     assert entry["company_id"] is None and entry["actor"] == "operator"
-    assert entry["data"]["changes"]["history_months"] == {"from": 24, "to": 12}
     assert entry["data"]["changes"]["resume_days"] == {"from": {}, "to": {"not_now": 10}}
-    admin_api.patch(url, {"history_months": 12}, format="json")
+    admin_api.patch(url, {"resume_days": {"not_now": 10}}, format="json")
     assert Activity.objects.filter(kind=ActivityKind.SETTINGS).count() == 1
-
-
-@pytest.mark.parametrize("months", [0, 121])
-def test_history_months_out_of_range_400(admin_api, channel, months):
-    assert admin_api.patch(api_url("channel/"), {"history_months": months}, format="json").status_code == 400
-
-
-def test_purge_deletes_entries_older_than_the_channel_months(company, channel):
-    now = timezone.now()
-    old = _entry(company, ActivityKind.NOTE, "anna", activity_service.months_before(now, 24) - timedelta(days=1))
-    kept = _entry(company, ActivityKind.NOTE, "anna", activity_service.months_before(now, 24) + timedelta(days=1))
-    assert purge_history(as_of=now.isoformat()) == {channel.idx: 1}
-    assert not Activity.objects.filter(pk=old.pk).exists() and Activity.objects.filter(pk=kept.pk).exists()
-    channel.history_months = 1
-    channel.save()
-    assert purge_history(as_of=now.isoformat()) == {channel.idx: 1}
-
-
-@pytest.mark.parametrize(
-    ("moment", "months", "expected"),
-    [
-        (datetime(2026, 3, 31, 8), 1, datetime(2026, 2, 28, 8)),
-        (datetime(2026, 11, 15), 24, datetime(2024, 11, 15)),
-        (datetime(2026, 1, 10), 1, datetime(2025, 12, 10)),
-    ],
-)
-def test_months_before(moment, months, expected):
-    assert activity_service.months_before(moment, months) == expected
-
-
-def test_purge_keeps_the_entries_other_code_reads(company, channel):
-    old = activity_service.months_before(timezone.now(), 24) - timedelta(days=1)
-    kept = [
-        _entry(company, kind, "anna", old)
-        for kind in (ActivityKind.LEGAL_BASIS, ActivityKind.LEGAL_BASIS_CONFLICT, ActivityKind.OPTOUT)
-    ]
-    kept.append(_entry(company, ActivityKind.ANONYMISED, "anna", old))
-    complaint = activity_service.record(company, ActivityKind.NOTE, "hard bounce", data={"reason": "complaint"})
-    first_sent = _entry(company, ActivityKind.SENT, "anna", old)
-    later_sent = _entry(company, ActivityKind.SENT, "anna", old + timedelta(days=1))
-    note = _entry(company, ActivityKind.NOTE, "anna", old)
-    Activity.objects.filter(pk=complaint.pk).update(created_at=old)
-    gone = {later_sent.pk, note.pk}
-    assert purge_history(as_of=timezone.now().isoformat()) == {channel.idx: 2}
-    left = set(Activity.objects.values_list("pk", flat=True))
-    assert {*(a.pk for a in kept), complaint.pk, first_sent.pk} <= left and not gone & left
 
 
 @pytest.mark.django_db(transaction=True)
