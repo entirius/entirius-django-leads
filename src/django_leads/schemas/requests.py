@@ -436,6 +436,11 @@ class UploadOptions(BaseModel):
         default=None,
         description="Owner of created companies and of matched ones without an owner; absent = none.",
     )
+    mapping: str | None = Field(
+        default=None,
+        description='JSON object {"<file column>": "<field key>" | "ignore"}, or "auto" for the proposal as it is; '
+        "absent = the exact-name import.",
+    )
 
 
 class AssignableUserQuery(BaseModel):
