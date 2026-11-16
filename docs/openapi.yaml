@@ -1216,6 +1216,8 @@ paths:
           description: No response body
     post:
       operationId: api_leads_v2_admin_contacts_create
+      description: 409 `contact_exists` (the company has the email) or `address_erased` (the address is in the erased-address
+        memory).
       summary: Add a contact to a company
       parameters:
       - in: path
@@ -1292,7 +1294,7 @@ paths:
           description: No response body
     patch:
       operationId: api_leads_v2_admin_contacts_partial_update
-      description: '`email` only while the contact has none (400 once set, 409 when the company already has it).'
+      description: '`email` only while the contact has none (400 once set, 409 when the company already has it or the address was erased: `contact_exists`, `address_erased`).'
       summary: Update editable contact fields
       parameters:
       - in: path

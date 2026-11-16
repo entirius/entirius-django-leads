@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Fix (GDPR): an erased address cannot come back through the contacts API.** `POST contacts/` and `PATCH contacts/<id>/`
+  (first email) answered with a mailable contact for an address in the erased-address memory. Every writer of a contact
+  email (`create_contact`, `update_contact`, `upsert_contact`) now calls `erased_address_service.ensure_not_erased`; the API
+  answers 409 `ADDRESS_ERASED`; the import's row-by-row path skips the row as `erased_address`, like its chunk filter.
 - **Review fixes (history, channel settings).** `PATCH channel/` saves nothing when any part of the request is
   invalid. Migration `0017` is reversible with `settings` entries present (they are deleted on the way back) and
   backfills before it builds the indexes. `mine_first` is in the OpenAPI.
