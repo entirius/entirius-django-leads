@@ -44,6 +44,8 @@ src/django_leads/
 │                 task_bridge (the only django_todo importer)  channel (settings)
 │                 deal_stage (sales pipeline)  deal (only Deal writer)  deal_board (columns, totals)
 │                 sequence_note (sequence stopped / paused after a reply or a hand-written mail)
+│                 import_file (csv / xlsx → table)  import_mapping (column → field proposal, preview, mapped CSV)
+│                 import_vocabulary (header synonyms PL / EN / DE — extend here)
 ├── signals/      __init__ (stage_entered, contact_anonymised, deal_stage_changed)  _deferred (after_commit)
 │                 leads_receivers  siteintel_receivers  communicator_receivers  contact_forms_bridge
 │                 todo_receivers (timeline, soft)
@@ -64,7 +66,7 @@ lock → pick → `request_draft` = gate + communicator draft) → `message_sent
 | Endpoint, params, response shape, error body | `docs/api.md`; `docs/openapi.yaml`; `schemas/` |
 | Models, dedup, legal basis, rules phases, outreach gate | `docs/concept.md` |
 | Which signals leads emits and consumes | `docs/concept.md` § Integration; `signals/` |
-| CSV columns, skip reasons, sweep, GDPR, retention, monitoring | `docs/operations.md` |
+| CSV columns, column mapping, skip reasons, sweep, GDPR, retention, monitoring | `docs/operations.md` |
 | Which test file covers what; BDD and e2e in the entirius-zeno harness | `docs/testing.md` |
 | ERD groupings | `docs/erd-config.yaml` |
 | Why the module is shaped this way | `docs/concept.md` |

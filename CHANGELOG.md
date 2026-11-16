@@ -5,6 +5,19 @@
 - **Review fixes (history, channel settings).** `PATCH channel/` saves nothing when any part of the request is
   invalid. Migration `0017` is reversible with `settings` entries present (they are deleted on the way back) and
   backfills before it builds the indexes. `mine_first` is in the OpenAPI.
+- **Import understands the file's own headers (U17).** `POST imports/preview/` proposes for every column a CRM field
+  with a confidence and where it came from (the exact name, the channel's custom fields, a dictionary of PL / EN / DE
+  header words in `services/import_vocabulary.py`, the values: email, website / domain, phone, NIP and REGON with check
+  digit, postal code, lead type, language), plus the first 5 rows after the mapping with the reason a row would be
+  skipped. The legal basis is never guessed: it comes from a header or from the user's mapping. One field takes one
+  column (the more certain wins, `duplicate_field`); `full_name` is split into first and last name. `POST imports/` and
+  `test/import-now/` take the confirmed `mapping` (`{column: field | "ignore"}`); the batch keeps it as
+  `column_mapping` (migration `0018`). Files: `.xlsx` (first sheet; new dependency `openpyxl`, MIT, with `defusedxml`)
+  and CSV with `,` `;` tab `|`, UTF-8 / UTF-16 BOM / cp1250. Limits, for xlsx and CSV alike: `LEADS_IMPORT_MAX_ROWS`
+  (100 000), `LEADS_IMPORT_MAX_COLUMNS` (200) and `LEADS_IMPORT_MAX_UNPACKED_MB` (200, xlsx size after unzipping);
+  over a limit the answer is 400. A corrupt sheet is a 400 too. Without `mapping` the exact-name import is unchanged; it
+  now also reads `description` (company notes) and accepts xlsx / cp1250 / `;` files with exact names. A file named
+  `name,domain,email` now gets its company names (test C9).
 
 - **History: the channel's journal of every activity.** `Activity.channel` (set on every entry, backfilled from the
   company) and a nullable `company` (migration `0017`, indexes on channel + date / actor / kind). `activities/` filters

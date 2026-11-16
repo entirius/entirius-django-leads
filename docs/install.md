@@ -58,6 +58,7 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | `LEADS_IMPORT_CHUNK_SIZE` | `500` | CSV rows per chunk; counters, report and resume point commit with each chunk |
 | `LEADS_IMPORT_TMP_DIR` | `<system temp>/django_leads` | uploads wait here as `<batch_id>.csv` (file 0600, directory 0700) |
 | `LEADS_IMPORT_STALE_MINUTES` | `30` | a `pending`/`running` batch without progress this long is failed `stale`; also the form-submission retry cutoff |
+| `LEADS_IMPORT_AI_MODEL` | `""` | toolbox model asked about import columns the rules leave unrecognised (header + ≤ 5 values each); empty = off |
 | `LEADS_IMPORT_REPORT_MAX` | `1000` | skipped rows kept in a batch report; counters always cover every row |
 | `LEADS_FORM_CONSENT_KEYS` | `["marketing_consent"]` | `Lead.raw_data` keys read as marketing consent |
 | `LEADS_FORM_WEBSITE_KEYS` | `["website", "url"]` | `Lead.raw_data` keys read as the company website |

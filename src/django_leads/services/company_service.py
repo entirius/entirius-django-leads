@@ -21,7 +21,7 @@ from django_leads.services import (
     suppression_service,
 )
 
-FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin")
+FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin", "description")
 # `do_not_contact` has its own writer: `set_do_not_contact`.
 EDITABLE_FIELDS = frozenset({"name", "website", "lead_type", "industry", "description", "external_ref", "origin"})
 SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at", "score_points", "owner__username"})
