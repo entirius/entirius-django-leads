@@ -4,6 +4,9 @@
 
 """Contacts: dedup by `(company, normalised email)`; a match fills empty fields only. Email is set once, then immutable.
 
+An address in the erased-address memory is refused (`AddressErased`) by every writer that sets one: `create_contact`,
+`update_contact`, `upsert_contact`; `build_contact` trusts its caller (the import filters a whole chunk in one select).
+
 `legal_basis` is never filled like the other fields: it changes only with a `legal_basis` Activity
 (old → new, source, consent_ref), and a basis that differs from a recorded one is logged as a conflict."""
 
@@ -20,6 +23,7 @@ from django_leads.models import Activity, Channel, Company, Contact
 from django_leads.services import (
     activity_service,
     attribute_service,
+    erased_address_service,
     follow_up_service,
     recipient_service,
     retention_service,
@@ -68,6 +72,7 @@ def upsert_contact(company: Company, row: dict[str, Any]) -> tuple[Contact, bool
     """Race-safe: the insert runs in a savepoint; a concurrent insert of the same email is re-read and merged."""
     contact = find_contact(company, row)
     if contact is None:
+        erased_address_service.ensure_not_erased(row.get("email", ""))
         try:
             with transaction.atomic():
                 contact = build_contact(company, row)
@@ -126,6 +131,7 @@ def admin_consent_ref(actor: str, basis: str | None, consent_ref: str | None) ->
 
 def create_contact(company: Company, row: dict[str, Any], *, actor: str, consent_ref: str | None = None) -> Contact:
     """Attributes are cleaned with required keys enforced (`InvalidAttribute`)."""
+    erased_address_service.ensure_not_erased(row.get("email", ""))
     attributes = attribute_service.initial(company.channel, AttributeEntity.CONTACT, row.get(ATTRIBUTES) or {})
     contact = build_contact(company, {**row, ATTRIBUTES: attributes})
     contact.is_primary = bool(row.get("is_primary"))
@@ -179,6 +185,7 @@ def _set_fields(contact: Contact, updates: dict[str, Any], patch: dict[str, Any]
 def _first_email(contact: Contact, email: str) -> str:
     if contact.email:
         raise EmailImmutable("email is immutable once set")
+    erased_address_service.ensure_not_erased(email)
     return normalize_email(email)
 
 

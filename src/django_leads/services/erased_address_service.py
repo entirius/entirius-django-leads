@@ -30,3 +30,13 @@ def erased_emails(emails: Iterable[str]) -> set[str]:
 
 def is_erased(email: str) -> bool:
     return bool(erased_emails([email]))
+
+
+class AddressErased(ValueError):
+    """The address is in the erased-address memory: no contact may be created with it or changed to it."""
+
+
+def ensure_not_erased(email: str) -> None:
+    """The one guard of every contact write that sets an address; a blank address passes."""
+    if is_erased(email):
+        raise AddressErased("this address was erased and cannot be used again")

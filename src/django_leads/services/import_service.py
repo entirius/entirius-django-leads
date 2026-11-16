@@ -368,6 +368,8 @@ def _apply_alone(batch: ImportBatch, line: int, company_row: dict, contact_row: 
         return line, "skipped", "invalid_value"
     except IntegrityError:
         return line, "skipped", "conflict"
+    except erased_address_service.AddressErased:
+        return line, "skipped", erased_address_service.SKIP_REASON
 
 
 def _upsert_row(batch: ImportBatch, line: int, company_row: dict, contact_row: dict | None) -> tuple[int, str, str]:

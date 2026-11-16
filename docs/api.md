@@ -76,7 +76,9 @@ legal_basis, opt_out_at, anonymised_at, wrong_person_at, attributes, mail_block`
 the send check behind `mailable/` (`recipient_service.block_reasons`: same codes, same order) why the contact cannot
 be mailed now, `""` when it can; a list page asks communicator for all its addresses at once. Contact attributes are personal data: GDPR
 export includes them, anonymisation and erasure clear them. `email` is set once: a contact without one may get it by PATCH (409
-`CONTACT_EXISTS` when the company already has it), a set email never changes (400). `legal_basis` is one of
+`CONTACT_EXISTS` when the company already has it), a set email never changes (400). An address held in the erased-address
+memory (erased or anonymised earlier) is refused on POST and on that PATCH with 409 `ADDRESS_ERASED`: the same check
+stops the form path and the import (which skips the row as `erased_address`). `legal_basis` is one of
 `consent`, `legitimate_interest`, `contract`; `consent` requires a non-blank `consent_ref` (≤ 255), recorded in the
 `legal_basis` Activity as `admin:<user>:<consent_ref>`; other bases as `admin:<user>`.
 

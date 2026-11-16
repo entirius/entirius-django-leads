@@ -21,7 +21,7 @@ from django_leads.enums import LeadSource
 from django_leads.models import Company, Contact
 from django_leads.schemas.requests import ContactCreateRequest, ContactListQuery, ContactUpdateRequest
 from django_leads.schemas.responses import ContactListResponse, ContactResponse
-from django_leads.services import attribute_service, contact_service, recipient_service
+from django_leads.services import attribute_service, contact_service, erased_address_service, recipient_service
 
 _TAGS = ["Leads Contacts"]
 TEXT_FIELDS = ("first_name", "last_name", "job_title", "phone")
@@ -67,6 +67,7 @@ class ContactListView(AdminView):
     @extend_schema(
         tags=_TAGS,
         summary="Add a contact to a company",
+        description="409 `contact_exists` (the company has the email) or `address_erased` (the address is in the erased-address memory).",
         request=ContactCreateRequest,
         responses={201: ContactResponse, **ERROR_RESPONSES, 409: None},
     )
@@ -81,6 +82,8 @@ class ContactListView(AdminView):
             contact = contact_service.create_contact(company, row, actor=request.user.username, consent_ref=consent_ref)
         except contact_service.ContactExists as error:
             raise Conflict(str(error), code="contact_exists") from None
+        except erased_address_service.AddressErased as error:
+            raise Conflict(str(error), code="address_erased") from None
         except attribute_service.InvalidAttribute as error:
             raise ValidationError({"attributes": [str(error)]}) from None
         return Response(contact_body(contact), status=201)
@@ -100,7 +103,7 @@ class ContactDetailView(AdminView):
     @extend_schema(
         tags=_TAGS,
         summary="Update editable contact fields",
-        description="`email` only while the contact has none (400 once set, 409 when the company already has it).",
+        description="`email` only while the contact has none (400 once set, 409 when the company already has it or the address was erased: `contact_exists`, `address_erased`).",
         request=ContactUpdateRequest,
         responses={200: ContactResponse, **ERROR_RESPONSES, 409: None},
     )
@@ -122,6 +125,8 @@ class ContactDetailView(AdminView):
             raise ValidationError({"attributes": [str(error)]}) from None
         except contact_service.ContactExists as error:
             raise Conflict(str(error), code="contact_exists") from None
+        except erased_address_service.AddressErased as error:
+            raise Conflict(str(error), code="address_erased") from None
         return Response(contact_body(contact))
 
     @extend_schema(
