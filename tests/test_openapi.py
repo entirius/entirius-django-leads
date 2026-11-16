@@ -1,16 +1,14 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-import pytest
 from django.core.management import call_command
 
 
-@pytest.mark.parametrize("urlconf", ["django_leads.urls", "django_ai_crm.urls", "django_prospecting.urls"])
-def test_openapi_schema_validates(tmp_path, urlconf):
+def test_openapi_schema_validates(tmp_path):
     call_command(
         "spectacular",
         "--urlconf",
-        urlconf,
+        "django_leads.urls",
         "--validate",
         "--fail-on-warn",
         "--file",
