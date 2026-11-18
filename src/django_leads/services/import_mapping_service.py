@@ -50,6 +50,7 @@ BUILTIN_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("lead_type", "Company type", "company"),
     ("origin", "Origin", "company"),
     ("description", "Notes", "company"),
+    ("brand", "Brand", "company"),
     ("full_name", "Full name (split into first and last name)", "contact"),
     ("first_name", "First name", "contact"),
     ("last_name", "Last name", "contact"),

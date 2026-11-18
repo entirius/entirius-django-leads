@@ -93,7 +93,7 @@ def compose_message(
             message = compose_service.compose(
                 channel_idx=company.channel.idx, recipient=_recipient(company, contact), subject=subject,
                 body_text=body, subject_ref=subject_ref(company), author=actor, mailbox_user_id=company.owner_id,
-                in_reply_to=reply, subject_label=company.name,
+                mailbox_brand=company.brand, in_reply_to=reply, subject_label=company.name,
             )  # fmt: skip
             _record_composed(company, contact, message, username)
     except (ClauseSetMissing, AgreementsChannel.DoesNotExist, LegalFooterRequiredError):
@@ -117,6 +117,7 @@ def _communicate(company: Company, contact: Contact, template_key: str, thread: 
         thread=thread,
         audience=company.lead_type,  # the template's lead-type variant, else its any-audience default
         mailbox_user_id=company.owner_id,  # the owner's mailbox, else the channel default
+        mailbox_brand=company.brand,  # the owner's mailbox of the company's brand first
         subject_label=company.name,
     )
 

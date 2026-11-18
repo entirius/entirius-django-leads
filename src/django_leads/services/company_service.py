@@ -4,6 +4,7 @@
 
 """Companies: dedup by `(channel, registrable domain)`; a match fills empty fields only."""
 
+import re
 from typing import Any
 
 from django.db import IntegrityError, transaction
@@ -21,8 +22,8 @@ from django_leads.services import (
     suppression_service,
 )
 
-FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin", "description")
-# `do_not_contact` has its own writer: `set_do_not_contact`.
+FILL_FIELDS = ("name", "website", "lead_type", "industry", "origin", "description", "brand")
+# `do_not_contact` has its own writer: `set_do_not_contact`; `brand` too: `set_brand` / `set_brand_many`.
 EDITABLE_FIELDS = frozenset({"name", "website", "lead_type", "industry", "description", "external_ref", "origin"})
 SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at", "score_points", "owner__username"})
 NULLS_LAST_SORTS = frozenset({"score_points", "owner__username"})
@@ -30,10 +31,26 @@ NULLS_LAST_SORTS = frozenset({"score_points", "owner__username"})
 ATTRIBUTES = "attributes"
 LIST_FILTER_KINDS = frozenset({AttributeKind.SELECT, AttributeKind.BOOL, AttributeKind.TEXT})
 EMPTY_VALUES = (None, "", UNKNOWN_LEAD_TYPE)
+# The sender brand — the same slug rule as communicator's `Mailbox.brand`; blank = no brand.
+BRAND_PATTERN = r"^[a-z0-9.-]{0,32}$"
+BRAND_LIMIT = 200
+BRAND_FILTER_NONE = "none"
 
 
 class CompanyExists(Exception):
     """The channel already has a company on this domain."""
+
+
+class InvalidBrand(ValueError):
+    """Not a brand slug (`BRAND_PATTERN`)."""
+
+
+def clean_brand(value: str) -> str:
+    """Stripped and lower-cased; anything outside `BRAND_PATTERN` raises `InvalidBrand`."""
+    brand = value.strip().lower()
+    if not re.fullmatch(BRAND_PATTERN, brand):
+        raise InvalidBrand("brand must be up to 32 of a-z, 0-9, '.' and '-'")
+    return brand
 
 
 def fill_empty(instance: Any, row: dict[str, Any], fields: tuple[str, ...]) -> list[str]:
@@ -133,6 +150,47 @@ def set_do_not_contact(company: Company, value: bool, *, actor: str) -> Company:
     return company
 
 
+def set_brand(company: Company, brand: str, *, actor: str) -> bool:
+    """Writes the brand (cleaned, `InvalidBrand`) and the Activity `brand: <brand | none>`; the current brand
+    changes nothing."""
+    brand = clean_brand(brand)
+    if company.brand == brand:
+        return False
+    company.brand = brand
+    company.save(update_fields=["brand", "modified_at"])
+    activity_service.record(company, ActivityKind.NOTE, _brand_note(brand), data=brand_data(brand), actor=actor)
+    return True
+
+
+def set_brand_many(channel: Channel, company_ids: list[int], brand: str, *, actor: str) -> int:
+    """Bulk brand (≤ `BRAND_LIMIT` ids, every one a company of the channel, else `ValueError`; a bad brand
+    `InvalidBrand`); returns how many companies changed brand. One update and one Activity insert for the batch."""
+    brand = clean_brand(brand)
+    if len(company_ids) > BRAND_LIMIT:
+        raise ValueError(f"at most {BRAND_LIMIT} companies at once")
+    with transaction.atomic():
+        companies = list(Company.objects.select_for_update().filter(channel=channel, pk__in=company_ids))
+        missing = set(company_ids) - {company.pk for company in companies}
+        if missing:
+            raise ValueError(f"companies not in this channel: {sorted(missing)}")
+        changed = [company for company in companies if company.brand != brand]
+        Company.objects.filter(pk__in=[c.pk for c in changed]).update(brand=brand, modified_at=timezone.now())
+        note, data = _brand_note(brand), brand_data(brand)
+        activity_service.record_many(
+            [Activity(company=c, kind=ActivityKind.NOTE, message=note, data=data, actor=actor) for c in changed]
+        )
+    return len(changed)
+
+
+def brand_data(brand: str) -> dict:
+    """Activity data of a brand change: the screen renders it in its own words."""
+    return {"event": "brand_set", "brand": brand} if brand else {"event": "brand_cleared", "brand": ""}
+
+
+def _brand_note(brand: str) -> str:
+    return f"brand: {brand or 'none'}"
+
+
 def list_companies(
     channel: Channel,
     *,
@@ -143,6 +201,7 @@ def list_companies(
     do_not_contact: bool | None = None,
     has_reply: bool | None = None,
     origin: str = "",
+    brand: str = "",
     segment: str = "",
     attributes: dict[str, str] | None = None,
     owner: str = "",
@@ -151,7 +210,8 @@ def list_companies(
 ) -> QuerySet[Company]:
     """`sort` must be validated against `SORT_FIELDS` (± prefix) by the caller's schema; `lead_type` must be an
     active lead type of the channel (`UnknownLeadType`); `attributes` keys must be list filters (`filter_attributes`);
-    `owner` is `me` (= `user_id`), `none` or a user id (`owner_service.filter_by_owner`).
+    `owner` is `me` (= `user_id`), `none` or a user id (`owner_service.filter_by_owner`); `brand` is exact, `none` =
+    companies without a brand, blank = any.
     Never-scored and unowned companies sort last on `score_points` / `owner__username` either way. `mine_first` puts
     the companies `user_id` owns before the rest (the task dialog's company picker)."""
     if sort.lstrip("-") not in SORT_FIELDS:
@@ -163,6 +223,8 @@ def list_companies(
         companies = companies.filter(Q(name__icontains=search) | Q(domain__icontains=search))
     if origin:
         companies = companies.filter(origin=origin)
+    if brand:
+        companies = companies.filter(brand="" if brand == BRAND_FILTER_NONE else brand)
     if lead_type:
         lead_type_service.check_code(channel, lead_type)
     if segment:

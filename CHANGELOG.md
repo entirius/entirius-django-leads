@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Company brand: which of the owner's mailboxes sends (U21).** `Company.brand` (migration `0019_company_brand`): a
+  sender brand slug such as `entirius` or `ecom.house` (up to 32 of `a-z0-9.-`, lower-cased, blank = none), the same
+  rule as communicator's `Mailbox.brand`. In `CompanyResponse`, `POST companies/` and `PATCH companies/<id>/` (a change
+  is an Activity `note` "brand: <brand | none>", `data` `event: "brand_set" | "brand_cleared"`); list filter
+  `companies/?brand=<brand>` (`none` = without a brand). `POST companies/bulk-brand/` `{ids, brand}` → `{updated}` sets
+  or clears it on up to 200 companies, one note per changed company. The import reads a `brand` column (exact names,
+  CSV connector and the column mapping, header words `brand` / `marka` / `marke`); it fills only an empty brand and a
+  bad cell skips the row as `invalid_brand`. Every draft and hand-written mail passes `mailbox_brand=company.brand`
+  next to `mailbox_user_id`. **Release order:** needs the communicator release with `mailbox_brand` on
+  `communicate()` / `compose()` (U21); against an older one every draft fails with `TypeError`.
 - **Fix (GDPR): an erased address cannot come back through the contacts API.** `POST contacts/` and `PATCH contacts/<id>/`
   (first email) answered with a mailable contact for an address in the erased-address memory. Every writer of a contact
   email (`create_contact`, `update_contact`, `upsert_contact`) now calls `erased_address_service.ensure_not_erased`; the API

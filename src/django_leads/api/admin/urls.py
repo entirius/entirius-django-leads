@@ -28,6 +28,7 @@ from django_leads.api.admin.views import test_views as dev
 urlpatterns = [
     path("companies/", company.CompanyListView.as_view(), name="admin-leads-companies"),
     path("companies/assign/", owner.OwnerAssignView.as_view(), name="admin-leads-companies-assign"),
+    path("companies/bulk-brand/", company.CompanyBrandView.as_view(), name="admin-leads-companies-bulk-brand"),
     path("companies/<int:pk>/", company.CompanyDetailView.as_view(), name="admin-leads-company"),
     path("companies/<int:pk>/transition/", company.CompanyTransitionView.as_view(), name="admin-leads-transition"),
     path("companies/<int:pk>/score/", scoring.CompanyScoreView.as_view(), name="admin-leads-company-score"),

@@ -104,6 +104,7 @@ def test_item4_whitespace_header_reads_its_own_column():
             "phone": "",
             "origin": "",
             "description": "",
+            "brand": "",
             "attributes": {},
             "contact_attributes": {},
         }

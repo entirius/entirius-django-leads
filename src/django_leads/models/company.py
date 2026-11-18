@@ -33,6 +33,9 @@ class Company(BaseModel):
     last_activity_at = models.DateTimeField(null=True, blank=True)
     # Where the lead came from (free text: a fair, a list, a campaign); the funnel report groups by it.
     origin = models.CharField(max_length=64, blank=True, default="")
+    # The sender brand (`entirius`, `ecom.house`): communicator picks the owner's mailbox of this brand. A slug
+    # `[a-z0-9.-]{0,32}` (`company_service.clean_brand`); blank = no brand, the owner's default mailbox.
+    brand = models.CharField(max_length=32, blank=True, default="")
     # Values of the channel's company `AttributeDefinition`s — written only through `attribute_service`.
     attributes = models.JSONField(default=dict, blank=True)
     # The last `scoring_service.score_and_record` result; null / empty = never scored.

@@ -129,6 +129,10 @@ class OwnerAssignResponse(BaseModel):
     updated: int = Field(description="Companies whose owner changed.", examples=[3])
 
 
+class CompanyBrandResponse(BaseModel):
+    updated: int = Field(description="Companies whose brand changed.", examples=[3])
+
+
 class CompanyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -150,6 +154,7 @@ class CompanyResponse(BaseModel):
     rotation_count: int = Field(description="Contact rotations.", examples=[0])
     last_activity_at: datetime | None = Field(description="Last timeline entry.", examples=[None])
     origin: str = Field(description="Where the lead came from.", examples=["fair"])
+    brand: str = Field(description="Sender brand; empty = none (the owner's default mailbox).", examples=["ecom.house"])
     attributes: dict[str, Any] = Field(description="Company attribute values by key.", examples=[{"size": "micro"}])
     score_points: int | None = Field(description="Points of the last scoring; null = never scored.", examples=[45])
     score_segment: str = Field(description="S1 (best) … S4 of the last scoring; empty = never scored.", examples=["S2"])

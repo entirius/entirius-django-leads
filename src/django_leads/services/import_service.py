@@ -283,6 +283,7 @@ def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any]
         "industry": raw["industry"],
         "origin": raw["origin"],
         "description": raw.get("description", ""),
+        "brand": _row_brand(raw.get("brand", "")),
         "source": LeadSource.CSV,
         "attributes": _row_attributes(raw.get("attributes") or {}, lookups.company_attributes),
     }
@@ -305,6 +306,14 @@ def _row_attributes(cells: dict[str, str], definitions: dict[str, AttributeDefin
         except ValueError:
             raise SkipRow(f"bad_attribute:{key}") from None
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _row_brand(cell: str) -> str:
+    """Lower-cased; a cell that is not a brand slug skips the row with `invalid_brand`."""
+    try:
+        return company_service.clean_brand(cell)
+    except company_service.InvalidBrand:
+        raise SkipRow("invalid_brand") from None
 
 
 def _row_lead_type(raw: dict[str, str], lead_types: frozenset[str]) -> str:

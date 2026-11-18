@@ -18,7 +18,9 @@ from django_leads.api.admin.views.owner_views import owner_or_400
 from django_leads.enums import LeadSource
 from django_leads.models import Company, Stage
 from django_leads.schemas.requests import (
+    BRAND_FILTER_DESCRIPTION,
     OWNER_FILTER_DESCRIPTION,
+    CompanyBrandRequest,
     CompanyCreateRequest,
     CompanyListQuery,
     CompanyUpdateRequest,
@@ -26,6 +28,7 @@ from django_leads.schemas.requests import (
 )
 from django_leads.schemas.responses import (
     ActivityResponse,
+    CompanyBrandResponse,
     CompanyDetailResponse,
     CompanyListResponse,
     CompanyResponse,
@@ -94,6 +97,7 @@ class CompanyListView(AdminView):
             OpenApiParameter("do_not_contact", bool, description="do_not_contact flag."),
             OpenApiParameter("has_reply", bool, description="At least one reply activity (true) or none (false)."),
             OpenApiParameter("origin", str, description="Exact origin."),
+            OpenApiParameter("brand", str, description=BRAND_FILTER_DESCRIPTION),
             OpenApiParameter("segment", str, description="Score segment S1 … S4."),
             OpenApiParameter("owner", str, description=OWNER_FILTER_DESCRIPTION),
             OpenApiParameter(
@@ -147,6 +151,28 @@ class CompanyListView(AdminView):
         return Response(detail(company), status=201)
 
 
+class CompanyBrandView(AdminView):
+    access_area = "leads.companies"
+
+    @extend_schema(
+        tags=_TAGS,
+        operation_id="leads_companies_bulk_brand",
+        summary="Set or clear the brand of many companies",
+        description="At most 200 companies, every one of the channel; a blank brand clears it. Each change is a "
+        "timeline note; `updated` counts the companies whose brand changed.",
+        request=CompanyBrandRequest,
+        responses={200: CompanyBrandResponse, **ERROR_RESPONSES},
+    )
+    def post(self, request: Request, channel_idx: str) -> Response:
+        body = parse(CompanyBrandRequest, request.data)
+        channel = self.channel(channel_idx)
+        try:
+            updated = company_service.set_brand_many(channel, body.ids, body.brand, actor=request.user.username)
+        except ValueError as error:
+            raise ValidationError({"ids": [str(error)]}) from None
+        return Response(CompanyBrandResponse(updated=updated).model_dump(mode="json"))
+
+
 class CompanyDetailView(AdminView):
     access_area = "leads.companies"
 
@@ -166,7 +192,7 @@ class CompanyDetailView(AdminView):
         tags=_TAGS,
         summary="Update editable company fields",
         description="Stage, domain, hooks, score and customer link are not editable here; `attributes` is merged "
-        "(null removes a key); `owner_id` sets the owner (null clears it). Turning do_not_contact on suppresses the company's domain in communicator; turning it off removes that suppression.",
+        "(null removes a key); `owner_id` sets the owner (null clears it); a `brand` change is a timeline note. Turning do_not_contact on suppresses the company's domain in communicator; turning it off removes that suppression.",
         request=CompanyUpdateRequest,
         responses={200: CompanyDetailResponse, **ERROR_RESPONSES},
     )
@@ -177,12 +203,15 @@ class CompanyDetailView(AdminView):
         if None in updates.values():  # `attributes: null` included — remove keys inside the patch instead
             raise ValidationError({"detail": ["null is only allowed for website and owner_id"]})
         do_not_contact = updates.pop("do_not_contact", None)
+        brand = updates.pop("brand", None)
         actor = request.user.username
         owner = owner_or_400(owner_id)
         with unknown_lead_type_as_400(), transaction.atomic():
             company = company_service.update_company(self.company(channel_idx, pk), updates)
             if owner_given:
                 owner_service.set_owner(company, owner, actor=actor)
+            if brand is not None:
+                company_service.set_brand(company, brand, actor=actor)
             if do_not_contact is not None:
                 company_service.set_do_not_contact(company, do_not_contact, actor=actor)
         return Response(detail(company))

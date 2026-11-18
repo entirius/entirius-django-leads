@@ -224,6 +224,7 @@ FIELD_SYNONYMS: dict[str, tuple[str, ...]] = {
         "beschreibung",
         "kommentar",
     ),
+    "brand": ("brand", "sender brand", "marka", "marka nadawcy", "marke", "absendermarke"),
     "language": ("language", "lang", "locale", "jezyk", "jezyk kontaktu", "sprache"),
     "legal_basis": (
         "legal basis",

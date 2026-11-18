@@ -35,7 +35,7 @@ from django_leads.enums import (
     ScoreSegment,
     StageKind,
 )
-from django_leads.services.company_service import SORT_FIELDS
+from django_leads.services.company_service import BRAND_LIMIT, SORT_FIELDS, clean_brand
 from django_leads.services.deal_service import SORT_FIELDS as DEAL_SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
@@ -43,6 +43,8 @@ from django_leads.utils.domains import registrable_domain
 LEAD_TYPE_PATTERN = r"^[A-Z0-9_]+$"
 ATTRIBUTE_KEY_PATTERN = r"^[a-z][a-z0-9_]*$"
 OWNER_FILTER_PATTERN = r"^(me|none|[0-9]{1,9})?$"
+BRAND_DESCRIPTION = "Sender brand: up to 32 of a-z, 0-9, '.' and '-' (lower-cased); blank = no brand."
+BRAND_FILTER_DESCRIPTION = "Exact brand; `none` = companies without a brand; blank = any."
 # The default user model's primary key is a 32-bit integer.
 USER_ID_MAX = 2_147_483_647
 OWNER_FILTER_DESCRIPTION = "me = the caller's companies, none = without an owner, a user id; blank = any."
@@ -71,6 +73,7 @@ class CompanyListQuery(BaseModel):
     do_not_contact: bool | None = Field(default=None, description="do_not_contact flag filter.")
     has_reply: bool | None = Field(default=None, description="At least one reply activity (true) or none (false).")
     origin: str = Field(default="", max_length=64, description="Exact origin filter; blank = any.", examples=["fair"])
+    brand: str = Field(default="", max_length=32, description=BRAND_FILTER_DESCRIPTION, examples=["ecom.house"])
     segment: ScoreSegment | None = Field(default=None, description="Score segment filter (S1 best … S4).")
     owner: str = Field(default="", pattern=OWNER_FILTER_PATTERN, description=OWNER_FILTER_DESCRIPTION, examples=["me"])
     mine_first: bool = Field(
@@ -95,6 +98,7 @@ class CompanyCreateRequest(BaseModel):
         default=UNKNOWN_LEAD_TYPE, max_length=32, pattern=LEAD_TYPE_PATTERN, description="Lead type code."
     )
     industry: str = Field(default="", max_length=128, description="Industry.")
+    brand: str = Field(default="", max_length=32, description=BRAND_DESCRIPTION, examples=["ecom.house"])
     attributes: dict[str, Any] = Field(default_factory=dict, description=ATTRIBUTES_DESCRIPTION)
     owner_id: int | None = Field(
         ge=1,
@@ -108,6 +112,11 @@ class CompanyCreateRequest(BaseModel):
     def domain_is_registrable(cls, value: str) -> str:
         return registrable_domain(value)
 
+    @field_validator("brand")
+    @classmethod
+    def brand_is_slug(cls, value: str) -> str:
+        return clean_brand(value)
+
 
 class CompanyUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -120,10 +129,16 @@ class CompanyUpdateRequest(BaseModel):
     do_not_contact: bool | None = Field(default=None, description="Never contact this company.")
     external_ref: str | None = Field(default=None, max_length=128, description="Reference in an external system.")
     origin: str | None = Field(default=None, max_length=64, description="Where the lead came from.")
+    brand: str | None = Field(default=None, max_length=32, description=BRAND_DESCRIPTION, examples=["ecom.house"])
     attributes: dict[str, Any] | None = Field(default=None, description=ATTRIBUTES_DESCRIPTION)
     owner_id: int | None = Field(
         ge=1, le=USER_ID_MAX, default=None, description="Owner (an assignable user); null clears the owner."
     )
+
+    @field_validator("brand")
+    @classmethod
+    def brand_is_slug(cls, value: str | None) -> str | None:
+        return None if value is None else clean_brand(value)
 
 
 class TransitionRequest(BaseModel):
@@ -452,6 +467,20 @@ class OwnerAssignRequest(BaseModel):
     owner_id: int | None = Field(
         ge=1, le=USER_ID_MAX, description="Owner (an assignable user); null clears the owner.", examples=[7]
     )
+
+
+class CompanyBrandRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[int] = Field(
+        min_length=1, max_length=BRAND_LIMIT, description="Companies of the channel, at most 200.", examples=[[1, 2]]
+    )
+    brand: str = Field(max_length=32, description=BRAND_DESCRIPTION, examples=["ecom.house"])
+
+    @field_validator("brand")
+    @classmethod
+    def brand_is_slug(cls, value: str) -> str:
+        return clean_brand(value)
 
 
 class FunnelQuery(BaseModel):

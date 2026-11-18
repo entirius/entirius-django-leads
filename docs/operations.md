@@ -22,7 +22,8 @@ column after stripping surrounding whitespace (`" domain "` matches `domain`); v
 same stripped mapping, so a padded header never imports empty values. Columns (all optional, unknown ones ignored):
 `company_name`, `domain`, `website`, `lead_type` (older files: `company_type`, read when `lead_type` is absent),
 `industry`, `first_name`, `last_name`, `email`, `job_title`, `language` (ISO 639-1), `legal_basis` (`consent`,
-`legitimate_interest`, `contract`), `phone`, `origin` (free text, ≤ 64; fills only an empty origin).
+`legitimate_interest`, `contract`), `phone`, `origin` (free text, ≤ 64; fills only an empty origin), `brand` (sender brand, lower-cased, up to 32 of
+`a-z0-9.-`; fills only an empty brand; anything else skips the row `invalid_brand`).
 
 - The company domain is `domain`, else `website`, else the email host; a free-mail host without `domain`/`website`
   is skipped.
@@ -109,6 +110,7 @@ Skipped rows (`{row, reason}`, at most `LEADS_IMPORT_REPORT_MAX`):
 | `invalid_domain` / `invalid_email` | no registrable domain / email fails validation |
 | `invalid_legal_basis` | value outside the `LegalBasis` choices |
 | `too_long:<field>` | a value longer than its column |
+| `invalid_brand` | a `brand` cell outside `[a-z0-9.-]{0,32}` (after lower-casing) |
 | `erased_address` | the address was erased or anonymised |
 | `bad_attribute:<key>` | an `attr.<key>` / `contact.attr.<key>` value the attribute's kind refuses |
 | `conflict` / `invalid_value` | the database rejected the row alone (integrity / data error) |

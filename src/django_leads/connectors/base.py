@@ -34,6 +34,7 @@ class CandidateRow:
     phone: str
     origin: str = ""
     description: str = ""
+    brand: str = ""
     external_ref: str = ""
     attributes: dict[str, str] = field(default_factory=dict)
     contact_attributes: dict[str, str] = field(default_factory=dict)
