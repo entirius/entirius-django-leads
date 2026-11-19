@@ -26,6 +26,7 @@ response schema (`schemas/responses.py`). Field whitelists live in the services.
 | POST | `<channel_idx>/companies/` | `domain` (required, domain or URL, stored registrable), `name` (default: the domain), `website`, `lead_type` (active code or `UNKNOWN`, default `UNKNOWN`), `industry`, `attributes` (every `required` company attribute must be given), `owner_id` (absent = the requesting user when they can own companies, else none; null = no owner) | 201 `CompanyDetailResponse`; Activity `note` "company created" (+ "owner: <username>") |
 | GET | `<channel_idx>/companies/<id>/` | — | 200 `CompanyDetailResponse` |
 | PATCH | `<channel_idx>/companies/<id>/` | any of `name`, `website` (null clears), `lead_type` (active code or `UNKNOWN`), `industry`, `description`, `do_not_contact` (on: the domain is suppressed in communicator; off: that suppression is removed), `external_ref`, `origin` (≤ 64), `attributes` (merged: given keys are set, a `null` key is removed; a required key may not be removed), `owner_id` (null clears) | 200 `CompanyDetailResponse`; an owner change is an Activity `note` "owner: <username \| none>" |
+| POST | `<channel_idx>/companies/bulk-attribute/` | `company_ids` (1–200 companies of the channel), `key` (an active company attribute), `value` (cleaned by the attribute's kind; `null` or `""` clears the key) | 200 `{updated}` (companies whose value changed); no Activity (attribute edits have none); more than 200 ids or an id of another channel is a 400 on `company_ids`, an unknown / inactive key, a refused value or clearing a required key a 400 on `attributes`. The sender brand is `key: "sender_brand"` (`concept.md` § Owner) |
 | POST | `<channel_idx>/companies/assign/` | `company_ids` (1–200 companies of the channel), `owner_id` (null clears) | 200 `{updated}` (companies whose owner changed); one Activity `note` per change; more than 200 ids or an id of another channel is a 400 on `company_ids` |
 | GET | `<channel_idx>/assignable-users/` | `search` (substring of username, first or last name) | 200 `{results: [{id, username, name}]}` — active staff by name, at most 50; nothing else about a user |
 | POST | `<channel_idx>/companies/<id>/transition/` | `stage_key` | 200 `CompanyDetailResponse`; Activity `stage`, `stage_entered` on commit (same stage: no-op) |
@@ -230,8 +231,8 @@ type through its `audience` (cascade in `concept.md` § Outreach).
 | GET | `<channel_idx>/imports/<id>/` | — | 200 `ImportBatchDetailResponse` |
 
 `ImportBatchResponse`: `id, source, filename, status (pending|running|done|failed), created_count, matched_count,
-skipped_count, row_count, size_bytes, created_by, created_at, run_rules, owner_id, rules_queued, ignored_columns, automation_started_count`
-(`rules_queued`: one rule evaluation per created company when `run_rules` is on, else 0; `ignored_columns`: header
+skipped_count, warnings, row_count, size_bytes, created_by, created_at, run_rules, owner_id, rules_queued, ignored_columns, automation_started_count`
+(`warnings`: `{reason: rows}` of values dropped while the row was imported, e.g. `{"bad_attribute:sender_brand": 2}`; `rules_queued`: one rule evaluation per created company when `run_rules` is on, else 0; `ignored_columns`: header
 names of the file the import did not read, never repeated in `report`; `automation_started_count`: companies of the batch that entered their first
 stage with its rules, 0 when `run_rules` is off). The detail adds `report: [{row, reason}]` — CSV line
 (header = 1) and reason code, never a row value; `row: 0` is a file-level failure. Codes: `operations.md` § Import.

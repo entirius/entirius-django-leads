@@ -665,7 +665,7 @@ wheels = [
 [[package]]
 name = "entirius-django-communicator"
 version = "0.5.0"
-source = { git = "https://github.com/entirius/entirius-django-communicator?branch=develop#dbc3b414b85c672f5fd065e574773535e598c25d" }
+source = { git = "https://github.com/entirius/entirius-django-communicator?branch=develop#584023e4df416acac45725b334c05dce910b7300" }
 dependencies = [
     { name = "celery" },
     { name = "celery-once" },

@@ -110,8 +110,16 @@ Skipped rows (`{row, reason}`, at most `LEADS_IMPORT_REPORT_MAX`):
 | `invalid_legal_basis` | value outside the `LegalBasis` choices |
 | `too_long:<field>` | a value longer than its column |
 | `erased_address` | the address was erased or anonymised |
-| `bad_attribute:<key>` | an `attr.<key>` / `contact.attr.<key>` value the attribute's kind refuses |
 | `conflict` / `invalid_value` | the database rejected the row alone (integrity / data error) |
+
+A bad value in an `attr.<key>` / `contact.attr.<key>` cell never skips the row: only that value is dropped and the
+batch counts one warning `bad_attribute:<key>` per row in `warnings` (`{reason: rows}`; the key, never the value; a
+skipped row counts none). Optional data does not cost a lead.
+
+Sender brand: the channel defines a `select` company attribute `sender_brand` (setting
+`LEADS_SENDER_BRAND_ATTRIBUTE`) whose option values are its mailbox brands (`acme`, `beta`), then fills it by the
+column `attr.sender_brand` (or the mapping target of the same name), by hand, or in bulk with
+`POST companies/bulk-attribute/`. Filter the list with `attr.sender_brand=acme` (needs `show_in_list`).
 
 Columns the import does not read (unknown names, attribute columns without an active definition) are named once
 per batch in `ignored_columns` (each header capped at 64 characters), never in the row report; the rows still

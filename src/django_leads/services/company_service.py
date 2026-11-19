@@ -28,6 +28,7 @@ SORT_FIELDS = frozenset({"name", "domain", "stage_entered_at", "last_activity_at
 NULLS_LAST_SORTS = frozenset({"score_points", "owner__username"})
 # `attributes` is never set from a dict: create / patch go through `attribute_service`.
 ATTRIBUTES = "attributes"
+ATTRIBUTE_BULK_LIMIT = 200
 LIST_FILTER_KINDS = frozenset({AttributeKind.SELECT, AttributeKind.BOOL, AttributeKind.TEXT})
 EMPTY_VALUES = (None, "", UNKNOWN_LEAD_TYPE)
 
@@ -213,3 +214,23 @@ def filter_flags(
         replies = Activity.objects.filter(company=OuterRef("pk"), kind=ActivityKind.REPLY)
         companies = companies.filter(Exists(replies)) if has_reply else companies.exclude(Exists(replies))
     return companies
+
+
+def set_attribute_many(channel: Channel, company_ids: list[int], key: str, value: Any) -> int:
+    """Bulk set (or, for null / blank, clear) one attribute of up to `ATTRIBUTE_BULK_LIMIT` companies, every one of
+    the channel (else `ValueError`); the key must be an active company attribute and the value is cleaned by its kind
+    (`InvalidAttribute`). Returns how many companies changed; one select-for-update and one bulk update."""
+    if len(company_ids) > ATTRIBUTE_BULK_LIMIT:
+        raise ValueError(f"at most {ATTRIBUTE_BULK_LIMIT} companies at once")
+    cleaned = attribute_service.clean(channel, AttributeEntity.COMPANY, {key: value})[key]
+    with transaction.atomic():
+        companies = list(Company.objects.select_for_update().filter(channel=channel, pk__in=company_ids))
+        missing = set(company_ids) - {company.pk for company in companies}
+        if missing:
+            raise ValueError(f"companies not in this channel: {sorted(missing)}")
+        changed = [company for company in companies if company.attributes.get(key) != cleaned]
+        for company in changed:
+            company.attributes = {k: v for k, v in {**company.attributes, key: cleaned}.items() if v is not None}
+            company.modified_at = timezone.now()
+        Company.objects.bulk_update(changed, [ATTRIBUTES, "modified_at"])
+    return len(changed)

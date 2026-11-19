@@ -25,6 +25,8 @@ class ImportBatch(BaseModel):
     # CSV line of the last committed row — a retried run resumes after it.
     last_row_done = models.PositiveIntegerField(default=0)
     report = models.JSONField(default=list, blank=True)
+    # `{reason: rows}` of values the import dropped while keeping the row (`bad_attribute:<key>`).
+    warnings = models.JSONField(default=dict, blank=True)
     created_by = models.CharField(max_length=150, blank=True, default="")
     # Every company the import creates enters its first stage with `stage_entered` (one rule evaluation each).
     run_rules = models.BooleanField(default=False)

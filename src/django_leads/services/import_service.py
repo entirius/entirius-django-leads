@@ -55,6 +55,7 @@ from django_leads.utils.emails import normalize_email
 logger = logging.getLogger(__name__)
 
 HEADER_MAX_LENGTH = 64
+BAD_ATTRIBUTE = "bad_attribute"
 ERROR_CODES = {csv.Error: "csv_error", UnicodeDecodeError: "encoding_error", stage_service.NoStages: "no_stages"}
 
 
@@ -253,7 +254,16 @@ def apply_chunk(batch: ImportBatch, rows: list[tuple[int, dict[str, str]]], look
             writer.flush()
     except (DataError, IntegrityError):
         writer.outcomes = [_apply_alone(batch, *row) for row in prepared]
-    save_progress(batch, [*writer.skipped, *writer.outcomes], rows[-1][0])
+    outcomes = [*writer.skipped, *writer.outcomes]
+    _count_warnings(batch, outcomes, writer.warned)
+    save_progress(batch, outcomes, rows[-1][0])
+
+
+def _count_warnings(batch: ImportBatch, outcomes: list[tuple[int, str, str]], warned: dict[int, list[str]]) -> None:
+    """`batch.warnings[reason]` += 1 for every warning of a row that was imported (a skipped row counts none)."""
+    for line, action, _ in outcomes:
+        for reason in warned.get(line, []) if action != "skipped" else []:
+            batch.warnings[reason] = batch.warnings.get(reason, 0) + 1
 
 
 def save_progress(batch: ImportBatch, outcomes: list[tuple[int, str, str]], last_line: int) -> None:
@@ -264,13 +274,25 @@ def save_progress(batch: ImportBatch, outcomes: list[tuple[int, str, str]], last
     skipped = [{"row": line, "reason": reason} for line, action, reason in outcomes if action == "skipped"]
     batch.report.extend(skipped[:room])
     batch.last_row_done, batch.row_count = last_line, last_line - 1
-    fields = ["created_count", "matched_count", "skipped_count", "last_row_done", "row_count", "modified_at"]
+    fields = [
+        "created_count",
+        "matched_count",
+        "skipped_count",
+        "warnings",
+        "last_row_done",
+        "row_count",
+        "modified_at",
+    ]
     batch.save(update_fields=[*fields, "report"] if skipped[:room] else fields)
 
 
-def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any], dict[str, Any] | None]:
+def normalise_row(
+    raw: dict[str, str], lookups: Lookups, warnings: list[str] | None = None
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """`(company row, contact row or None)`; raises `SkipRow` with the report reason. A lead type that is not an
-    active one of the channel reads as `UNKNOWN` — never a skip."""
+    active one of the channel reads as `UNKNOWN` — never a skip; a bad attribute cell is left out and its reason
+    (`bad_attribute:<key>`) appended to `warnings`."""
+    warnings = [] if warnings is None else warnings
     email = _row_email(raw)
     legal_basis = raw["legal_basis"].lower() or None
     if legal_basis and legal_basis not in LegalBasis.values:
@@ -284,17 +306,19 @@ def normalise_row(raw: dict[str, str], lookups: Lookups) -> tuple[dict[str, Any]
         "origin": raw["origin"],
         "description": raw.get("description", ""),
         "source": LeadSource.CSV,
-        "attributes": _row_attributes(raw.get("attributes") or {}, lookups.company_attributes),
+        "attributes": _row_attributes(raw.get("attributes") or {}, lookups.company_attributes, warnings),
     }
     _check_lengths(Company, company)
     if not (email or raw["first_name"] or raw["last_name"]):
         return company, None
-    return company, _contact_row(raw, email, legal_basis, lookups)
+    return company, _contact_row(raw, email, legal_basis, lookups, warnings)
 
 
-def _row_attributes(cells: dict[str, str], definitions: dict[str, AttributeDefinition]) -> dict[str, Any]:
-    """Cells of active definitions, cleaned; blank cells and other keys are left out. A bad value skips the row
-    with `bad_attribute:<key>` (the key, never the value)."""
+def _row_attributes(
+    cells: dict[str, str], definitions: dict[str, AttributeDefinition], warnings: list[str]
+) -> dict[str, Any]:
+    """Cells of active definitions, cleaned; blank cells and other keys are left out. A bad value is dropped and
+    `bad_attribute:<key>` (the key, never the value) goes to `warnings` — an optional field never drops a row."""
     values = {}
     for key, cell in cells.items():
         definition = definitions.get(key)
@@ -303,7 +327,7 @@ def _row_attributes(cells: dict[str, str], definitions: dict[str, AttributeDefin
         try:
             values[key] = attribute_service.clean_value(definition.kind, definition.options, cell)
         except ValueError:
-            raise SkipRow(f"bad_attribute:{key}") from None
+            warnings.append(f"{BAD_ATTRIBUTE}:{key}")
     return {key: value for key, value in values.items() if value is not None}
 
 
@@ -312,12 +336,14 @@ def _row_lead_type(raw: dict[str, str], lead_types: frozenset[str]) -> str:
     return code if code in lead_types else UNKNOWN_LEAD_TYPE
 
 
-def _contact_row(raw: dict[str, str], email: str, legal_basis: str | None, lookups: Lookups) -> dict:
+def _contact_row(
+    raw: dict[str, str], email: str, legal_basis: str | None, lookups: Lookups, warnings: list[str]
+) -> dict:
     """A contact without email is kept when it has a name (L-08)."""
     contact = {key: raw[key] for key in ("first_name", "last_name", "job_title", "phone")}
     _check_lengths(Contact, {**contact, "email": email})
     language = lookups.languages.get(raw["language"].lower())
-    attributes = _row_attributes(raw.get("contact_attributes") or {}, lookups.contact_attributes)
+    attributes = _row_attributes(raw.get("contact_attributes") or {}, lookups.contact_attributes, warnings)
     fields = {"email": email, "language": language, "legal_basis": legal_basis, "attributes": attributes}
     return {**contact, **fields, "source": LeadSource.CSV}
 
@@ -416,6 +442,7 @@ class _ChunkWriter:
     activities: list[Activity] = field(default_factory=list)
     outcomes: list[tuple[int, str, str]] = field(default_factory=list)
     skipped: list[tuple[int, str, str]] = field(default_factory=list)
+    warned: dict[int, list[str]] = field(default_factory=dict)
 
     @property
     def actor(self) -> str:
@@ -424,8 +451,10 @@ class _ChunkWriter:
     def prepare(self, rows: list[tuple[int, dict[str, str]]]) -> list[tuple[int, dict, dict | None]]:
         prepared = []
         for line, raw in rows:
+            warnings: list[str] = []
             try:
-                prepared.append((line, *normalise_row(raw, self.lookups)))
+                prepared.append((line, *normalise_row(raw, self.lookups, warnings)))
+                self.warned[line] = warnings
             except SkipRow as reason:
                 self.skipped.append((line, "skipped", str(reason)))
         return self._without_erased(prepared)

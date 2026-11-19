@@ -125,6 +125,10 @@ class OwnerListResponse(BaseModel):
     results: list[OwnerResponse] = Field(description="Active staff users by name, at most 50.")
 
 
+class CompanyAttributeBulkResponse(BaseModel):
+    updated: int = Field(description="Companies whose attribute changed.", examples=[3])
+
+
 class OwnerAssignResponse(BaseModel):
     updated: int = Field(description="Companies whose owner changed.", examples=[3])
 
@@ -196,6 +200,11 @@ class ImportBatchResponse(BaseModel):
     created_count: int = Field(description="Rows that created a company.", examples=[8])
     matched_count: int = Field(description="Rows that matched a company.", examples=[1])
     skipped_count: int = Field(description="Rows skipped.", examples=[3])
+    warnings: dict[str, int] = Field(
+        default_factory=dict,
+        description="Values dropped while the row was imported, rows per reason (`bad_attribute:<key>`).",
+        examples=[{"bad_attribute:sender_brand": 2}],
+    )
     row_count: int = Field(description="Data rows processed so far.", examples=[12])
     size_bytes: int = Field(description="Uploaded file size.", examples=[1024])
     created_by: str = Field(description="Uploader.", examples=["admin"])

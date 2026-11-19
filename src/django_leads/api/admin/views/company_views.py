@@ -19,6 +19,7 @@ from django_leads.enums import LeadSource
 from django_leads.models import Company, Stage
 from django_leads.schemas.requests import (
     OWNER_FILTER_DESCRIPTION,
+    CompanyAttributeBulkRequest,
     CompanyCreateRequest,
     CompanyListQuery,
     CompanyUpdateRequest,
@@ -26,6 +27,7 @@ from django_leads.schemas.requests import (
 )
 from django_leads.schemas.responses import (
     ActivityResponse,
+    CompanyAttributeBulkResponse,
     CompanyDetailResponse,
     CompanyListResponse,
     CompanyResponse,
@@ -145,6 +147,29 @@ class CompanyListView(AdminView):
         except stage_service.NoStages as error:
             raise Conflict(str(error), code="no_stages") from None
         return Response(detail(company), status=201)
+
+
+class CompanyAttributeBulkView(AdminView):
+    access_area = "leads.companies"
+
+    @extend_schema(
+        tags=_TAGS,
+        summary="Set or clear one attribute of many companies",
+        description="At most 200 companies, every one of the channel; `key` must be an active company attribute and "
+        "`value` is cleaned by its kind (null or blank clears the key; a required key cannot be cleared). "
+        "`updated` counts the companies whose value changed.",
+        request=CompanyAttributeBulkRequest,
+        responses={200: CompanyAttributeBulkResponse, **ERROR_RESPONSES},
+    )
+    def post(self, request: Request, channel_idx: str) -> Response:
+        body = parse(CompanyAttributeBulkRequest, request.data)
+        channel = self.channel(channel_idx)
+        try:
+            with unknown_lead_type_as_400():
+                updated = company_service.set_attribute_many(channel, body.company_ids, body.key, body.value)
+        except ValueError as error:
+            raise ValidationError({"company_ids": [str(error)]}) from None
+        return Response(CompanyAttributeBulkResponse(updated=updated).model_dump(mode="json"))
 
 
 class CompanyDetailView(AdminView):

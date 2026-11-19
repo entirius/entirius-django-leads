@@ -49,11 +49,22 @@ def test_ignored_headers_are_named_once_and_never_in_the_row_report(channel, def
     assert batch.report == []
 
 
-def test_a_bad_attribute_value_skips_the_row(channel, definitions):
+def test_a_bad_attribute_value_is_dropped_and_the_row_imported(channel, definitions):
     batch = run(channel, "A,a-shop.pl,,,huge,,,,", "B,b-shop.pl,,,,many,,,", "C,c-shop.pl,,,big,,,,")
-    assert (batch.created_count, batch.skipped_count) == (1, 2)
-    skipped = {entry["row"]: entry["reason"] for entry in batch.report if entry["row"] > 1}
-    assert skipped == {2: "bad_attribute:size", 3: "bad_attribute:employees"}
+    assert (batch.created_count, batch.skipped_count, batch.report) == (3, 0, [])
+    assert batch.warnings == {"bad_attribute:size": 1, "bad_attribute:employees": 1}
+    attributes = dict(Company.objects.values_list("domain", "attributes"))
+    assert attributes == {"a-shop.pl": {}, "b-shop.pl": {}, "c-shop.pl": {"size": "big"}}
+
+
+def test_a_bad_contact_attribute_is_a_warning_too(channel, definitions):
+    batch = run(channel, "A,a-shop.pl,jan@a-shop.pl,Jan,,,,,")
+    assert batch.warnings == {} and Contact.objects.get().attributes == {}
+
+
+def test_a_skipped_row_counts_no_warning(channel, definitions):
+    batch = run(channel, "A,,,,huge,,,,")
+    assert (batch.skipped_count, batch.warnings) == (1, {})
 
 
 def test_a_matched_company_gets_missing_attributes_only(channel, definitions):

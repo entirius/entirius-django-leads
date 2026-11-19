@@ -16,6 +16,7 @@ from django_communicator.services import compose_service
 from django_communicator.services.communicate_service import LegalFooterRequiredError, RecipientData, communicate
 from django_utils.toolbox import ToolboxDisabledError
 
+from django_leads import settings as leads_settings
 from django_leads.enums import ActivityKind
 from django_leads.models import Company, Contact
 from django_leads.services import activity_service, fact_service, recipient_service, sequence_note_service
@@ -93,7 +94,7 @@ def compose_message(
             message = compose_service.compose(
                 channel_idx=company.channel.idx, recipient=_recipient(company, contact), subject=subject,
                 body_text=body, subject_ref=subject_ref(company), author=actor, mailbox_user_id=company.owner_id,
-                in_reply_to=reply, subject_label=company.name,
+                mailbox_brand=_sender_brand(company), in_reply_to=reply, subject_label=company.name,
             )  # fmt: skip
             _record_composed(company, contact, message, username)
     except (ClauseSetMissing, AgreementsChannel.DoesNotExist, LegalFooterRequiredError):
@@ -104,6 +105,11 @@ def compose_message(
 def reply_of(company: Company, reply_id: int) -> Reply | None:
     """The reply when it belongs to a thread of the company, else None."""
     return Reply.objects.select_related("thread").filter(pk=reply_id, thread__subject_ref=subject_ref(company)).first()
+
+
+def _sender_brand(company: Company) -> str:
+    """The company's `sender_brand` attribute (the setting names the key); blank = the owner's default mailbox."""
+    return company.attributes.get(leads_settings.LEADS_SENDER_BRAND_ATTRIBUTE, "")
 
 
 def _communicate(company: Company, contact: Contact, template_key: str, thread: Thread | None) -> Message:
@@ -117,6 +123,7 @@ def _communicate(company: Company, contact: Contact, template_key: str, thread: 
         thread=thread,
         audience=company.lead_type,  # the template's lead-type variant, else its any-audience default
         mailbox_user_id=company.owner_id,  # the owner's mailbox, else the channel default
+        mailbox_brand=_sender_brand(company),  # of the company's brand first
         subject_label=company.name,
     )
 

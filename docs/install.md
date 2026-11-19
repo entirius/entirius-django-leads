@@ -70,6 +70,7 @@ Defaults: `django_leads/settings.py`. Every value is read **once, at import** of
 | `LEADS_ROTATION_MAX_FAILURES` | `3` | no-draft attempts before the rotation gives up |
 | `LEADS_INTEL_RETRY_LIMIT` | `3` | beat retries of an intel analysis that failed transiently (toolbox down, timeout, 5xx) |
 | `LEADS_CLAIM_STALE_MINUTES` | `30` | a `claimed` rule run or claim older than this is failed `outcome_unknown`, never retried |
+| `LEADS_SENDER_BRAND_ATTRIBUTE` | `"sender_brand"` | key of the company attribute (a select the channel defines) whose value is the mailbox brand passed to communicator |
 | `LEADS_NOTIFY_ROLE` | `"sales_admin"` | notifications recipient role of replies and failed analyses |
 | `LEADS_ANALYSIS_MAX_HOOKS` | `10` | hooks kept from one intel analysis |
 | `LEADS_RETENTION_DAYS` | `180` | idle days before contacts are anonymised, when `Channel.retention_days` is null |

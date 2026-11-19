@@ -1172,6 +1172,51 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/leads/v2/admin/{channel_idx}/companies/bulk-attribute/:
+    post:
+      operationId: api_leads_v2_admin_companies_bulk_attribute_create
+      description: At most 200 companies, every one of the channel; `key` must be
+        an active company attribute and `value` is cleaned by its kind (null or blank
+        clears the key; a required key cannot be cleared). `updated` counts the companies
+        whose value changed.
+      summary: Set or clear one attribute of many companies
+      parameters:
+      - in: path
+        name: channel_idx
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leads Companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyAttributeBulkRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyAttributeBulkRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyAttributeBulkRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyAttributeBulkResponse'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+        '403':
+          description: No response body
+        '404':
+          description: No response body
   /api/leads/v2/admin/{channel_idx}/contacts/:
     get:
       operationId: leads_contacts_list
@@ -4164,6 +4209,51 @@ components:
       - address_status
       title: CommunicatorAnswer
       type: object
+    CompanyAttributeBulkRequest:
+      additionalProperties: false
+      properties:
+        company_ids:
+          description: Companies of the channel, at most 200.
+          examples:
+          - - 1
+          items:
+            type: integer
+          maxItems: 200
+          minItems: 1
+          title: Company Ids
+          type: array
+        key:
+          description: Active company attribute.
+          examples:
+          - sender_brand
+          maxLength: 64
+          pattern: ^[a-z][a-z0-9_]*$
+          title: Key
+          type: string
+        value:
+          description: Value cleaned by the attribute's kind; null or blank clears
+            the key.
+          examples:
+          - acme
+          title: Value
+      required:
+      - company_ids
+      - key
+      - value
+      title: CompanyAttributeBulkRequest
+      type: object
+    CompanyAttributeBulkResponse:
+      properties:
+        updated:
+          description: Companies whose attribute changed.
+          examples:
+          - 3
+          title: Updated
+          type: integer
+      required:
+      - updated
+      title: CompanyAttributeBulkResponse
+      type: object
     CompanyCreateRequest:
       additionalProperties: false
       properties:
@@ -6135,6 +6225,14 @@ components:
           - 3
           title: Skipped Count
           type: integer
+        warnings:
+          additionalProperties:
+            type: integer
+          description: Values dropped while the row was imported, rows per reason (`bad_attribute:<key>`).
+          examples:
+          - bad_attribute:sender_brand: 2
+          title: Warnings
+          type: object
         row_count:
           description: Data rows processed so far.
           examples:
@@ -6308,6 +6406,14 @@ components:
           - 3
           title: Skipped Count
           type: integer
+        warnings:
+          additionalProperties:
+            type: integer
+          description: Values dropped while the row was imported, rows per reason (`bad_attribute:<key>`).
+          examples:
+          - bad_attribute:sender_brand: 2
+          title: Warnings
+          type: object
         row_count:
           description: Data rows processed so far.
           examples:

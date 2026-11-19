@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Sender brand as a company attribute (U21).** Every draft and hand-written mail passes `mailbox_brand` next to
+  `mailbox_user_id`, read from the company attribute `sender_brand` (setting `LEADS_SENDER_BRAND_ATTRIBUTE`); the
+  channel defines it as a `select` whose option values are its mailbox brands (`acme`, `beta`), leads never creates it.
+  No new company field. `POST companies/bulk-attribute/` `{company_ids, key, value}` → `{updated}` sets or clears one
+  attribute of up to 200 companies (validated by `attribute_service`, channel-scoped; null or blank clears).
+  **Import:** a cell that fails its attribute's validation no longer skips the row (`bad_attribute:<key>` is gone from
+  the skip reasons): the value is dropped, the row imported, and `ImportBatch.warnings` (migration
+  `0019_import_warnings`, in `ImportBatchResponse`) counts `{bad_attribute:<key>: rows}`. **Release order:** needs
+  communicator >= 0.5.0 with `mailbox_brand` on `communicate()` / `compose()`; against an older one every draft fails
+  with `TypeError`.
 - **Fix (GDPR): an erased address cannot come back through the contacts API.** `POST contacts/` and `PATCH contacts/<id>/`
   (first email) answered with a mailable contact for an address in the erased-address memory. Every writer of a contact
   email (`create_contact`, `update_contact`, `upsert_contact`) now calls `erased_address_service.ensure_not_erased`; the API

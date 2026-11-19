@@ -26,6 +26,10 @@ LEADS_IMPORT_MAX_UNPACKED_MB = getattr(settings, "LEADS_IMPORT_MAX_UNPACKED_MB",
 # Skipped rows kept in a batch report (row number + reason code); the counters always cover every row.
 LEADS_IMPORT_REPORT_MAX = getattr(settings, "LEADS_IMPORT_REPORT_MAX", 1000)
 
+# Key of the company attribute (a select the channel defines) whose value is the sender brand: the mailbox brand
+# communicator picks for the company's owner. Leads never creates the definition.
+LEADS_SENDER_BRAND_ATTRIBUTE = getattr(settings, "LEADS_SENDER_BRAND_ATTRIBUTE", "sender_brand")
+
 # contact_forms bridge: body keys read from `Lead.raw_data`.
 LEADS_FORM_CONSENT_KEYS = getattr(settings, "LEADS_FORM_CONSENT_KEYS", ["marketing_consent"])
 LEADS_FORM_WEBSITE_KEYS = getattr(settings, "LEADS_FORM_WEBSITE_KEYS", ["website", "url"])

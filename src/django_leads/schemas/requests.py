@@ -35,7 +35,7 @@ from django_leads.enums import (
     ScoreSegment,
     StageKind,
 )
-from django_leads.services.company_service import SORT_FIELDS
+from django_leads.services.company_service import ATTRIBUTE_BULK_LIMIT, SORT_FIELDS
 from django_leads.services.deal_service import SORT_FIELDS as DEAL_SORT_FIELDS
 from django_leads.utils.domains import registrable_domain
 
@@ -451,6 +451,23 @@ class OwnerAssignRequest(BaseModel):
     company_ids: list[int] = Field(min_length=1, description="Companies of the channel, at most 200.", examples=[[1]])
     owner_id: int | None = Field(
         ge=1, le=USER_ID_MAX, description="Owner (an assignable user); null clears the owner.", examples=[7]
+    )
+
+
+class CompanyAttributeBulkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    company_ids: list[int] = Field(
+        min_length=1,
+        max_length=ATTRIBUTE_BULK_LIMIT,
+        description="Companies of the channel, at most 200.",
+        examples=[[1]],
+    )
+    key: str = Field(
+        max_length=64, pattern=ATTRIBUTE_KEY_PATTERN, description="Active company attribute.", examples=["sender_brand"]
+    )
+    value: Any = Field(
+        description="Value cleaned by the attribute's kind; null or blank clears the key.", examples=["acme"]
     )
 
 
